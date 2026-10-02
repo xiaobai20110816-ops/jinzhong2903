@@ -137,21 +137,29 @@ body.poster .site-header:not(.is-scrolled) {
   animation: fadeUp 1.1s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* 主标题:纯白高亮 + 深投影,不做金色辉光(会糊成一片黄光) */
+/* 投影必须放在外层:
+   标题是"背景裁剪成文字 + 填充透明",此时 text-shadow 会从透明的字形里透出来,
+   结果是字发暗、阴影像是压在字上而不是落在字下。
+   drop-shadow 作用在裁剪之后的合成结果上,阴影才会正确地出现在数字下方;
+   又因为 Safari 对"同元素同时用 filter 与 background-clip:text"支持不稳,
+   所以 filter 放在包裹元素上,裁剪留在 .poster-title 上。 */
+.poster-title-wrap {
+  filter:
+    drop-shadow(0 20px 26px rgba(0, 0, 0, 0.72))
+    drop-shadow(0 0 46px rgba(255, 255, 255, 0.20));
+}
+
+/* 主标题:近乎纯白,只留一丝冷调过渡避免死板 */
 .poster-title {
   font-family: var(--font-display);
   font-weight: 900;
   font-size: clamp(4.2rem, 19vw, 16rem);
   line-height: 0.86;
   letter-spacing: 0.01em;
-  background: linear-gradient(178deg, #ffffff 0%, #ffffff 52%, #f4f7ff 68%, #ffffff 100%);
+  background: linear-gradient(178deg, #ffffff 0%, #ffffff 62%, #f6f9ff 74%, #ffffff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.66),
-    0 4px 14px rgba(0, 0, 0, 0.42),
-    0 0 44px rgba(255, 255, 255, 0.16);
   animation: titleIn 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .poster-title span {
