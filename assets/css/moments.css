@@ -1,0 +1,91 @@
+/* ============================================================
+   103班：音乐领军班 · 高光时刻(照片墙)样式
+   网格 + 灯箱
+   ============================================================ */
+
+.moments-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 210px;
+  gap: 16px;
+}
+
+.moment-item {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: zoom-in;
+  border: 1px solid var(--gold-line);
+  background: var(--bg1);
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+/* 让照片墙高低错落 */
+.moment-item:nth-child(3n) { grid-row: span 2; }
+
+.moment-item:hover { transform: scale(1.02); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6); }
+.moment-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s;
+}
+.moment-item:hover img { transform: scale(1.08); }
+.moment-item figcaption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 30px 14px 10px;
+  font-size: 0.82rem;
+  color: var(--text);
+  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.85));
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.moment-item:hover figcaption { opacity: 1; }
+
+/* ---- 灯箱 ---- */
+/* 灯箱样式已移至 base.css,供高光时刻与宿舍风采共用 */
+
+/* ---- 活动视频(宿舍游行) ---- */
+.video-block { max-width: 880px; margin: 0 auto; }
+.video-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.video-head .en {
+  font-family: var(--font-latin);
+  font-weight: 300;
+  font-size: 0.72rem;
+  letter-spacing: 0.4em;
+  color: var(--gold);
+  opacity: 0.85;
+}
+.video-head h2 {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  letter-spacing: 3px;
+}
+/* 多个视频竖排,每个一段 */
+.video-list { display: grid; gap: 30px; }
+.video-item { margin: 0; }
+.video-block video {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--gold-line);
+  background: #000;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+.video-note {
+  margin-top: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+}
+
+@media (max-width: 900px) { .moments-grid { grid-template-columns: repeat(3, 1fr); grid-auto-rows: 170px; } }
+@media (max-width: 620px) { .moments-grid { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 150px; } }

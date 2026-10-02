@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 高光时刻">
+  <title>高光时刻 · 103班 音乐领军班</title>
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/moments.css">
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Highlights</div>
+    <h1><span class="gold-text">高光时刻</span></h1>
+    <p>那些定格在旋律里的瞬间</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <!-- 照片墙:图片放在 assets/images/albums/ 里,新增照片照下面格式加一段 figure 即可 -->
+      <div id="moments-grid" class="moments-grid">
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-01.jpg" alt="合唱比赛 01">
+          <figcaption>合唱比赛 · 01</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-02.jpg" alt="合唱比赛 02">
+          <figcaption>合唱比赛 · 02</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-03.jpg" alt="合唱比赛 03">
+          <figcaption>合唱比赛 · 03</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-04.jpg" alt="合唱比赛 04">
+          <figcaption>合唱比赛 · 04</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-05.jpg" alt="合唱比赛 05">
+          <figcaption>合唱比赛 · 05</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-06.jpg" alt="合唱比赛 06">
+          <figcaption>合唱比赛 · 06</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-07.jpg" alt="合唱比赛 07">
+          <figcaption>合唱比赛 · 07</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-08.jpg" alt="合唱比赛 08">
+          <figcaption>合唱比赛 · 08</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-09.jpg" alt="合唱比赛 09">
+          <figcaption>合唱比赛 · 09</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-10.jpg" alt="合唱比赛 10">
+          <figcaption>合唱比赛 · 10</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-11.jpg" alt="合唱比赛 11">
+          <figcaption>合唱比赛 · 11</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-12.jpg" alt="合唱比赛 12">
+          <figcaption>合唱比赛 · 12</figcaption>
+        </figure>
+        <figure class="moment-item">
+          <img src="assets/images/albums/choir-13.jpg" alt="合唱比赛 13">
+          <figcaption>合唱比赛 · 13</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 活动视频:宿舍游行 -->
+  <section class="section">
+    <div class="container">
+      <div class="video-block">
+        <div class="video-head">
+          <span class="en">Feature</span>
+          <h2>宿舍游行</h2>
+        </div>
+        <div class="video-list">
+          <figure class="video-item">
+            <video controls preload="metadata" playsinline>
+              <source src="assets/videos/parade.mp4" type="video/mp4">
+              你的浏览器不支持视频播放。
+            </video>
+            <figcaption class="video-note">片段一 · 时长 04:31</figcaption>
+          </figure>
+          <figure class="video-item">
+            <video controls preload="metadata" playsinline>
+              <source src="assets/videos/parade-2.mp4" type="video/mp4">
+              你的浏览器不支持视频播放。
+            </video>
+            <figcaption class="video-note">片段二 · 时长 00:30</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 灯箱 -->
+  <div class="lightbox" id="lightbox">
+    <span class="close" id="lightbox-close">×</span>
+    <div>
+      <img id="lightbox-img" src="" alt="放大查看">
+      <div class="lightbox-caption" id="lightbox-caption"></div>
+    </div>
+  </div>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // 高光时刻:点击放大(灯箱)
+    const lightbox = document.getElementById("lightbox");
+    const lightboxImg = document.getElementById("lightbox-img");
+    const lightboxCaption = document.getElementById("lightbox-caption");
+    const closeBtn = document.getElementById("lightbox-close");
+
+    document.querySelectorAll(".moment-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        const img = item.querySelector("img");
+        const cap = item.querySelector("figcaption");
+        lightboxImg.src = img.src;
+        lightboxCaption.textContent = cap ? cap.textContent : "";
+        lightbox.classList.add("show");
+      });
+    });
+
+    function closeLightbox() {
+      lightbox.classList.remove("show");
+    }
+    closeBtn.addEventListener("click", closeLightbox);
+    lightbox.addEventListener("click", (e) => {
+      if (e.target === lightbox) closeLightbox();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeLightbox();
+    });
+  </script>
+</body>
+</html>

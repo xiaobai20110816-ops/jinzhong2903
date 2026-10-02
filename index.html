@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 音乐领军班 — 青春交响，永不散场">
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <title>103班 · 音乐领军班</title>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/home.css">
+</head>
+<body class="poster">
+
+  <!-- 背景层:Canvas 粒子(缓慢、克制) -->
+  <canvas id="particles" aria-hidden="true"></canvas>
+
+  <main>
+    <!-- ========== 第一屏:品牌海报(视频封面) ========== -->
+    <section class="poster-screen" id="poster" aria-label="班级主页海报">
+      <video class="poster-video" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+        <source src="assets/videos/cover.mp4" type="video/mp4">
+      </video>
+      <div class="poster-shade" aria-hidden="true"></div>
+      <div class="poster-center">
+        <h1 class="poster-title">103<span>班</span></h1>
+        <p class="poster-tagline">CLASS 103 · MUSICAL VANGUARDS</p>
+        <p class="poster-year">2026</p>
+      </div>
+      <button class="scroll-hint" id="scroll-hint" type="button" aria-label="进入内容">
+        <span>SCROLL</span>
+        <span class="line" aria-hidden="true"></span>
+      </button>
+    </section>
+
+    <!-- ========== 01 学生风采 ========== -->
+    <section class="showcase" id="students" aria-label="学生风采">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">01</span>
+          <h2>学生风采</h2>
+          <span class="en">STUDENTS</span>
+          <a class="more" href="students.html" data-veil>查看全部<i>→</i></a>
+        </div>
+        <div class="showcase-body soon-inline" data-io>
+          <p class="soon-en">COMING SOON</p>
+          <p class="soon-cn">敬请期待</p>
+          <p class="soon-note">名单整理中，即将公布</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 02 宿舍风采 ========== -->
+    <section class="showcase" id="dormitory" aria-label="宿舍风采">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">02</span>
+          <h2>宿舍风采</h2>
+          <span class="en">DORMITORY</span>
+          <a class="more" href="dormitory.html" data-veil>查看全部<i>→</i></a>
+        </div>
+      </div>
+      <div class="showcase-rail" data-io>
+        <a class="dorm-mini" href="dormitory.html" data-veil>
+          <span class="dorm-mini-photo"><img src="assets/images/dorm/311/1.jpg" alt="311 宿舍"></span>
+          <span class="dorm-mini-body"><b>311</b><em>皇家园区</em></span>
+        </a>
+        <a class="dorm-mini" href="dormitory.html" data-veil>
+          <span class="dorm-mini-photo"><img src="assets/images/dorm/312/1.jpg" alt="312 宿舍"></span>
+          <span class="dorm-mini-body"><b>312</b><em>大诚酒店</em></span>
+        </a>
+        <a class="dorm-mini" href="dormitory.html" data-veil>
+          <span class="dorm-mini-photo"><img src="assets/images/avatars/avatar-placeholder.svg" alt="409 宿舍"></span>
+          <span class="dorm-mini-body"><b>409</b><em>待补充</em></span>
+        </a>
+        <a class="dorm-mini" href="dormitory.html" data-veil>
+          <span class="dorm-mini-photo"><img src="assets/images/dorm/410/1.jpg" alt="410 宿舍"></span>
+          <span class="dorm-mini-body"><b>410</b><em>金楚涵教总部</em></span>
+        </a>
+        <a class="dorm-mini" href="dormitory.html" data-veil>
+          <span class="dorm-mini-photo"><img src="assets/images/dorm/411/1.jpg" alt="411 宿舍"></span>
+          <span class="dorm-mini-body"><b>411</b><em>法兰西室联盟</em></span>
+        </a>
+        <a class="dorm-mini" href="dormitory.html" data-veil>
+          <span class="dorm-mini-photo"><img src="assets/images/dorm/412/1.jpg" alt="412 宿舍"></span>
+          <span class="dorm-mini-body"><b>412</b><em>待补充</em></span>
+        </a>
+      </div>
+    </section>
+
+    <!-- ========== 03 高光时刻 ========== -->
+    <section class="showcase" id="moments" aria-label="高光时刻">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">03</span>
+          <h2>高光时刻</h2>
+          <span class="en">MOMENTS</span>
+          <a class="more" href="moments.html" data-veil>查看全部<i>→</i></a>
+        </div>
+      </div>
+      <div class="showcase-grid" data-io>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-01.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-02.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-03.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-04.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-05.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-06.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-07.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-08.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-09.jpg" alt="合唱比赛"></a>
+      </div>
+      <div class="container">
+        <p class="showcase-note" data-io>合唱比赛 · 96.95 分 · 位列第一<i>/</i>另有宿舍游行视频</p>
+      </div>
+    </section>
+
+    <!-- ========== 04 班级公告 ========== -->
+    <section class="showcase" id="announcements" aria-label="班级公告">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">04</span>
+          <h2>班级公告</h2>
+          <span class="en">ANNOUNCEMENTS</span>
+          <a class="more" href="announcements.html" data-veil>查看全部<i>→</i></a>
+        </div>
+        <div class="news-list" data-io>
+          <a class="news" href="announcements.html" data-veil>
+            <span class="news-date">2026.09.29<i class="pin">置顶</i></span>
+            <p>合唱比赛获得 96.95 分，位列第一。</p>
+          </a>
+          <a class="news" href="announcements.html" data-veil>
+            <span class="news-date">2026.09.25</span>
+            <p>素养 103 第二帝国建立，何易航政府覆灭，金楚涵皈依第二帝国。</p>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 转场幕布:点击"查看全部"后浮起遮住画面,再跳转 -->
+  <div class="page-veil" id="page-veil" aria-hidden="true"></div>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // ========== 封面视频:加载失败自动隐藏,露出粒子背景;滚出屏幕暂停省电 ==========
+    (function () {
+      const v = document.querySelector(".poster-video");
+      if (!v) return;
+      v.addEventListener("error", () => { v.style.display = "none"; }, true); // capture:捕获 <source> 的加载失败
+      if ("IntersectionObserver" in window) {
+        new IntersectionObserver((es) => {
+          es.forEach((e) => e.isIntersecting ? v.play().catch(() => {}) : v.pause());
+        }, { threshold: 0.1 }).observe(document.getElementById("poster"));
+      }
+    })();
+
+    // ========== 背景粒子:纯 Canvas,缓慢流动 ==========
+    (function () {
+      const canvas = document.getElementById("particles");
+      const ctx = canvas.getContext("2d");
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      let W, H, DPR, parts = [];
+      const mouse = { x: 0.5, y: 0.5 };
+
+      function resize() {
+        DPR = Math.min(window.devicePixelRatio || 1, 2);
+        W = innerWidth; H = innerHeight;
+        canvas.width = W * DPR; canvas.height = H * DPR;
+        canvas.style.width = W + "px"; canvas.style.height = H + "px";
+        const count = Math.min(90, Math.max(36, Math.floor((W * H) / 18000)));
+        parts = [];
+        for (let i = 0; i < count; i++) {
+          parts.push({
+            x: Math.random() * W, y: Math.random() * H,
+            r: Math.random() * 1.6 + 0.6,
+            a: Math.random() * 0.45 + 0.15,
+            gold: Math.random() < 0.32,               // 约三分之一金色粒子
+            phase: Math.random() * Math.PI * 2,
+            vx: (Math.random() - 0.5) * 0.12,
+            vy: (Math.random() - 0.5) * 0.12,
+          });
+        }
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.scale(DPR, DPR);
+        const ox = (mouse.x - 0.5) * 24, oy = (mouse.y - 0.5) * 24; // 轻微视差
+        for (const p of parts) {
+          p.phase += 0.004;
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < -12) p.x = W + 12; else if (p.x > W + 12) p.x = -12;
+          if (p.y < -12) p.y = H + 12; else if (p.y > H + 12) p.y = -12;
+          const dx = Math.sin(p.phase) * 9, dy = Math.cos(p.phase * 0.8) * 9;
+          const flicker = 0.72 + 0.28 * Math.sin(p.phase * 2.1);
+          ctx.beginPath();
+          ctx.arc(p.x + dx - ox, p.y + dy - oy, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = p.gold
+            ? "rgba(240,185,11," + (p.a * flicker).toFixed(3) + ")"
+            : "rgba(255,255,255," + (p.a * 0.8 * flicker).toFixed(3) + ")";
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function loop() { render(); requestAnimationFrame(loop); }
+
+      resize();
+      addEventListener("resize", resize);
+      addEventListener("mousemove", (e) => {
+        mouse.x = e.clientX / innerWidth; mouse.y = e.clientY / innerHeight;
+      }, { passive: true });
+
+      if (reduceMotion) render(); // 尊重"减少动效":只画一帧静态
+      else requestAnimationFrame(loop);
+    })();
+
+    // ========== 点击海报任意处 / SCROLL → 平滑滚到第一个内容区 ==========
+    (function () {
+      const target = document.getElementById("students");
+      const go = () => target.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("scroll-hint").addEventListener("click", (e) => {
+        e.stopPropagation(); go();
+      });
+      document.getElementById("poster").addEventListener("click", go);
+    })();
+
+    // ========== 顶部导航:滚动过首屏后由透明变为实底 ==========
+    (function () {
+      const header = document.querySelector(".site-header");
+      const poster = document.getElementById("poster");
+      if (!header || !poster) return;
+      const sync = () => {
+        header.classList.toggle("is-scrolled", scrollY > poster.offsetHeight - 80);
+      };
+      addEventListener("scroll", sync, { passive: true });
+      sync();
+    })();
+
+    // ========== "查看全部"点击:播放平滑转场后再跳转 ==========
+    // 不依赖 View Transitions 特性(file:// 下原生过渡不生效),保证任何环境都顺
+    (function () {
+      const veilTime = 380; // 与 CSS 幕布过渡时长一致
+      document.querySelectorAll("[data-veil]").forEach((a) => {
+        a.addEventListener("click", (e) => {
+          // 组合键/中键点击交给浏览器(新标签页打开)
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          const href = a.getAttribute("href");
+          document.body.classList.add("leaving");
+          setTimeout(() => { location.href = href; }, veilTime);
+        });
+      });
+
+      // 浏览器"后退"用 bfcache 恢复页面时,清掉幕布状态,避免留下黑屏
+      addEventListener("pageshow", () => document.body.classList.remove("leaving"));
+    })();
+
+    // ========== 内容块:进入视口时逐条上浮 ==========
+    (function () {
+      const items = document.querySelectorAll("[data-io]");
+      if (!("IntersectionObserver" in window)) return;
+      items.forEach((el) => el.classList.add("io-rise"));
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((en, i) => {
+          if (en.isIntersecting) {
+            setTimeout(() => en.target.classList.add("in"), i * 90);
+            io.unobserve(en.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      items.forEach((el) => io.observe(el));
+    })();
+  </script>
+</body>
+</html>
