@@ -66,15 +66,24 @@ body.poster .site-header:not(.is-scrolled) {
   object-fit: cover;
   z-index: 0;
   background: #05070d;
+  /* 下沿渐隐:视频本身淡出,不在 100vh 处留一条硬边 */
+  -webkit-mask-image: linear-gradient(180deg,
+    #000 0%, #000 74%, rgba(0, 0, 0, 0.45) 90%, transparent 100%);
+  mask-image: linear-gradient(180deg,
+    #000 0%, #000 74%, rgba(0, 0, 0, 0.45) 90%, transparent 100%);
 }
 
-/* 电影暗角:四周压黑,中间留亮,视线自然收到标题上 */
+/* 电影暗角:四周压黑,中间留亮,视线自然收到标题上
+   最上一层是"接到页面底色"的渐隐,必须放在最前面(图层越靠前越在上),
+   这样画面最下沿正好等于内容区的底色,视频与下方内容之间就没有接缝了。
+   用 var(--bg0) 而不是写死深色:浅色主题下也能对上。 */
 .poster-shade {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
   background:
+    linear-gradient(180deg, transparent 0%, transparent 70%, var(--bg0) 100%),
     radial-gradient(125% 85% at 50% 44%,
       rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.42) 56%, rgba(3, 5, 10, 0.90) 100%),
     linear-gradient(180deg,
@@ -263,6 +272,8 @@ body.poster .site-header:not(.is-scrolled) {
   padding: 132px 0;
   border-top: 1px solid var(--line);
 }
+/* 紧挨着海报的那一块不要分隔线:它正好落在视频接缝处,会看成一道缝 */
+.poster-screen + .showcase { border-top: none; }
 
 /* 区块标题行:序号 / 中文大标题 / 英文 / 查看全部 */
 .showcase-head {
