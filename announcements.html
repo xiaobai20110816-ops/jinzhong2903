@@ -54,9 +54,12 @@
       font-size: 0.9rem;
     }
     .tl-body {
-      background: linear-gradient(165deg, var(--bg1), var(--bg2));
-      border: 1px solid var(--gold-line);
-      border-radius: 14px;
+      background: var(--glass-bg);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--glass-brd);
+      box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+      border-radius: 16px;
       padding: 18px 22px;
       margin-top: 8px;
     }
@@ -65,8 +68,7 @@
 
     /* 置顶公告:金色描边突出 */
     .tl-item.pinned .tl-body {
-      border-color: var(--gold);
-      box-shadow: 0 10px 36px rgba(240, 185, 11, 0.12);
+      border-color: var(--gold-line);
     }
     .tl-pin {
       display: inline-block;

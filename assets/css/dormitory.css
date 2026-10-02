@@ -9,18 +9,24 @@
   gap: 26px;
 }
 
+/* 玻璃卡:外框留 8px 内边距,模糊在合照四周看得见 */
 .dorm-card {
-  background: linear-gradient(165deg, var(--bg1), var(--bg2));
-  border: 1px solid var(--gold-line);
+  padding: 8px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
   border-radius: var(--radius);
   overflow: hidden;
   transition: transform 0.25s, border-color 0.25s;
 }
-.dorm-card:hover { transform: translateY(-6px); border-color: var(--gold); }
+.dorm-card:hover { transform: translateY(-6px); border-color: var(--gold-line); }
 
 /* 宿舍合照区:用 4:3 相框代替原来的扁条,竖拍照片不再被裁掉大半 */
 .dorm-photo {
   aspect-ratio: 4 / 3;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;

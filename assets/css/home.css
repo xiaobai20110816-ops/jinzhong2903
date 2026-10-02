@@ -124,32 +124,6 @@ body.poster .site-header:not(.is-scrolled) {
   max-width: 1500px;
 }
 
-/* 标题背后的旋转金色光晕:慢速环绕,给"霸气"托底 */
-.poster-center::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: min(135vw, 1200px);
-  aspect-ratio: 1;
-  z-index: -1;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  background: conic-gradient(from 0deg,
-    transparent 0deg,
-    rgba(240, 185, 11, 0.30) 52deg,
-    rgba(255, 138, 0, 0.14) 98deg,
-    transparent 150deg,
-    transparent 360deg);
-  -webkit-mask-image: radial-gradient(circle, #000 10%, transparent 62%);
-  mask-image: radial-gradient(circle, #000 10%, transparent 62%);
-  filter: blur(6px);
-  animation: haloSpin 26s linear infinite;
-}
-@keyframes haloSpin {
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
 /* 小字标头 */
 .poster-kicker {
   font-family: var(--font-latin);
@@ -163,20 +137,21 @@ body.poster .site-header:not(.is-scrolled) {
   animation: fadeUp 1.1s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* 主标题:银白渐变 + 深投影 + 金色辉光 */
+/* 主标题:纯白高亮 + 深投影,不做金色辉光(会糊成一片黄光) */
 .poster-title {
   font-family: var(--font-display);
   font-weight: 900;
   font-size: clamp(4.2rem, 19vw, 16rem);
   line-height: 0.86;
   letter-spacing: 0.01em;
-  background: linear-gradient(178deg, #ffffff 0%, #ffffff 38%, #c6d0e4 64%, #ffffff 100%);
+  background: linear-gradient(178deg, #ffffff 0%, #ffffff 52%, #f4f7ff 68%, #ffffff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   text-shadow:
-    0 22px 56px rgba(0, 0, 0, 0.55),
-    0 0 78px rgba(240, 185, 11, 0.20);
+    0 20px 48px rgba(0, 0, 0, 0.66),
+    0 4px 14px rgba(0, 0, 0, 0.42),
+    0 0 44px rgba(255, 255, 255, 0.16);
   animation: titleIn 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .poster-title span {
@@ -371,24 +346,28 @@ body.poster .site-header:not(.is-scrolled) {
   background: var(--gold-line);
   border-radius: 999px;
 }
+/* 玻璃卡:外框留 8px 内边距,模糊才在照片四周看得见 */
 .dorm-mini {
   flex: 0 0 auto;
-  width: 236px;
+  width: 252px;
   scroll-snap-align: start;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  overflow: hidden;
-  background: var(--bg1);
+  padding: 8px;
+  border-radius: 22px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s, box-shadow 0.3s;
 }
 .dorm-mini:hover {
   transform: translateY(-6px);
   border-color: var(--gold-line);
-  box-shadow: var(--glass-shadow);
 }
 .dorm-mini-photo {
   display: block;
   aspect-ratio: 4 / 3;
+  border-radius: 15px;
   overflow: hidden;
   background: var(--bg2);
 }
@@ -428,17 +407,26 @@ body.poster .site-header:not(.is-scrolled) {
   gap: 12px;
   padding: 0 20px;
 }
+/* 玻璃相框:图片内缩 6px,四周露出一圈模糊玻璃 */
 .showcase-grid .ph {
   display: block;
   aspect-ratio: 1 / 1;
+  padding: 6px;
   overflow: hidden;
-  border-radius: 14px;
-  background: var(--bg1);
+  border-radius: 20px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s;
 }
+.showcase-grid .ph:hover { transform: translateY(-4px); border-color: var(--gold-line); }
 .showcase-grid .ph img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 14px;
   transition: transform 0.5s ease, filter 0.4s ease;
   filter: saturate(0.86) brightness(0.94);
 }
@@ -466,17 +454,25 @@ body.poster .site-header:not(.is-scrolled) {
   opacity: 0.5;
 }
 
-/* ---- 04 班级公告:条目 ---- */
-.news-list { border-top: 1px solid var(--line); }
+/* ---- 04 班级公告:玻璃条目 ---- */
+.news-list { display: grid; gap: 14px; }
 .news {
   display: flex;
   align-items: baseline;
   gap: 20px;
-  padding: 26px 4px;
-  border-bottom: 1px solid var(--line);
-  transition: border-color 0.25s, padding-left 0.25s;
+  padding: 24px 26px;
+  border-radius: 18px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
 }
-.news:hover { border-color: var(--gold-line); padding-left: 12px; }
+.news:hover {
+  border-color: var(--gold-line);
+  transform: translateX(6px);
+}
 .news-date {
   flex: none;
   min-width: 130px;
@@ -541,8 +537,7 @@ body.leaving .page-veil { opacity: 1; }
 
 /* ========== 尊重"减少动效" ========== */
 @media (prefers-reduced-motion: reduce) {
-  .poster-screen::after,
-  .poster-center::before { animation: none; }
+  .poster-screen::after { animation: none; }
   .poster-title,
   .poster-kicker,
   .poster-rule,
@@ -566,6 +561,6 @@ body.leaving .page-veil { opacity: 1; }
 @media (max-width: 480px) {
   .poster-tagline { letter-spacing: 4px; text-indent: 4px; }
   .poster-year { letter-spacing: 6px; text-indent: 6px; }
-  .dorm-mini { width: 200px; }
+  .dorm-mini { width: 216px; }
   .showcase-head .en { display: none; }
 }

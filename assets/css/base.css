@@ -261,9 +261,13 @@ ul { list-style: none; }
   max-width: 88vw;
   max-height: 80vh;
   object-fit: contain;          /* 完整显示,不裁切 */
-  border-radius: 12px;
-  border: 1px solid var(--gold-line);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8);
+  padding: 8px;                 /* 玻璃卡纸:图片四周留一圈,和内容区统一 */
+  border-radius: 20px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 30px 80px rgba(0, 0, 0, 0.8);
 }
 .lightbox-caption {
   text-align: center;
