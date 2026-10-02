@@ -5,10 +5,13 @@
    ============================================================ */
 
 :root {
+  color-scheme: dark;
+
   /* 深色底 */
   --bg0: #070b14;        /* 最底层夜空 */
   --bg1: #0d1424;        /* 卡片/表面 */
   --bg2: #141d33;        /* 更深一块 / 悬浮 */
+  --bg0-veil: rgba(7, 11, 20, 0.92);      /* 底部信息栏的渐隐底 */
 
   /* 点缀色：金 + 橙 */
   --gold: #f0b90b;       /* 主金 */
@@ -20,6 +23,20 @@
   --text: #e8edf7;
   --muted: #8b93a8;
   --faint: #5a6276;
+
+  /* 分隔线 / 弱底(随主题变,别的地方不要再硬写 rgba(255,255,255,…)) */
+  --line: rgba(255, 255, 255, 0.08);
+  --chip: rgba(255, 255, 255, 0.045);
+
+  /* 苹果式玻璃材质 */
+  --glass-bg: rgba(20, 27, 42, 0.46);
+  --glass-brd: rgba(255, 255, 255, 0.14);
+  --glass-hi: rgba(255, 255, 255, 0.22);   /* 顶部内高光 */
+  --glass-shadow: 0 20px 52px rgba(0, 0, 0, 0.45);
+
+  /* 页面底色上的两团氛围光 */
+  --glow-top: rgba(20, 29, 51, 0.62);
+  --glow-btm: rgba(255, 138, 0, 0.06);
 
   /* 尺寸 */
   --radius: 18px;
@@ -34,19 +51,57 @@
   --font-latin: "MiSans", "SF Pro Display", "Helvetica Neue", "Arial", sans-serif;
 }
 
+/* ============================================================
+   浅色主题:只覆盖颜色变量,结构完全不动
+   由 <html data-theme="light"> 触发(nav.js 的开关按钮负责切换)
+   ============================================================ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg0: #f4f6fa;
+  --bg1: #ffffff;
+  --bg2: #eaeef6;
+  --bg0-veil: rgba(244, 246, 250, 0.92);
+
+  /* 白色底上金色必须压深,否则看不清 */
+  --gold: #b3810a;
+  --gold-2: #d97400;
+  --gold-soft: rgba(179, 129, 10, 0.10);
+  --gold-line: rgba(179, 129, 10, 0.26);
+
+  --text: #10131a;
+  --muted: #5b6479;
+  --faint: #8b93a5;
+
+  --line: rgba(16, 19, 26, 0.10);
+  --chip: rgba(16, 19, 26, 0.035);
+
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-brd: rgba(255, 255, 255, 0.92);
+  --glass-hi: rgba(255, 255, 255, 0.98);
+  --glass-shadow: 0 18px 44px rgba(16, 19, 26, 0.13);
+
+  --glow-top: rgba(255, 255, 255, 0.92);
+  --glow-btm: rgba(217, 116, 0, 0.05);
+
+  --shadow: 0 18px 50px rgba(16, 19, 26, 0.14);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
 body {
   font-family: var(--font-body);
-  background: var(--bg0);
+  background-color: var(--bg0);
   color: var(--text);
   line-height: 1.75;
-  /* 轻微胶片噪点,增强电影感 */
+  /* 页面底色上的两团氛围光(随主题换色) */
   background-image:
-    radial-gradient(circle at 50% 0%, rgba(20, 29, 51, 0.6), transparent 60%),
-    radial-gradient(circle at 15% 100%, rgba(255, 138, 0, 0.06), transparent 45%);
+    radial-gradient(circle at 50% 0%, var(--glow-top), transparent 60%),
+    radial-gradient(circle at 15% 100%, var(--glow-btm), transparent 45%);
+  /* 主题切换时平滑过渡,不要闪一下 */
+  transition: background-color 0.45s ease, color 0.45s ease;
 }
 
 img { max-width: 100%; display: block; }
@@ -73,6 +128,20 @@ ul { list-style: none; }
 .container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
 
 .section { padding: 72px 0; }
+
+/* ============================================================
+   苹果式玻璃材质
+   半透明 + 背景模糊 + 1px 高光描边 + 顶部内高光
+   导航、悬浮控件、卡片共用;不支持 backdrop-filter 的浏览器
+   会自动退化为半透明底,依然可读
+   ============================================================ */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+}
 
 /* 区块标题：影视剧那种"章节编号 + 标题" */
 .section-title {

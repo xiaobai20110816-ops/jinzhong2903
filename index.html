@@ -6,7 +6,18 @@
   <meta name="description" content="103班 · 音乐领军班 — 青春交响，永不散场">
   <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
   <meta name="view-transition" content="same-origin">
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#070b14">
   <title>103班 · 音乐领军班</title>
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+    } catch (e) {}
+  </script>
   <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
   <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
   <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
@@ -27,7 +38,9 @@
       </video>
       <div class="poster-shade" aria-hidden="true"></div>
       <div class="poster-center">
+        <p class="poster-kicker">Jinhua No.1 High School</p>
         <h1 class="poster-title">103<span>班</span></h1>
+        <div class="poster-rule" aria-hidden="true"></div>
         <p class="poster-tagline">CLASS 103 · MUSICAL VANGUARDS</p>
         <p class="poster-year">2026</p>
       </div>
@@ -190,6 +203,7 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.save();
         ctx.scale(DPR, DPR);
+        const light = document.documentElement.dataset.theme === "light"; // 浅色底下粒子要变深才看得见
         const ox = (mouse.x - 0.5) * 24, oy = (mouse.y - 0.5) * 24; // 轻微视差
         for (const p of parts) {
           p.phase += 0.004;
@@ -201,8 +215,8 @@
           ctx.beginPath();
           ctx.arc(p.x + dx - ox, p.y + dy - oy, p.r, 0, Math.PI * 2);
           ctx.fillStyle = p.gold
-            ? "rgba(240,185,11," + (p.a * flicker).toFixed(3) + ")"
-            : "rgba(255,255,255," + (p.a * 0.8 * flicker).toFixed(3) + ")";
+            ? (light ? "rgba(179,129,10," : "rgba(240,185,11,") + (p.a * flicker).toFixed(3) + ")"
+            : (light ? "rgba(16,19,26," : "rgba(255,255,255,") + (p.a * 0.8 * flicker).toFixed(3) + ")";
           ctx.fill();
         }
         ctx.restore();

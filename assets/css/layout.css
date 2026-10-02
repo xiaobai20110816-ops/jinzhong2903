@@ -1,23 +1,41 @@
 /* ============================================================
    103班：音乐领军班 · 布局与导航
-   顶部导航栏(由 nav.js 动态注入) + 手机汉堡菜单 + 底部
+   悬浮玻璃导航条(由 nav.js 动态注入) + 主题开关 + 手机菜单 + 底部
    ============================================================ */
 
-/* ---- 顶部导航 ---- */
+/* ---- 顶部导航:悬浮玻璃条 ---- */
 .site-header {
   position: sticky;
   top: 0;
   z-index: 200;
-  background: rgba(7, 11, 20, 0.85);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--gold-line);
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  pointer-events: none;   /* 透明区域不挡点击,只有玻璃条本身可交互 */
+
+  /* 导航的"墨水色"与玻璃底色,默认跟随主题;
+     首页首屏会覆盖成深色版本(视频太亮,白字才压得住) */
+  --nav-ink: var(--text);
+  --nav-ink-dim: var(--muted);
+  --nav-bg: var(--glass-bg);
+  --nav-brd: var(--glass-brd);
 }
 
 .nav {
+  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 66px;
+  gap: 12px;
+  height: 58px;
+  padding: 0 10px 0 18px;
+  border-radius: 999px;
+  background: var(--nav-bg);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--nav-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  transition: background 0.4s ease, border-color 0.4s ease;
 }
 
 .nav-logo {
@@ -26,20 +44,21 @@
   gap: 10px;
 }
 .nav-logo img {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  box-shadow: 0 0 18px rgba(240, 185, 11, 0.3);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  box-shadow: 0 0 18px rgba(240, 185, 11, 0.28);
 }
 .nav-logo b {
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   letter-spacing: 2px;
-  color: var(--text);
+  color: var(--nav-ink);
+  transition: color 0.4s ease;
 }
 .nav-logo small {
   display: block;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   letter-spacing: 3px;
   color: var(--gold);
   text-transform: uppercase;
@@ -49,34 +68,59 @@
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .nav-links a {
   position: relative;
-  padding: 8px 16px;
+  padding: 8px 15px;
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 1.5px;
-  text-transform: uppercase;
-  font-size: 0.95rem;
-  color: var(--muted);
-  transition: color 0.2s;
+  font-size: 0.9rem;
+  color: var(--nav-ink-dim);
+  transition: color 0.25s;
 }
 .nav-links a::after {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 2px;
+  bottom: 1px;
   width: 0;
   height: 2px;
   background: linear-gradient(90deg, var(--gold), var(--gold-2));
   transform: translateX(-50%);
   transition: width 0.25s;
 }
-.nav-links a:hover { color: var(--text); }
-.nav-links a:hover::after { width: 60%; }
+.nav-links a:hover { color: var(--nav-ink); }
+.nav-links a:hover::after { width: 52%; }
 .nav-links a.active { color: var(--gold); }
-.nav-links a.active::after { width: 60%; }
+.nav-links a.active::after { width: 52%; }
+
+/* ---- 深色/浅色开关:玻璃圆钮,图标随当前主题切换 ---- */
+.theme-toggle {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--chip);
+  border: 1px solid var(--nav-brd);
+  color: var(--nav-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.3s ease, color 0.4s ease, transform 0.25s ease, border-color 0.4s ease;
+}
+.theme-toggle:hover { transform: scale(1.08); background: var(--gold-soft); }
+.theme-toggle:active { transform: scale(0.96); }
+.theme-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.theme-toggle svg { width: 19px; height: 19px; display: block; }
+
+/* 深色下显示"太阳"(点了变浅色),浅色下显示"月亮" */
+.theme-toggle .i-sun { display: block; }
+.theme-toggle .i-moon { display: none; }
+:root[data-theme="light"] .theme-toggle .i-sun { display: none; }
+:root[data-theme="light"] .theme-toggle .i-moon { display: block; }
 
 /* 汉堡按钮(手机才显示) */
 .nav-toggle {
@@ -84,15 +128,15 @@
   flex-direction: column;
   gap: 5px;
   background: none;
-  border: 1px solid var(--gold-line);
-  border-radius: 8px;
-  padding: 9px 10px;
+  border: 1px solid var(--nav-brd);
+  border-radius: 10px;
+  padding: 10px 11px;
   cursor: pointer;
 }
 .nav-toggle span {
-  width: 22px;
+  width: 20px;
   height: 2px;
-  background: var(--gold);
+  background: var(--nav-ink);
   transition: 0.3s;
 }
 .nav-toggle.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
@@ -110,30 +154,32 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   text-align: center;
   font-size: 0.68rem;
   letter-spacing: 0.15em;
-  color: rgba(232, 237, 247, 0.22);
-  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.92) 65%);
+  color: var(--faint);
+  background: linear-gradient(180deg, transparent, var(--bg0-veil) 65%);
   pointer-events: none; /* 不干扰主视觉与点击 */
+  transition: color 0.45s ease, background 0.45s ease;
 }
 .site-footer b {
-  color: rgba(232, 237, 247, 0.42);
+  color: var(--muted);
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 0.2em;
 }
-.site-footer em { color: var(--gold); font-style: normal; opacity: 0.6; }
+.site-footer em { color: var(--gold); font-style: normal; opacity: 0.75; }
 .site-footer i { display: inline-block; margin: 0 10px; font-style: normal; opacity: 0.5; }
 
 /* ---- 各子页面共用页头(横幅) ---- */
 .page-hero {
-  padding: 92px 20px 60px;
+  padding: 84px 20px 64px;
   text-align: center;
   position: relative;
   overflow: hidden;
-  border-bottom: 1px solid var(--gold-line);
+  border-bottom: 1px solid var(--line);
   background:
-    radial-gradient(circle at 50% 0%, rgba(240, 185, 11, 0.14), transparent 55%),
-    linear-gradient(180deg, var(--bg0), #0a101f);
+    radial-gradient(circle at 50% 0%, var(--gold-soft), transparent 55%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
   animation: page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; /* 柔和落地 */
+  transition: background 0.45s ease, border-color 0.45s ease;
 }
 .page-hero .no {
   font-family: var(--font-latin);
@@ -172,23 +218,32 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 
   .nav-links {
     position: fixed;
-    top: 66px;
-    left: 0;
-    right: 0;
+    top: 82px;
+    left: 14px;
+    right: 14px;
     flex-direction: column;
     align-items: stretch;
-    background: rgba(7, 11, 20, 0.98);
-    padding: 10px 18px 20px;
-    border-bottom: 1px solid var(--gold-line);
-    transform: translateY(-120%);
-    transition: transform 0.3s ease;
+    gap: 0;
+    padding: 10px 14px 14px;
+    border-radius: 24px;
+    /* 用 --nav-bg:首页首屏(深色导航)时展开也是深色,不会白字白底 */
+    background: var(--nav-bg);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: blur(26px) saturate(180%);
+    border: 1px solid var(--nav-brd);
+    box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+    transform: translateY(-130%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.32s ease;
   }
-  .nav-links.open { transform: translateY(0); }
+  .nav-links.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
   .nav-links a {
     text-align: center;
     padding: 13px;
-    border-bottom: 1px dashed rgba(240, 185, 11, 0.12);
+    border-bottom: 1px solid var(--line);
   }
+  .nav-links a:last-child { border-bottom: none; }
   .nav-links a::after { display: none; }
 
   .section { padding: 48px 0; }

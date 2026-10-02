@@ -25,7 +25,7 @@
 .student-card:hover {
   transform: translateY(-8px);
   border-color: var(--gold);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow);
 }
 
 /* 头像占位：无照片时显示姓氏首字 + 渐变圆 */
@@ -99,7 +99,7 @@
   font-size: clamp(2.6rem, 9vw, 5.5rem);
   letter-spacing: 0.18em;
   text-indent: 0.18em;          /* 抵消字距造成的右偏 */
-  color: #fff;
+  color: var(--text);
   margin: 18px 0 14px;
 }
 .students-soon .soon-note {
