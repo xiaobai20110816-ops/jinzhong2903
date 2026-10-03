@@ -9,7 +9,6 @@ import {
   fail,
   notReady,
   ensureSchema,
-  ensureOwner,
   jsonWith,
   hashPassword,
   randomHex,
@@ -26,7 +25,6 @@ const REG_COOLDOWN_MS = 20000; // 同一台设备 20 秒内只能注册一次,�
 export async function onRequestPost({ request, env }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
-  await ensureOwner(env.DB, env);
 
   let payload;
   try {

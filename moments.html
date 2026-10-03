@@ -149,31 +149,123 @@
 
   <script src="assets/js/nav.js"></script>
   <script>
-    // 高光时刻:点击放大(灯箱)
-    const lightbox = document.getElementById("lightbox");
-    const lightboxImg = document.getElementById("lightbox-img");
-    const lightboxCaption = document.getElementById("lightbox-caption");
-    const closeBtn = document.getElementById("lightbox-close");
+    // 高光时刻:照片分组与视频来自后台(GET /api/content 的 moments)
+    // 分组、图、视频都在渲染完成后再统一绑一次灯箱;拿不到内容就保留写死的三块
+    document.addEventListener("DOMContentLoaded", () => {
+      // 来自接口的文本 / 图片地址统一处理(图片地址必须过 C103Img)
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      const img = window.C103Img || ((v) => v);
 
-    document.querySelectorAll(".moment-item").forEach((item) => {
-      item.addEventListener("click", () => {
-        const img = item.querySelector("img");
-        const cap = item.querySelector("figcaption");
-        lightboxImg.src = img.src;
-        lightboxCaption.textContent = cap ? cap.textContent : "";
-        lightbox.classList.add("show");
+      const lightbox = document.getElementById("lightbox");
+      const lightboxImg = document.getElementById("lightbox-img");
+      const lightboxCaption = document.getElementById("lightbox-caption");
+      const closeBtn = document.getElementById("lightbox-close");
+
+      function closeLightbox() {
+        lightbox.classList.remove("show");
+      }
+      closeBtn.addEventListener("click", closeLightbox);
+      lightbox.addEventListener("click", (e) => {
+        if (e.target === lightbox) closeLightbox();
       });
-    });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeLightbox();
+      });
 
-    function closeLightbox() {
-      lightbox.classList.remove("show");
-    }
-    closeBtn.addEventListener("click", closeLightbox);
-    lightbox.addEventListener("click", (e) => {
-      if (e.target === lightbox) closeLightbox();
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeLightbox();
+      // 一张照片的相框;caption 为空时 alt 用分组标题,figcaption 省略
+      const figure = (photo, title) => {
+        const caption = photo && photo.caption ? String(photo.caption) : "";
+        const cap = caption ? `<figcaption>${esc(caption)}</figcaption>` : "";
+        return `
+        <figure class="moment-item">
+          <img src="${esc(img(photo && photo.src))}" alt="${esc(caption || title || "")}">
+          ${cap}
+        </figure>`;
+      };
+
+      // 点击放大(灯箱):渲染完成 / 兜底内容都要能用,统一在这里绑定
+      const bindLightbox = () => {
+        document.querySelectorAll(".moment-item").forEach((item) => {
+          item.addEventListener("click", () => {
+            const image = item.querySelector("img");
+            const cap = item.querySelector("figcaption");
+            lightboxImg.src = image.src;
+            lightboxCaption.textContent = cap ? cap.textContent : "";
+            lightbox.classList.add("show");
+          });
+        });
+      };
+
+      const grid = document.getElementById("moments-grid");
+      const mainSection = grid ? grid.closest("section") : null;
+      const fallbackBridge = document.querySelector(".bridge-grid")
+        ? document.querySelector(".bridge-grid").closest("section")
+        : null;
+
+      const render = (moments) => {
+        // 加载失败 / 没有分组:保留写死的三块
+        if (!moments || !Array.isArray(moments.groups) || !moments.groups.length) return;
+
+        // 第 1 组 → 现有照片墙(没有图就沿用写死的 13 张)
+        const first = moments.groups[0] || {};
+        const firstPhotos = Array.isArray(first.photos) ? first.photos : [];
+        if (grid && firstPhotos.length) {
+          grid.innerHTML = firstPhotos.map((p) => figure(p, first.title)).join("");
+        }
+
+        // 第 2 组及以后:每组一个 group-head + bridge-grid,插在第一块 section 之后
+        if (fallbackBridge) fallbackBridge.remove();
+        if (mainSection) {
+          let anchor = mainSection;
+          moments.groups.slice(1).forEach((g) => {
+            const photos = Array.isArray(g.photos) ? g.photos : [];
+            if (!photos.length) return;
+            const section = document.createElement("section");
+            section.className = "section";
+            section.innerHTML = `
+            <div class="container">
+              <div class="group-head">
+                <span class="en">${esc(g.en || "")}</span>
+                <h2>${esc(g.title || "")}</h2>
+              </div>
+              <div class="bridge-grid">${photos.map((p) => figure(p, g.title)).join("")}</div>
+            </div>`;
+            anchor.after(section);
+            anchor = section;
+          });
+        }
+
+        // 视频:后台有就清空重建,没有就保留写死的两个
+        const videos = Array.isArray(moments.videos) ? moments.videos : [];
+        const videoList = document.querySelector(".video-list");
+        if (videoList && videos.length) {
+          videoList.innerHTML = videos
+            .map(
+              (v) => `
+          <figure class="video-item">
+            <video controls preload="metadata" playsinline>
+              <source src="${esc(img(v && v.src))}" type="video/mp4">
+              你的浏览器不支持视频播放。
+            </video>
+            <figcaption class="video-note">${esc((v && v.caption) || "")}</figcaption>
+          </figure>`
+            )
+            .join("");
+        }
+      };
+
+      if (window.C103Content) {
+        // load() 失败时 resolve 出 null,此时保留写死内容,但灯箱照常绑定
+        C103Content.load().then((content) => {
+          if (content) render(content.moments);
+          bindLightbox();
+        });
+      } else {
+        bindLightbox();
+      }
     });
   </script>
 </body>

@@ -4,12 +4,11 @@
    前端每次打开页面问一次,用来决定导航栏和发帖框的样子
    ============================================================ */
 
-import { json, ensureSchema, ensureOwner, currentUser, notReady } from "../_utils.js";
+import { json, ensureSchema, currentUser, notReady } from "../_utils.js";
 
 export async function onRequestGet({ request, env }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
-  await ensureOwner(env.DB, env);
 
   const user = await currentUser(request, env);
   return json({ ok: true, user });

@@ -12,7 +12,6 @@ import {
   fail,
   notReady,
   ensureSchema,
-  ensureOwner,
   currentUser,
   toPost,
   loadThread,
@@ -117,7 +116,6 @@ export async function onRequestGet({ request, env }) {
 export async function onRequestPost({ request, env }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
-  await ensureOwner(env.DB, env);
 
   const me = await currentUser(request, env);
   if (!me) return fail("登录后才能发言", 401);

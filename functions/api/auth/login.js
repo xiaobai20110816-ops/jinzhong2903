@@ -8,7 +8,6 @@ import {
   fail,
   notReady,
   ensureSchema,
-  ensureOwner,
   jsonWith,
   hashPassword,
   randomHex,
@@ -20,7 +19,6 @@ import {
 export async function onRequestPost({ request, env }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
-  await ensureOwner(env.DB, env);
 
   let payload;
   try {

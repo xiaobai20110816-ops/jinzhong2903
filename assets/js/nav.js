@@ -239,11 +239,73 @@ const C103Auth = {
 
 window.C103Auth = C103Auth;
 
+/* ============================================================
+   站点内容:全站文案 / 公告 / 学生 / 宿舍 / 高光都从这里取
+   拉一次缓存在内存里,所有页面共用;后端没接上就返回 null,
+   页面各自保留一份写死的兜底样子,永远不会空白。
+   ============================================================ */
+const C103Content = {
+  data: null,
+  ready: null,
+  _subs: [],
+
+  onChange(fn) {
+    this._subs.push(fn);
+    if (this.data) fn(this.data);
+  },
+
+  _emit(data) {
+    for (const fn of this._subs) {
+      try { fn(data); } catch (e) { /* 单个回调出错不影响别人 */ }
+    }
+  },
+
+  load() {
+    if (!this.ready) {
+      this.ready = apiFetch(API + "/content")
+        .then((d) => {
+          this.data = d.content || null;
+          this._emit(this.data);
+          return this.data;
+        })
+        .catch(() => {
+          this.data = null;
+          this._emit(null);
+          return null;
+        });
+    }
+    return this.ready;
+  },
+
+  get(key) {
+    return this.data ? this.data[key] : null;
+  },
+};
+
+window.C103Content = C103Content;
+
+/* 图片地址:后台新传的图是 KV 里的 key(32 位 hex),老图是仓库里的相对路径,
+   两种写法都认,页面里统一用这个函数转一次 */
+const IMG_KEY_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
+
+function imgSrc(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (!s) return "";
+  return IMG_KEY_RE.test(s) ? API + "/img/" + s : s;
+}
+
+window.C103Img = imgSrc;
+
 /* 导航栏右侧的账号入口:没登录写「登录」,登录了显示头像/首字 */
 function renderAccount() {
+  const u = C103Auth.user;
+
+  // 服主 / 管理员才看得到「管理后台」入口
+  const adminLink = document.getElementById("nav-admin");
+  if (adminLink) adminLink.hidden = !(u && (u.role === "owner" || u.role === "admin"));
+
   const btn = document.getElementById("nav-account");
   if (!btn) return;
-  const u = C103Auth.user;
 
   if (!u) {
     btn.classList.remove("is-in");
@@ -343,6 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
           (n) => `<a href="${n.href}" data-nav ${n.href === current ? 'class="active"' : ""}>${n.label}</a>`
         ).join("")}
       </nav>
+      <a class="nav-admin" id="nav-admin" href="admin.html" data-nav hidden>管理后台</a>
       <a class="nav-account" id="nav-account" href="account.html" data-nav></a>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换深色 / 浅色模式">
         <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -361,11 +424,29 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>`;
   document.body.prepend(header);
 
+  // 手机版导航栏塞不下这个按钮,把它挪进汉堡菜单里
+  if (matchMedia("(max-width: 820px)").matches) {
+    const adminLink = header.querySelector("#nav-admin");
+    const links = header.querySelector("#nav-links");
+    if (adminLink && links) links.appendChild(adminLink);
+  }
+
   // ---- 注入底部信息栏(固定不随滚动消失) ----
+  // 文案从站点内容里取,后台改一次全站跟着变;拿不到就用这份兜底
+  const DEFAULT_FOOTER = ["青春交响，永不散场", "金华一中 103班", "班主任：盛老师", "鸣谢：小柏制作"];
   const footer = document.createElement("footer");
   footer.className = "site-footer";
-  footer.innerHTML = `青春交响，永不散场<i>/</i>金华一中 103班<i>/</i>班主任：盛老师<i>/</i>鸣谢：小柏制作`;
   document.body.appendChild(footer);
+  const renderFooter = () => {
+    const site = C103Content.get("site") || {};
+    const items = Array.isArray(site.footerItems) && site.footerItems.length
+      ? site.footerItems
+      : DEFAULT_FOOTER;
+    footer.innerHTML = items.map(esc).join("<i>/</i>");
+  };
+  renderFooter();
+  C103Content.onChange(renderFooter);
+  C103Content.load();
 
   // ---- 账号:先按未登录渲染,再问服务器要真实状态 ----
   renderAccount();

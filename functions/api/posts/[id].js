@@ -10,7 +10,6 @@ import {
   fail,
   notReady,
   ensureSchema,
-  ensureOwner,
   currentUser,
   isStaff,
   safeParse,
@@ -38,7 +37,6 @@ async function collectSubtree(db, rootId) {
 export async function onRequestPut({ request, env, params }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
-  await ensureOwner(env.DB, env);
 
   const me = await currentUser(request, env);
   if (!isStaff(me)) return fail("只有服主和管理员能置顶", 403);
@@ -68,7 +66,6 @@ export async function onRequestPut({ request, env, params }) {
 export async function onRequestDelete({ request, env, params }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
-  await ensureOwner(env.DB, env);
 
   const me = await currentUser(request, env);
   if (!me) return fail("请先登录", 401);

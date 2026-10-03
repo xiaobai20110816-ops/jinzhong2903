@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 管理后台">
+  <title>管理后台 · 103班 音乐领军班</title>
+  <meta name="robots" content="noindex">
+  <meta name="view-transition" content="same-origin">
+  <meta name="theme-color" content="#070b14">
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <style>
+    .adm-wrap { max-width: 980px; margin: 0 auto; }
+
+    /* ---- 玻璃底:和全站一个质感 ---- */
+    .glass {
+      background: var(--glass-surface);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      backdrop-filter: blur(26px) saturate(180%);
+      border: 1px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+      border-radius: 22px;
+      transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+    }
+
+    /* ---- 页签 ---- */
+    .adm-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .adm-tab {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.86rem;
+      letter-spacing: 2px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.3s ease, background-color 0.4s ease, border-color 0.4s ease;
+    }
+    .adm-tab:hover { color: var(--text); }
+    .adm-tab.active {
+      color: #0b0f1a;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      border-color: transparent;
+    }
+
+    .panel { padding: 24px 22px; animation: page-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .panel[hidden] { display: none; }
+    .panel-head { margin-bottom: 18px; }
+    .panel-head h2 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+    .panel-head p {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .rows { display: flex; flex-direction: column; gap: 14px; }
+    .row {
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+    }
+    .row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .panel input[type="text"],
+    .panel textarea {
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      color: var(--text);
+      background: var(--bg0);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.3s ease, background-color 0.4s ease, color 0.6s ease;
+    }
+    .panel input[type="text"]:focus,
+    .panel textarea:focus { border-color: var(--gold-line); }
+    .panel textarea { width: 100%; margin-top: 8px; resize: vertical; line-height: 1.7; }
+    .w-date { width: 118px; flex: none; }
+    .w-num { width: 92px; flex: none; }
+    .w-grow { flex: 1; min-width: 120px; }
+
+    .chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .btn {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.84rem;
+      letter-spacing: 1.5px;
+      padding: 10px 20px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      color: #0b0f1a;
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.3s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; transform: none; cursor: default; }
+    .btn.ghost {
+      background: var(--chip);
+      border-color: var(--line);
+      color: var(--text);
+    }
+    .icon-btn {
+      flex: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      color: var(--faint);
+      font-size: 0.95rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: color 0.25s ease, border-color 0.25s ease;
+    }
+    .icon-btn:hover { color: #ff7a7a; border-color: #ff7a7a; }
+
+    .panel-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+    .panel-foot .tip { font-size: 0.76rem; color: var(--faint); }
+
+    .field-grid { display: grid; gap: 14px; }
+    .field-grid label { display: block; }
+    .field-grid .lb {
+      display: block;
+      font-size: 0.74rem;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 7px;
+    }
+    .field-grid input[type="text"] { width: 100%; }
+
+    /* ---- 图片墙 ---- */
+    .shots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .shot { position: relative; width: 74px; height: 74px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+    .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .shot .x {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0, 0, 0, 0.62);
+      color: #fff;
+      font-size: 0.78rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .shot.add {
+      display: grid;
+      place-items: center;
+      background: var(--chip);
+      color: var(--muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+    .shot.add:hover { color: var(--gold); }
+
+    .avatar-slot {
+      flex: none;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .avatar-slot img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* ---- 成员表 ---- */
+    .member { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+    .member .m-face {
+      flex: none; width: 38px; height: 38px; border-radius: 50%; overflow: hidden;
+      display: grid; place-items: center; font-weight: 900; color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+    }
+    .member .m-face img { width: 100%; height: 100%; object-fit: cover; }
+    .member .m-name { font-family: var(--font-display); font-weight: 700; color: var(--text); }
+    .member .m-sub { font-size: 0.74rem; color: var(--faint); margin-top: 2px; }
+    .member .m-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .member select {
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      color: var(--text);
+      background: var(--bg0);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    .badge-pill {
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--gold);
+      color: #0b0f1a;
+    }
+
+    .note {
+      margin-top: 22px;
+      font-size: 0.76rem;
+      line-height: 1.8;
+      color: var(--faint);
+    }
+    .msg { font-size: 0.8rem; margin-top: 12px; min-height: 1.1em; }
+    .msg.err { color: #ff7a7a; }
+    .msg.ok { color: var(--gold); }
+    .msg.saving { color: var(--muted); }
+
+    .gate { padding: 32px 24px; text-align: center; }
+    .gate h2 { font-family: var(--font-display); font-size: 1.2rem; color: var(--text); }
+    .gate p { margin: 12px 0 20px; font-size: 0.86rem; line-height: 1.8; color: var(--muted); }
+
+    @media (max-width: 620px) {
+      .panel { padding: 18px 14px; border-radius: 18px; }
+      .w-date { width: 96px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 导航栏由 assets/js/nav.js 注入 -->
+
+  <section class="page-hero">
+    <div class="no">Console</div>
+    <h1><span class="gold-text">管理后台</span></h1>
+    <p>全站内容，都在这里改</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="adm-wrap">
+
+        <!-- 没权限 -->
+        <div class="glass gate" id="adm-gate" hidden>
+          <h2>这扇门只对服主和管理员开</h2>
+          <p id="gate-text">先用账号登录。如果你手里有一次性的服主激活口令，去个人中心激活一下再回来。</p>
+          <a class="btn" href="account.html">去个人中心 →</a>
+        </div>
+
+        <!-- 后台主体 -->
+        <div id="adm-main" hidden>
+          <div class="adm-tabs">
+            <button class="adm-tab active" type="button" data-panel="ann">班级公告</button>
+            <button class="adm-tab" type="button" data-panel="students">学生风采</button>
+            <button class="adm-tab" type="button" data-panel="dorms">宿舍风采</button>
+            <button class="adm-tab" type="button" data-panel="moments">高光时刻</button>
+            <button class="adm-tab" type="button" data-panel="site">首页文案</button>
+            <button class="adm-tab" type="button" data-panel="members">成员权限</button>
+          </div>
+
+          <!-- ========== 公告 ========== -->
+          <div class="glass panel" id="panel-ann">
+            <div class="panel-head">
+              <h2>班级公告</h2>
+              <p>首页的「班级公告」和公告页都读这里。勾了置顶的排在最前面，日期写 2026.10.03 这种格式。</p>
+            </div>
+            <div class="rows" id="ann-list"></div>
+            <div class="panel-foot">
+              <button class="btn ghost" type="button" id="ann-add">＋ 加一条公告</button>
+              <div>
+                <span class="msg" id="ann-msg"></span>
+                <button class="btn" type="button" data-save="announcements" data-msg="ann-msg">保存公告</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ========== 学生 ========== -->
+          <div class="glass panel" id="panel-students" hidden>
+            <div class="panel-head">
+              <h2>学生风采</h2>
+              <p>这里为空时，学生风采页显示「敬请期待」。头像可以直接从电脑上传，会自动压到 1MB 以内。</p>
+            </div>
+            <div class="rows" id="stu-list"></div>
+            <div class="panel-foot">
+              <button class="btn ghost" type="button" id="stu-add">＋ 加一位同学</button>
+              <div>
+                <span class="msg" id="stu-msg"></span>
+                <button class="btn" type="button" data-save="students" data-msg="stu-msg">保存名单</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ========== 宿舍 ========== -->
+          <div class="glass panel" id="panel-dorms" hidden>
+            <div class="panel-head">
+              <h2>宿舍风采</h2>
+              <p>第一张照片会作为合照大图，其余的是缩略图。成员昵称用逗号隔开即可，留空显示「待补充」。</p>
+            </div>
+            <div class="rows" id="dorm-list"></div>
+            <div class="panel-foot">
+              <button class="btn ghost" type="button" id="dorm-add">＋ 加一间宿舍</button>
+              <div>
+                <span class="msg" id="dorm-msg"></span>
+                <button class="btn" type="button" data-save="dorms" data-msg="dorm-msg">保存宿舍</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ========== 高光 ========== -->
+          <div class="glass panel" id="panel-moments" hidden>
+            <div class="panel-head">
+              <h2>高光时刻</h2>
+              <p>可以分组（比如「合唱比赛」「天桥文化」），每组里放照片。下面的视频只改标题和地址，大文件还是建议直接放进仓库的 assets/videos。</p>
+            </div>
+            <div class="rows" id="mom-groups"></div>
+            <button class="btn ghost" type="button" id="mom-add-group" style="margin-top:14px">＋ 加一个照片分组</button>
+
+            <div class="panel-head" style="margin-top:26px">
+              <h2>视频</h2>
+            </div>
+            <div class="rows" id="mom-videos"></div>
+            <button class="btn ghost" type="button" id="mom-add-video" style="margin-top:14px">＋ 加一个视频位</button>
+
+            <div class="panel-foot">
+              <span class="tip">照片墙每张最多 1MB，传多了会慢。</span>
+              <div>
+                <span class="msg" id="mom-msg"></span>
+                <button class="btn" type="button" data-save="moments" data-msg="mom-msg">保存高光时刻</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ========== 文案 ========== -->
+          <div class="glass panel" id="panel-site" hidden>
+            <div class="panel-head">
+              <h2>首页文案与鸣谢</h2>
+              <p>改完保存，全站所有页面立刻跟着变。</p>
+            </div>
+            <div class="field-grid">
+              <label><span class="lb">第一屏大字（如 103）</span><input id="s-heroTitle" type="text" maxlength="24"></label>
+              <label><span class="lb">大字后面的小字（如 班）</span><input id="s-heroTitleSuffix" type="text" maxlength="8"></label>
+              <label><span class="lb">第一屏顶部小字</span><input id="s-heroKicker" type="text" maxlength="60"></label>
+              <label><span class="lb">第一屏英文标语</span><input id="s-heroTagline" type="text" maxlength="80"></label>
+              <label><span class="lb">年份</span><input id="s-heroYear" type="text" maxlength="8"></label>
+              <label><span class="lb">学生风采那一行小字（名单为空时显示）</span><input id="s-studentsLede" type="text" maxlength="60"></label>
+              <label><span class="lb">高光时刻下方备注</span><input id="s-momentsNote" type="text" maxlength="200"></label>
+              <label><span class="lb">底部信息栏（一行一项，按顺序显示）</span>
+                <textarea id="s-footerItems" rows="4" maxlength="400"></textarea>
+              </label>
+              <label><span class="lb">公告页「鸣谢」小标题</span><input id="s-thanksTitle" type="text" maxlength="20"></label>
+              <label><span class="lb">鸣谢名字</span><input id="s-thanksName" type="text" maxlength="60"></label>
+            </div>
+            <div class="panel-foot">
+              <span class="tip">留空的项会自动退回默认文案。</span>
+              <div>
+                <span class="msg" id="site-msg"></span>
+                <button class="btn" type="button" data-save="site" data-msg="site-msg">保存文案</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ========== 成员 ========== -->
+          <div class="glass panel" id="panel-members" hidden>
+            <div class="panel-head">
+              <h2>成员权限</h2>
+              <p>只有服主能改权限。管理员能改全站内容、能置顶和删留言；普通成员只能发帖回复。</p>
+            </div>
+            <div class="rows" id="mem-list"></div>
+            <p class="msg" id="mem-msg"></p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const API = "api";
+      const A = window.C103Auth;
+      const C = window.C103Content;
+      const $ = (s, r) => (r || document).querySelector(s);
+      const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const img = window.C103Img;
+
+      let data = null;   // 内容工作副本
+      let me = null;
+
+      function say(id, text, kind) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text || "";
+        el.className = "msg" + (kind ? " " + kind : "");
+      }
+
+      async function upload(file, maxEdge) {
+        const blob = await window.C103Image.compress(file, { maxEdge: maxEdge || 1600 });
+        const res = await fetch(API + "/upload", {
+          method: "POST",
+          headers: { "content-type": blob.type || "image/jpeg" },
+          credentials: "same-origin",
+          body: blob,
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || !d.ok) throw new Error(d.error || "上传失败了");
+        return d.key;
+      }
+
+      /* ============ 公告 ============ */
+      function annRow(a) {
+        const el = document.createElement("div");
+        el.className = "row";
+        el.innerHTML = `
+          <div class="row-top">
+            <input class="i-date w-date" type="text" placeholder="2026.10.03" value="${esc(a.date)}">
+            <input class="i-title w-grow" type="text" placeholder="标题（可以空着）" value="${esc(a.title)}">
+            <label class="chk"><input class="i-pin" type="checkbox" ${a.pinned ? "checked" : ""}> 置顶</label>
+            <button class="icon-btn del" type="button" title="删掉这条">×</button>
+          </div>
+          <textarea class="i-body" rows="4" placeholder="正文，一行一段">${esc(a.body)}</textarea>`;
+        $(".del", el).addEventListener("click", () => el.remove());
+        return el;
+      }
+      function renderAnn() {
+        const box = $("#ann-list");
+        box.innerHTML = "";
+        (data.announcements || []).forEach((a) => box.appendChild(annRow(a)));
+      }
+      function collectAnn() {
+        return $$("#ann-list .row").map((r) => ({
+          date: $(".i-date", r).value.trim(),
+          title: $(".i-title", r).value.trim(),
+          body: $(".i-body", r).value,
+          pinned: $(".i-pin", r).checked,
+        }));
+      }
+      $("#ann-add").addEventListener("click", () => {
+        $("#ann-list").appendChild(annRow({ date: "", title: "", body: "", pinned: false }));
+      });
+
+      /* ============ 学生 ============ */
+      function stuRow(s) {
+        const el = document.createElement("div");
+        el.className = "row";
+        el.innerHTML = `
+          <div class="row-top">
+            <button class="avatar-slot" type="button" title="点头像上传">${s.avatar ? `<img src="${esc(img(s.avatar))}" alt="">` : "＋"}</button>
+            <input class="i-key" type="hidden" value="${esc(s.avatar)}">
+            <input class="i-name w-grow" type="text" placeholder="姓名" value="${esc(s.name)}">
+            <input class="i-tag w-grow" type="text" placeholder="人物定位标签，如「主唱」「定海神针」" value="${esc(s.tag)}">
+            <button class="icon-btn del" type="button" title="删掉">×</button>
+          </div>`;
+        $(".del", el).addEventListener("click", () => el.remove());
+
+        const slot = $(".avatar-slot", el);
+        const keyBox = $(".i-key", el);
+        const file = document.createElement("input");
+        file.type = "file";
+        file.accept = "image/*";
+        file.hidden = true;
+        el.appendChild(file);
+        slot.addEventListener("click", () => file.click());
+        file.addEventListener("change", async () => {
+          const f = (file.files || [])[0];
+          file.value = "";
+          if (!f) return;
+          slot.textContent = "…";
+          try {
+            const key = await upload(f, 512);
+            keyBox.value = key;
+            slot.innerHTML = `<img src="${esc(img(key))}" alt="">`;
+          } catch (err) {
+            slot.textContent = "＋";
+            say("stu-msg", err.message, "err");
+          }
+        });
+        return el;
+      }
+      function renderStudents() {
+        const box = $("#stu-list");
+        box.innerHTML = "";
+        (data.students || []).forEach((s) => box.appendChild(stuRow(s)));
+      }
+      function collectStudents() {
+        return $$("#stu-list .row").map((r) => ({
+          name: $(".i-name", r).value.trim(),
+          tag: $(".i-tag", r).value.trim(),
+          avatar: $(".i-key", r).value,
+        }));
+      }
+      $("#stu-add").addEventListener("click", () => {
+        $("#stu-list").appendChild(stuRow({ name: "", tag: "", avatar: "" }));
+      });
+
+      /* ============ 宿舍 ============ */
+      /* 宿舍照片只存地址;高光照片还带一句说明,点图可以改 */
+      function shotEl(src, caption, withCaption) {
+        const el = document.createElement("span");
+        el.className = "shot";
+        el.dataset.src = src;
+        el.dataset.caption = caption || "";
+        el.title = withCaption ? (caption || "（没有说明）") : "";
+        el.innerHTML = `<img src="${esc(img(src))}" alt=""><button class="x" type="button" title="删掉这张">×</button>`;
+        $(".x", el).addEventListener("click", (e) => {
+          e.stopPropagation();
+          el.remove();
+        });
+        if (withCaption) {
+          el.addEventListener("click", () => {
+            const v = prompt("这张图的说明（留空就不显示）：", el.dataset.caption || "");
+            if (v === null) return;
+            el.dataset.caption = v.trim().slice(0, 80);
+            el.title = el.dataset.caption || "（没有说明）";
+          });
+        }
+        return el;
+      }
+      function dormRow(d) {
+        const el = document.createElement("div");
+        el.className = "row";
+        el.innerHTML = `
+          <div class="row-top">
+            <input class="i-num w-num" type="text" placeholder="311" value="${esc(d.number)}">
+            <input class="i-nick w-grow" type="text" placeholder="宿舍昵称「皇家园区」" value="${esc(d.nick)}">
+            <button class="icon-btn del" type="button" title="删掉这间">×</button>
+          </div>
+          <input class="i-members w-grow" type="text" style="margin-top:8px;width:100%"
+                 placeholder="成员昵称，用逗号隔开" value="${esc((d.members || []).join("，"))}">
+          <div class="shots"></div>`;
+        $(".del", el).addEventListener("click", () => el.remove());
+
+        const shots = $(".shots", el);
+        (d.photos || []).forEach((p) => shots.appendChild(shotEl(p, "", false)));
+
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "shot add";
+        add.title = "上传照片";
+        add.textContent = "＋";
+        shots.appendChild(add);
+
+        const file = document.createElement("input");
+        file.type = "file";
+        file.accept = "image/*";
+        file.multiple = true;
+        file.hidden = true;
+        el.appendChild(file);
+        add.addEventListener("click", () => file.click());
+        file.addEventListener("change", async () => {
+          const files = Array.from(file.files || []);
+          file.value = "";
+          for (const f of files) {
+            add.textContent = "…";
+            try {
+              const key = await upload(f);
+              shots.insertBefore(shotEl(key, "", false), add);
+            } catch (err) {
+              say("dorm-msg", err.message, "err");
+            }
+          }
+          add.textContent = "＋";
+        });
+        return el;
+      }
+      function renderDorms() {
+        const box = $("#dorm-list");
+        box.innerHTML = "";
+        (data.dorms || []).forEach((d) => box.appendChild(dormRow(d)));
+      }
+      function collectDorms() {
+        return $$("#dorm-list .row").map((r) => ({
+          number: $(".i-num", r).value.trim(),
+          nick: $(".i-nick", r).value.trim(),
+          members: $(".i-members", r).value.split(/[,，、\s]+/).filter(Boolean),
+          photos: $$(".shot", $(".shots", r)).filter((s) => s.dataset.src).map((s) => s.dataset.src),
+        }));
+      }
+      $("#dorm-add").addEventListener("click", () => {
+        $("#dorm-list").appendChild(dormRow({ number: "", nick: "", members: [], photos: [] }));
+      });
+
+      /* ============ 高光 ============ */
+      function groupRow(g) {
+        const el = document.createElement("div");
+        el.className = "row";
+        el.innerHTML = `
+          <div class="row-top">
+            <input class="i-title w-grow" type="text" placeholder="分组名，如「合唱比赛」" value="${esc(g.title)}">
+            <input class="i-en w-num" type="text" placeholder="英文" value="${esc(g.en)}">
+            <button class="icon-btn del" type="button" title="删掉这组">×</button>
+          </div>
+          <div class="shots"></div>`;
+        $(".del", el).addEventListener("click", () => el.remove());
+
+        const shots = $(".shots", el);
+        (g.photos || []).forEach((p) => {
+          if (typeof p === "string") shots.appendChild(shotEl(p, "", true));
+          else shots.appendChild(shotEl(p.src, p.caption, true));
+        });
+
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "shot add";
+        add.title = "上传照片";
+        add.textContent = "＋";
+        shots.appendChild(add);
+
+        const file = document.createElement("input");
+        file.type = "file";
+        file.accept = "image/*";
+        file.multiple = true;
+        file.hidden = true;
+        el.appendChild(file);
+        add.addEventListener("click", () => file.click());
+        file.addEventListener("change", async () => {
+          const files = Array.from(file.files || []);
+          file.value = "";
+          for (const f of files) {
+            add.textContent = "…";
+            try {
+              const key = await upload(f);
+              shots.insertBefore(shotEl(key, "", true), add);
+            } catch (err) {
+              say("mom-msg", err.message, "err");
+            }
+          }
+          add.textContent = "＋";
+        });
+        return el;
+      }
+      function videoRow(v) {
+        const el = document.createElement("div");
+        el.className = "row";
+        el.innerHTML = `
+          <div class="row-top">
+            <input class="i-src w-grow" type="text" placeholder="assets/videos/parade.mp4" value="${esc(v.src)}">
+            <input class="i-cap w-grow" type="text" placeholder="说明，如「片段一 · 时长 04:31」" value="${esc(v.caption)}">
+            <button class="icon-btn del" type="button" title="删掉">×</button>
+          </div>`;
+        $(".del", el).addEventListener("click", () => el.remove());
+        return el;
+      }
+      function renderMoments() {
+        const gbox = $("#mom-groups");
+        gbox.innerHTML = "";
+        ((data.moments && data.moments.groups) || []).forEach((g) => gbox.appendChild(groupRow(g)));
+
+        const vbox = $("#mom-videos");
+        vbox.innerHTML = "";
+        ((data.moments && data.moments.videos) || []).forEach((v) => vbox.appendChild(videoRow(v)));
+      }
+      function collectMoments() {
+        return {
+          groups: $$("#mom-groups .row").map((r) => ({
+            title: $(".i-title", r).value.trim(),
+            en: $(".i-en", r).value.trim(),
+            photos: $$(".shot", $(".shots", r)).filter((s) => s.dataset.src)
+              .map((s) => ({ src: s.dataset.src, caption: s.dataset.caption || "" })),
+          })),
+          videos: $$("#mom-videos .row").map((r) => ({
+            src: $(".i-src", r).value.trim(),
+            caption: $(".i-cap", r).value.trim(),
+          })).filter((v) => v.src),
+        };
+      }
+      $("#mom-add-group").addEventListener("click", () => {
+        $("#mom-groups").appendChild(groupRow({ title: "", en: "", photos: [] }));
+      });
+      $("#mom-add-video").addEventListener("click", () => {
+        $("#mom-videos").appendChild(videoRow({ src: "", caption: "" }));
+      });
+
+      /* ============ 文案 ============ */
+      const SITE_FIELDS = ["heroKicker", "heroTitle", "heroTitleSuffix", "heroTagline", "heroYear",
+        "studentsLede", "momentsNote", "thanksTitle", "thanksName"];
+
+      function renderSite() {
+        const s = data.site || {};
+        SITE_FIELDS.forEach((k) => { const el = $("#s-" + k); if (el) el.value = s[k] || ""; });
+        $("#s-footerItems").value = (s.footerItems || []).join("\n");
+      }
+      function collectSite() {
+        const out = {};
+        SITE_FIELDS.forEach((k) => { const el = $("#s-" + k); if (el) out[k] = el.value.trim(); });
+        out.footerItems = $("#s-footerItems").value.split("\n").map((s) => s.trim()).filter(Boolean);
+        return out;
+      }
+
+      /* ============ 成员 ============ */
+      function renderMembers() {
+        say("mem-msg", "");
+        fetch(API + "/users", { credentials: "same-origin" })
+          .then((r) => r.json())
+          .then((d) => {
+            if (!d.ok) throw new Error(d.error || "读不到成员列表");
+            const box = $("#mem-list");
+            box.innerHTML = "";
+            d.users.forEach((u) => {
+              const el = document.createElement("div");
+              el.className = "row member";
+              const isOwner = u.role === "owner";
+              const face = u.avatar
+                ? `<img src="${esc(img(u.avatar))}" alt="">`
+                : esc(u.name.slice(0, 1));
+              el.innerHTML = `
+                <span class="m-face">${face}</span>
+                <div>
+                  <div class="m-name">${esc(u.name)}</div>
+                  <div class="m-sub">${esc(u.signature || "（还没写个性签名）")}</div>
+                </div>
+                <div class="m-right"></div>`;
+              const right = $(".m-right", el);
+              if (isOwner) {
+                right.innerHTML = `<span class="badge-pill">服主</span>`;
+              } else if (me && me.role === "owner") {
+                const sel = document.createElement("select");
+                [["member", "普通成员"], ["admin", "管理员"]].forEach(([v, t]) => {
+                  const o = document.createElement("option");
+                  o.value = v;
+                  o.textContent = t;
+                  if (u.role === v) o.selected = true;
+                  sel.appendChild(o);
+                });
+                sel.addEventListener("change", async () => {
+                  sel.disabled = true;
+                  try {
+                    const res = await fetch(API + "/users", {
+                      method: "PUT",
+                      headers: { "content-type": "application/json" },
+                      credentials: "same-origin",
+                      body: JSON.stringify({ id: u.id, role: sel.value }),
+                    });
+                    const rd = await res.json().catch(() => ({}));
+                    if (!res.ok || !rd.ok) throw new Error(rd.error || "改不了");
+                    say("mem-msg", `${u.name} 现在是${sel.value === "admin" ? "管理员" : "普通成员"}了`, "ok");
+                  } catch (err) {
+                    say("mem-msg", err.message, "err");
+                  } finally {
+                    sel.disabled = false;
+                  }
+                });
+                right.appendChild(sel);
+              } else {
+                right.innerHTML = `<span class="m-sub">${u.role === "admin" ? "管理员" : "普通成员"}</span>`;
+              }
+              box.appendChild(el);
+            });
+          })
+          .catch((err) => say("mem-msg", err.message, "err"));
+      }
+
+      /* ============ 保存 ============ */
+      const COLLECT = {
+        announcements: collectAnn,
+        students: collectStudents,
+        dorms: collectDorms,
+        moments: collectMoments,
+        site: collectSite,
+      };
+
+      $$("[data-save]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const key = btn.dataset.save;
+          const msgId = btn.dataset.msg;
+          btn.disabled = true;
+          say(msgId, "保存中…", "saving");
+          try {
+            const res = await fetch(API + "/content", {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ key: key, value: COLLECT[key]() }),
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
+            data[key] = d.value;
+            C.data = Object.assign({}, C.data, { [key]: d.value });
+            say(msgId, "已保存，页面刷新就能看到", "ok");
+            refreshPanels(key);
+          } catch (err) {
+            say(msgId, err.message, "err");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+
+      // 保存完把「文案 / 公告」这类别的面板顺手刷新一下,免得前后不一致
+      function refreshPanels(saved) {
+        if (saved === "site") renderSite();
+        if (saved === "announcements") renderAnn();
+        if (saved === "students") renderStudents();
+        if (saved === "dorms") renderDorms();
+        if (saved === "moments") renderMoments();
+      }
+
+      /* ============ 页签 ============ */
+      $$(".adm-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          $$(".adm-tab").forEach((t) => t.classList.toggle("active", t === tab));
+          const name = tab.dataset.panel;
+          $$(".panel").forEach((p) => { p.hidden = p.id !== "panel-" + name; });
+          if (name === "members") renderMembers();
+        });
+      });
+
+      /* ============ 入场:先认人,再拉内容 ============ */
+      function paint() {
+        const gate = $("#adm-gate");
+        const main = $("#adm-main");
+        const ok = !!me && (me.role === "owner" || me.role === "admin");
+        if (!ok) {
+          $("#gate-text").textContent = me
+            ? "你现在的身份是普通成员。如果手里有一次性的服主激活口令，去个人中心激活一下再回来。"
+            : "先用账号登录。如果你手里有一次性的服主激活口令，去个人中心激活一下再回来。";
+        }
+        gate.hidden = ok;
+        main.hidden = !ok;
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        A.ready.then(() => {
+          me = A.user;
+          paint();
+          if (!me || (me.role !== "owner" && me.role !== "admin")) return;
+
+          C.load().then((d) => {
+            if (!d) {
+              say("ann-msg", "内容没读上来，检查一下网络再刷新", "err");
+              return;
+            }
+            data = d;
+            renderAnn();
+            renderStudents();
+            renderDorms();
+            renderMoments();
+            renderSite();
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

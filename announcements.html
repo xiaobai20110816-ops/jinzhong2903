@@ -163,5 +163,62 @@
   </section>
 
   <script src="assets/js/nav.js"></script>
+  <script>
+    // 班级公告:时间线与鸣谢都来自后台(GET /api/content)
+    // 拿不到内容时不动 DOM,保留上面写死的三段公告与「鸣谢 / 小柏制作」
+    document.addEventListener("DOMContentLoaded", () => {
+      const timeline = document.querySelector(".timeline");
+      if (!timeline) return;
+
+      // 来自接口的文本统一转义后再拼进 innerHTML
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+
+      // 鸣谢:后台改了全站跟着变,拿不到就用页面里写死的
+      const thanksTitle = document.querySelector(".thanks-title");
+      const credit = document.querySelector(".credit");
+      const renderThanks = (site) => {
+        if (!site) return;
+        if (thanksTitle && site.thanksTitle) thanksTitle.textContent = site.thanksTitle;
+        if (credit && site.thanksName) credit.textContent = site.thanksName;
+      };
+
+      const render = (list) => {
+        // 加载失败 / 列表为空:保留写死的三段
+        if (!Array.isArray(list) || !list.length) return;
+
+        // 置顶的排前面,其余保持后台数组顺序
+        const items = list.slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+        timeline.innerHTML = items
+          .map((a) => {
+            const paras = String(a.body || "")
+              .split("\n")
+              .map((t) => t.trim())
+              .filter(Boolean)
+              .map((t) => `<p>${esc(t)}</p>`)
+              .join("");
+            const title = a.title ? `<h3>${esc(a.title)}</h3>` : "";
+            const pin = a.pinned ? `<span class="tl-pin">置顶</span>` : "";
+            return `
+        <div class="tl-item${a.pinned ? " pinned" : ""}">
+          <div class="tl-date">${esc(a.date)}${pin}</div>
+          <div class="tl-body">${title}${paras}</div>
+        </div>`;
+          })
+          .join("");
+      };
+
+      if (!window.C103Content) return;
+      // load() 失败时 resolve 出 null,此时保留写死内容
+      C103Content.load().then((content) => {
+        if (!content) return;
+        renderThanks(content.site);
+        render(content.announcements);
+      });
+    });
+  </script>
 </body>
 </html>

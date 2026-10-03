@@ -148,6 +148,17 @@ export function ensureSchema(db) {
         )
         .run();
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`).run();
+
+      // ---- 站点开关:一行一个开关,靠主键唯一性做「只能成功一次」的事 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS settings (
+             key TEXT PRIMARY KEY,
+             value TEXT,
+             updated_at INTEGER NOT NULL
+           )`
+        )
+        .run();
     })().catch((err) => {
       schemaReady = null; // 失败就下次重来,不要把错误缓存住
       throw err;
@@ -262,60 +273,32 @@ export function regionOf(request) {
 }
 
 /* ============================================================
-   服主账号:口令由环境变量决定,站点第一次被访问时自动建好
-   优先 OWNER_PASSWORD;没设就沿用老的 ADMIN_PASSWORD(班委总口令)。
-   两个都没设就跳过——站点照常能用,只是暂时没有服主。
+   一次性服主激活口令
+
+   口令明文不入仓库:这里只留 SHA-256(固定盐 + 明文)。
+   谁先登录后用它,谁就成为服主;之后 settings 里会写死一行
+   owner_claimed,再拿这串口令来只会被告知「已经用过了」。
+   没有后路:不做转让,也没法重置。
    ============================================================ */
 
-const OWNER_NAME = "小柏";
-let ownerReady = null;
+const ACTIVATION_SALT = "103-vanguard-2026";
+const ACTIVATION_SHA256 = "ac4aa0ea59eb903c48abf13f4297de331183f787aafe318303ead729debc40a5";
+export const CLAIM_KEY = "owner_claimed";
 
-async function doEnsureOwner(db, env) {
-  const password = String(env.OWNER_PASSWORD || env.ADMIN_PASSWORD || "");
-  if (!password) return;
-
-  const row = await db
-    .prepare("SELECT id, salt, pass_hash, role FROM users WHERE username = ?")
-    .bind(OWNER_NAME)
-    .first();
-
-  if (!row) {
-    const salt = randomHex(8);
-    await db
-      .prepare(
-        `INSERT OR IGNORE INTO users
-           (username, salt, pass_hash, avatar_key, signature, role, cid, created_at)
-         VALUES (?, ?, ?, NULL, ?, 'owner', NULL, ?)`
-      )
-      .bind(
-        OWNER_NAME,
-        salt,
-        await hashPassword(password, salt),
-        "这里是 103 的官方发布台。",
-        Date.now()
-      )
-      .run();
-    return;
-  }
-
-  // 口令换过了就同步一次,免得环境变量和库里对不上
-  if (row.pass_hash !== (await hashPassword(password, row.salt))) {
-    await db
-      .prepare("UPDATE users SET pass_hash = ?, role = 'owner' WHERE id = ?")
-      .bind(await hashPassword(password, row.salt), row.id)
-      .run();
-  } else if (row.role !== "owner") {
-    await db.prepare("UPDATE users SET role = 'owner' WHERE id = ?").bind(row.id).run();
-  }
+export async function isActivationCode(code) {
+  const input = String(code || "").trim().toUpperCase();
+  if (!input) return false;
+  return (await hashPassword(input, ACTIVATION_SALT)) === ACTIVATION_SHA256;
 }
 
-export function ensureOwner(db, env) {
-  if (ownerReady) return ownerReady;
-  ownerReady = doEnsureOwner(db, env).catch((err) => {
-    ownerReady = null; // 失败下次重来
-    throw err;
-  });
-  return ownerReady;
+/* 原子占位:settings 的主键决定了只有一个请求能插进去。
+   插进去 = 我抢到了;插不进去 = 别人已经用过了 */
+export async function claimOnce(db, key, value) {
+  const res = await db
+    .prepare("INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+    .bind(key, String(value == null ? "" : value), Date.now())
+    .run();
+  return !!(res.meta && res.meta.changes);
 }
 
 /* 把一页根帖下面所有回复一次捞齐(广度优先,避免逐条查库)。

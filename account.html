@@ -136,6 +136,19 @@
     .acc-block input[type="text"]:focus { border-color: var(--gold-line); background: var(--gold-soft); }
     .acc-block .pick-hint { display: inline-block; margin-left: 12px; vertical-align: middle; }
 
+    /* ---- 一次性服主激活 ---- */
+    .acc-activate { margin-bottom: 20px; }
+    .acc-activate[hidden] { display: none; }
+    .acc-activate-row { display: flex; gap: 10px; align-items: center; }
+    .acc-activate-row input[type="text"] { flex: 1; min-width: 0; }
+    .acc-activate-row .submit-btn { flex: none; padding: 11px 20px; }
+    .acc-activate p.hint {
+      margin-top: 9px;
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: var(--faint);
+    }
+
     .acc-foot {
       display: flex;
       align-items: center;
@@ -243,6 +256,17 @@
             <input id="acc-sig" type="text" maxlength="40" placeholder="一句话介绍自己，最多 40 字">
           </div>
 
+          <!-- 只有普通成员看得到:这是通往服主的唯一一把钥匙 -->
+          <div class="acc-activate" id="acc-activate" hidden>
+            <p class="acc-label">服主激活口令（只能用一次）</p>
+            <div class="acc-activate-row">
+              <input id="acc-code" type="text" maxlength="64" autocomplete="off" placeholder="粘贴那串一次性口令">
+              <button class="submit-btn" type="button" id="acc-activate-btn">激活</button>
+            </div>
+            <p class="hint">激活后你就是服主：金色徽章、发帖自动置顶、还能进后台改全站内容。<b>这串口令只能生效一次，用完永久作废。</b></p>
+            <p class="form-msg" id="acc-activate-msg"></p>
+          </div>
+
           <p class="form-msg" id="acc-msg"></p>
           <div class="acc-foot">
             <button class="submit-btn" type="button" id="acc-save">保存</button>
@@ -303,12 +327,16 @@
         $("#acc-sig").value = user.signature || "";
         paintFace(user.avatar);
 
+        // 激活口令只给普通成员看:已经当上服主/管理员的就不用再看了
+        const act = $("#acc-activate");
+        if (act) act.hidden = user.role !== "member";
+
         const note = $("#acc-note");
         if (user.role === "owner" || user.role === "admin") {
           note.hidden = false;
           note.innerHTML = user.role === "owner"
-            ? "你是服主：名字旁边会带金色「服主」徽章，发的通知自动置顶，还能置顶 / 删除任何一条留言。"
-            : "你是管理员：可以置顶和删除任意一条留言。";
+            ? "你是服主：名字旁边会带金色「服主」徽章，发的通知自动置顶，导航栏里可以进「管理后台」改全站内容。"
+            : "你是管理员：可以置顶和删除任意一条留言，也能进「管理后台」改全站内容。";
         } else {
           note.hidden = true;
         }
@@ -427,6 +455,38 @@
         } finally {
           btn.disabled = false;
           btn.textContent = "保存";
+        }
+      });
+
+      /* ---- 一次性服主激活:口令只有一次机会 ---- */
+      on($("#acc-activate-btn"), "click", async () => {
+        const msg = $("#acc-activate-msg");
+        const btn = $("#acc-activate-btn");
+        const code = $("#acc-code").value.trim();
+        if (!code) { say(msg, "先把口令填上", "err"); return; }
+
+        btn.disabled = true;
+        btn.textContent = "激活中";
+        try {
+          const res = await fetch(API + "/auth/activate", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ code: code }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || "激活失败了，稍后再试");
+
+          A.user = data.user;
+          A._emit(); // 导航栏的「管理后台」和金色徽章立刻生效
+          $("#acc-code").value = "";
+          say($("#acc-msg"), "激活成功，你现在是服主了。点导航栏的「管理后台」就能改全站内容。", "ok");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "激活";
         }
       });
 

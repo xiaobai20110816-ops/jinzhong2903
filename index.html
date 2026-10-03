@@ -425,7 +425,8 @@
     // 节奏是"转到位 → 停一会儿 → 再转下一张",不是连续匀速转。
     // 停住的那段时间一帧都不跑,只有 0.76 秒的转动期间才排 rAF——
     // 老版是常驻 rAF、每帧都写 scrollLeft 和 18 张玻璃卡的缩放,所以显得帧数很低。
-    (function () {
+    // 卡片由「站点内容」决定,所以这里包成函数,数据到位后再调用。
+    function initDormRail() {
       const rail = document.getElementById("dorm-rail");
       if (!rail) return;
       const btnPrev = document.querySelector(".rail-btn.prev");
@@ -616,6 +617,108 @@
 
       build();
       schedule(1000);   // 进来先停一秒,再开始一张一张地转
+    }
+
+    // ========== 站点内容:从后台接口拉一次,各板块用真数据重画 ==========
+    // 拉不到(断网 / 后端没接上)就什么都不做,页面保持上面写死的兜底样子。
+    (function () {
+      const C = window.C103Content;
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const img = window.C103Img || ((v) => v);
+      const PLACEHOLDER = "assets/images/avatars/avatar-placeholder.svg";
+
+      // ---- 第一屏文案 ----
+      function paintHero(site) {
+        const kicker = document.querySelector(".poster-kicker");
+        if (kicker && site.heroKicker) kicker.textContent = site.heroKicker;
+        const title = document.querySelector(".poster-title");
+        if (title && site.heroTitle) {
+          title.innerHTML = esc(site.heroTitle) +
+            (site.heroTitleSuffix ? `<span>${esc(site.heroTitleSuffix)}</span>` : "");
+        }
+        const tagline = document.querySelector(".poster-tagline");
+        if (tagline && site.heroTagline) tagline.textContent = site.heroTagline;
+        const year = document.querySelector(".poster-year");
+        if (year && site.heroYear) year.textContent = site.heroYear;
+      }
+
+      // ---- 01 学生风采:有名单就铺小卡,没名单保留「敬请期待」 ----
+      function paintStudents(list) {
+        const box = document.querySelector("#students .showcase-body");
+        if (!box) return;
+        box.className = "showcase-body stu-panel";
+        box.innerHTML = `<div class="stu-row">${list.slice(0, 12).map((s) => {
+          const face = s.avatar
+            ? `<img src="${esc(img(s.avatar))}" alt="${esc(s.name)}">`
+            : esc(String(s.name || "?").slice(0, 1));
+          return `<figure class="stu-mini">
+              <span class="stu-face">${face}</span>
+              <b>${esc(s.name)}</b>
+              ${s.tag ? `<em>${esc(s.tag)}</em>` : ""}
+            </figure>`;
+        }).join("")}</div>`;
+      }
+
+      // ---- 02 宿舍滑轨 ----
+      function paintRail(dorms) {
+        const rail = document.getElementById("dorm-rail");
+        if (!rail) return;
+        rail.innerHTML = dorms.map((d) => {
+          const photo = (d.photos && d.photos[0]) || PLACEHOLDER;
+          return `<a class="dorm-mini" href="dormitory.html" data-veil>
+              <span class="dorm-mini-photo"><img src="${esc(img(photo))}" alt="${esc(d.number)} 宿舍"></span>
+              <span class="dorm-mini-body"><b>${esc(d.number)}</b><em>${esc(d.nick || "待补充")}</em></span>
+            </a>`;
+        }).join("");
+      }
+
+      // ---- 03 高光时刻:拿第一组的照片铺九宫格 ----
+      function paintMoments(moments, site) {
+        const note = document.querySelector("#moments .showcase-note");
+        if (note && site.momentsNote) {
+          note.innerHTML = String(site.momentsNote).split("/")
+            .map((p) => esc(p.trim())).filter(Boolean).join("<i>/</i>");
+        }
+
+        const grid = document.querySelector("#moments .showcase-grid");
+        const group = moments && (moments.groups || [])[0];
+        const photos = (group && group.photos) || [];
+        if (!grid || !photos.length) return;
+        grid.innerHTML = photos.slice(0, 9).map((p) =>
+          `<a class="ph" href="moments.html" data-veil><img src="${esc(img(p.src))}" alt="${esc(p.caption || group.title)}"></a>`
+        ).join("");
+      }
+
+      // ---- 04 班级公告:最近三条 ----
+      function paintNews(list) {
+        const box = document.querySelector("#announcements .news-list");
+        if (!box || !list.length) return;
+        const digest = (a) => {
+          const line = String(a.body || "").split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
+          const text = a.title && line ? a.title + " —— " + line : (a.title || line);
+          return text.length > 62 ? text.slice(0, 62) + "…" : text;
+        };
+        box.innerHTML = list.slice(0, 3).map((a) => `
+          <a class="news" href="announcements.html" data-veil>
+            <span class="news-date">${esc(a.date)}${a.pinned ? '<i class="pin">置顶</i>' : ""}</span>
+            <p>${esc(digest(a))}</p>
+          </a>`).join("");
+      }
+
+      function paint(content) {
+        if (content) {
+          paintHero(content.site || {});
+          if (Array.isArray(content.students) && content.students.length) paintStudents(content.students);
+          if (Array.isArray(content.dorms) && content.dorms.length) paintRail(content.dorms);
+          paintMoments(content.moments, content.site || {});
+          if (Array.isArray(content.announcements)) paintNews(content.announcements);
+        }
+        initDormRail(); // 卡片定下来之后再启动滑轨
+      }
+
+      if (C && C.load) C.load().then(paint);
+      else paint(null);
     })();
   </script>
 

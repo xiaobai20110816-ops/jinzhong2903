@@ -404,6 +404,60 @@ body.poster .site-header:not(.is-scrolled) {
   transition: color 0.6s ease;
 }
 
+/* ---- 01 学生风采:名单有内容时的小卡(空名单仍用上面的 soon-inline) ---- */
+.stu-panel {
+  padding: 30px 24px;
+  border-radius: 22px;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+}
+.stu-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 14px;
+}
+.stu-mini {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px 8px 14px;
+  border-radius: 16px;
+  background: var(--chip);
+  border: 1px solid var(--line);
+}
+.stu-mini .stu-face {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.3rem;
+  color: #0b0f1a;
+  background: linear-gradient(135deg, var(--gold), var(--gold-2));
+}
+.stu-mini .stu-face img { width: 100%; height: 100%; object-fit: cover; }
+.stu-mini b {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text);
+  transition: color 0.6s ease;
+}
+.stu-mini em {
+  font-style: normal;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  transition: color 0.6s ease;
+}
+
 /* ---- 02 宿舍风采:横向滑轨(自动慢速滚动 + 左右箭头翻页) ---- */
 .rail-wrap { position: relative; }
 
