@@ -38,25 +38,15 @@
     <div class="container">
       <div class="story-wrap">
 
-        <!-- ========== 写一条 ========== -->
-        <form class="composer" id="composer" autocomplete="off">
-          <p class="composer-title">写一条</p>
-
-          <!-- 点了某条下面的「回复」才会出现,点 × 取消 -->
-          <div class="reply-chip" id="reply-chip" hidden>
-            <span id="reply-chip-text"></span>
-            <button type="button" id="reply-chip-x" aria-label="取消回复">×</button>
-          </div>
-
-          <div class="composer-row">
-            <label class="field">
-              <span>你的名字</span>
-              <input id="f-name" type="text" maxlength="24" placeholder="留空就署名「匿名同学」">
-            </label>
-            <label class="field">
-              <span>删帖口令（4 位以上）</span>
-              <input id="f-pass" type="text" maxlength="32" placeholder="自己记住，用来删自己的帖子">
-            </label>
+        <!-- ========== 写一条(登录后才会显示) ========== -->
+        <form class="composer" id="composer" autocomplete="off" hidden>
+          <div class="composer-me">
+            <span id="me-avatar" class="composer-face"></span>
+            <div class="composer-who">
+              <span class="story-name" id="me-name"></span>
+              <span class="composer-sig" id="me-sig"></span>
+            </div>
+            <a class="composer-center" href="account.html">个人中心 →</a>
           </div>
 
           <label class="field">
@@ -77,6 +67,13 @@
           </div>
         </form>
 
+        <!-- 没登录时挡在这里:先有个账号再来写 -->
+        <div class="login-gate" id="login-gate" hidden>
+          <p class="gate-title">登录后才能发言</p>
+          <p class="gate-sub">用账号署名，头像和个性签名会一起显示在留言上。</p>
+          <a class="gate-btn" href="account.html">去登录 / 注册 →</a>
+        </div>
+
         <!-- ========== 大家都在写 ========== -->
         <div class="story-list" id="story-list"></div>
 
@@ -88,7 +85,7 @@
 
         <div class="thanks">
           <p class="thanks-title">鸣谢</p>
-          <p class="credit">小柏制作 · 方胤锐发行</p>
+          <p class="credit">小柏制作</p>
         </div>
 
       </div>

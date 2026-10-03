@@ -1,10 +1,11 @@
 /* ============================================================
    103 纪事 · 前端脚本
-   1) 发帖:纯文字 + 最多 3 张图
-   2) 图片在上传前用 canvas 压到 1MB 以内
-   3) 倒序列表 + 翻页
-   4) 无限层嵌套回复(缩进最多到第 4 层,更深的靠「回复 @某某」辨认)
-   5) 凭口令删掉自己发的帖子
+   1) 登录后才能发言:未登录显示登录入口,登录后直接用自己的账号署名
+   2) 回复参考 B 站:点「回复」就地展开一个小输入框,不再滚回顶部
+      —— 所有回复都平铺一层,靠「回复 @某某」说明关系
+   3) 图片上传前用 canvas 压到 1MB 以内
+   4) 每条都显示头像、身份徽章和 IP 属地;服主/管理员可置顶
+   5) 删除:本人删自己的,服主/管理员删任意一条(不再需要删帖口令)
 
    同一份脚本同时给 story.html 和首页板块用:
    首页在引入本文件之前先设 window.CLASS103_BOARD = { limit: 3, compact: true },
@@ -16,9 +17,6 @@
 
   const API = "api";                 // 相对路径:官网根目录、子目录都能用
   const MAX_IMAGES = 3;
-  const MAX_EDGE = 1600;             // 长边像素上限
-  const TARGET_BYTES = 1024 * 1024;  // 压到 1MB 以内
-  const INDENT_MAX = 4;              // 缩进最多 4 层,再深就不缩了
   const COMPACT_REPLIES = 5;         // 首页紧凑模式:一条主帖最多先展开 5 条回复
 
   const CFG = Object.assign({ limit: 0, compact: false }, window.CLASS103_BOARD || {});
@@ -28,24 +26,12 @@
     if (el) el.addEventListener(ev, fn);
   };
 
-  const state = { page: 1, totalPages: 1, images: [], busy: false, locked: false, replyTo: null };
+  const state = { page: 1, totalPages: 1, images: [], busy: false, user: null, openReply: 0 };
   const els = {};
+  // 每个内联回复框自己的待传图片:form 元素 → [ {blob,url} ]
+  const replyImages = new Map();
 
   /* ---------- 小工具 ---------- */
-
-  // 同一台设备一个随机 id,只用来做「别发太快」的限流(整个班共用校园网时不会互相卡住)
-  function cid() {
-    try {
-      let v = localStorage.getItem("class103-cid");
-      if (!v) {
-        v = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now();
-        localStorage.setItem("class103-cid", v);
-      }
-      return v;
-    } catch (e) {
-      return "";
-    }
-  }
 
   function fmtTime(ms) {
     const d = new Date(ms);
@@ -59,91 +45,33 @@
     );
   }
 
+  function isStaff() {
+    return !!state.user && (state.user.role === "owner" || state.user.role === "admin");
+  }
+
   function setMsg(text, kind) {
     if (!els.msg) return;
     els.msg.textContent = text || "";
     els.msg.className = "form-msg" + (kind ? " " + kind : "");
   }
 
-  function submitLabel() {
-    return state.replyTo ? "回复" : "发布";
+  // 一句轻提示:飘在下方,两秒后自己消失
+  function toast(text) {
+    const t = document.createElement("div");
+    t.className = "story-toast";
+    t.textContent = text;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add("in"));
+    setTimeout(() => {
+      t.classList.remove("in");
+      setTimeout(() => t.remove(), 300);
+    }, 2200);
   }
 
-  /* ---------- 图片压缩:长边 ≤1600,质量从 0.85 逐档降到 0.45,
-       还超标就缩尺寸再来一轮,直到 ≤1MB ---------- */
+  /* ---------- 图片压缩:交给 nav.js 里的公共实现,见 C103Image ---------- */
 
-  function toBlob(canvas, quality) {
-    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-  }
-
-  async function decode(file) {
-    // createImageBitmap 能顺手按 EXIF 方向摆正,iPhone 竖拍的照片不会躺倒
-    if (window.createImageBitmap) {
-      try {
-        return await createImageBitmap(file, { imageOrientation: "from-image" });
-      } catch (e) {
-        /* 个别浏览器不认这个选项,退回 <img> */
-      }
-    }
-    return await new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve(img);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error("decode"));
-      };
-      img.src = url;
-    });
-  }
-
-  async function compressImage(file) {
-    let src;
-    try {
-      src = await decode(file);
-    } catch (e) {
-      throw new Error("这张图浏览器读不出来（iPhone 的 HEIC 格式最常见），请在相册里先导出成 JPG 再传。");
-    }
-
-    const w0 = src.width || 1;
-    const h0 = src.height || 1;
-    const fit = Math.min(1, MAX_EDGE / Math.max(w0, h0));
-    let w = Math.max(1, Math.round(w0 * fit));
-    let h = Math.max(1, Math.round(h0 * fit));
-
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    let quality = 0.85;
-    let blob = null;
-
-    for (let round = 0; round < 10; round++) {
-      canvas.width = w;
-      canvas.height = h;
-      ctx.fillStyle = "#ffffff"; // JPEG 没有透明通道,先铺白底免得透明区发黑
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(src, 0, 0, w, h);
-
-      blob = await toBlob(canvas, quality);
-      if (blob && blob.size <= TARGET_BYTES) break;
-
-      if (quality > 0.46) {
-        quality -= 0.12;
-      } else {
-        w = Math.max(1, Math.round(w * 0.8));
-        h = Math.max(1, Math.round(h * 0.8));
-        quality = 0.8;
-      }
-    }
-
-    if (src.close) src.close();
-    if (!blob) throw new Error("图片压缩失败了，换一张试试");
-
-    // 原图本来就很小就别硬撑,直接用原文件更清楚
-    if (blob.size > file.size && file.size <= TARGET_BYTES) return file;
-    return blob;
+  function compressImage(file) {
+    return window.C103Image.compress(file);
   }
 
   /* ---------- 接口 ---------- */
@@ -163,6 +91,15 @@
     }).then((d) => d.key);
   }
 
+  async function uploadAll(list, onProgress) {
+    const keys = [];
+    for (let i = 0; i < list.length; i++) {
+      if (onProgress) onProgress(`正在上传图片 ${i + 1} / ${list.length}…`);
+      keys.push(await uploadImage(list[i].blob));
+    }
+    return keys;
+  }
+
   /* ---------- 渲染 ---------- */
 
   function notice(title, text) {
@@ -170,44 +107,96 @@
     els.list.innerHTML = `<div class="notice"><b>${title}</b>${text || ""}</div>`;
   }
 
-  // depth:当前这条在第几层(0 = 主帖);parentName:它回复的是谁
-  function cardHTML(p, depth, parentName) {
-    depth = depth || 0;
+  function avatarHTML(author) {
+    if (author && author.avatar) {
+      return `<img class="story-avatar" src="${API}/img/${esc(author.avatar)}" alt="" loading="lazy">`;
+    }
+    const ch = author ? String(author.name).slice(0, 1) : "匿";
+    return `<span class="story-avatar story-avatar-fallback">${esc(ch)}</span>`;
+  }
 
-    const to = parentName ? `<p class="story-to">回复 <b>@${esc(parentName)}</b></p>` : "";
+  function badgeHTML(author) {
+    const role = author && author.role;
+    if (role === "owner") return '<em class="role-badge owner">服主</em>';
+    if (role === "admin") return '<em class="role-badge admin">管理员</em>';
+    return "";
+  }
+
+  function metaHTML(p) {
+    const region = p.region ? ` · IP 属地：${esc(p.region)}` : "";
+    return `${fmtTime(p.created_at)}${region}`;
+  }
+
+  function headHTML(p) {
+    return `<div class="story-head">
+      ${avatarHTML(p.author)}
+      <div class="story-who">
+        <span class="story-name">${esc(p.name)}${badgeHTML(p.author)}</span>
+        <span class="story-meta">${metaHTML(p)}</span>
+      </div>
+    </div>`;
+  }
+
+  function bodyHTML(p) {
     const body = p.body ? `<p class="story-body">${esc(p.body)}</p>` : "";
     const imgs = p.images.length
       ? `<div class="story-imgs">${p.images
           .map((k) => `<img src="${API}/img/${k}" alt="纪事配图" loading="lazy">`)
           .join("")}</div>`
       : "";
+    return body + imgs;
+  }
 
-    // 子回复:首页紧凑模式下一条主帖最多先展开 5 条,其余给个入口去纪事页看
+  function actionsHTML(p) {
+    const mine = !!(p.author && state.user && p.author.id === state.user.id);
+    const canDel = mine || isStaff();
+    let pin = "";
+    if (isStaff() && !p.parent_id) {
+      pin = `<button class="story-pin-btn" type="button" data-pin="${p.id}" data-on="${p.pinned ? 1 : 0}">${p.pinned ? "取消置顶" : "置顶"}</button>`;
+    }
+    const del = canDel ? `<button class="story-del" type="button" data-del="${p.id}">删除</button>` : "";
+    return `<div class="story-actions">
+      <button class="story-reply" type="button" data-reply="${p.id}" data-name="${esc(p.name)}">回复</button>
+      ${pin}${del}
+    </div>`;
+  }
+
+  // 主帖:带头像、置顶标记、动作条,下面平铺所有回复
+  function rootHTML(p) {
     const kids = p.replies || [];
     const shown = CFG.compact ? kids.slice(0, COMPACT_REPLIES) : kids;
     const rest = kids.length - shown.length;
+
     let replies = "";
     if (shown.length || rest > 0) {
-      const inner = shown.map((r) => cardHTML(r, depth + 1, p.name)).join("");
+      const inner = shown.map((r) => subHTML(r)).join("");
       const more = rest > 0
         ? `<a class="story-more" href="story.html">还有 ${rest} 条回复，去 103 纪事看 →</a>`
         : "";
-      const flat = depth + 1 > INDENT_MAX ? " no-indent" : "";
-      replies = `<div class="story-replies${flat}">${inner}${more}</div>`;
+      replies = `<div class="story-replies">${inner}${more}</div>`;
     }
 
-    return `<article class="story-card" data-id="${p.id}">
-      ${to}
-      <div class="story-head">
-        <span class="story-name">${esc(p.name)}</span>
-        <span class="story-time">${fmtTime(p.created_at)}</span>
-      </div>
-      ${body}${imgs}
-      <div class="story-actions">
-        <button class="story-reply" type="button" data-reply="${p.id}" data-name="${esc(p.name)}">回复</button>
-        <button class="story-del" type="button" data-del="${p.id}">删除</button>
-      </div>
+    return `<article class="story-card${p.pinned ? " is-pinned" : ""}" data-id="${p.id}">
+      ${p.pinned ? '<span class="story-pin">置顶</span>' : ""}
+      ${headHTML(p)}
+      ${bodyHTML(p)}
+      ${actionsHTML({ ...p, parent_id: null })}
+      <div class="reply-slot" data-slot="${p.id}"></div>
       ${replies}
+    </article>`;
+  }
+
+  // 回复:平铺一层,不再缩进;用「回复 @某某」标出对象
+  function subHTML(p) {
+    const to = p.reply_to_name
+      ? `<p class="story-to">回复 <b>@${esc(p.reply_to_name)}</b></p>`
+      : "";
+    return `<article class="story-card story-sub" data-id="${p.id}">
+      ${headHTML(p)}
+      ${to}
+      ${bodyHTML(p)}
+      ${actionsHTML({ ...p, parent_id: 1 })}
+      <div class="reply-slot" data-slot="${p.id}"></div>
     </article>`;
   }
 
@@ -220,58 +209,171 @@
     if (els.next) els.next.disabled = state.page >= state.totalPages;
   }
 
-  function lockForm(locked) {
-    state.locked = locked;
-    ["name", "pass", "body", "pickBtn", "submit"].forEach((k) => {
-      if (els[k]) els[k].disabled = locked;
-    });
-    if (!locked) syncPick();
+  /* ---------- 发帖框:登录了才给用 ---------- */
+
+  function renderComposer() {
+    const gate = $("#login-gate");
+    const logged = !!state.user;
+
+    if (els.form) els.form.hidden = !logged;
+    if (gate) gate.hidden = logged;
+    if (!logged) return;
+
+    if (els.meName) els.meName.innerHTML = esc(state.user.name) + badgeHTML(state.user);
+    if (els.meAvatar) els.meAvatar.innerHTML = avatarHTML(state.user);
+    if (els.meSig) els.meSig.textContent = state.user.signature || "还没写个性签名";
+    syncPick();
   }
 
   function syncPick() {
     if (!els.pickBtn || !els.pickHint) return;
     const full = state.images.length >= MAX_IMAGES;
-    els.pickBtn.disabled = state.locked || full;
-    if (els.file) els.file.disabled = state.locked || full;
+    els.pickBtn.disabled = state.busy || full;
+    if (els.file) els.file.disabled = state.busy || full;
     els.pickHint.textContent = full
       ? `已选满 ${MAX_IMAGES} 张`
       : `最多 ${MAX_IMAGES} 张，上传前自动压到 1MB 以内`;
   }
 
-  /* ---------- 正在回复谁 ---------- */
+  /* ---------- 内联回复框(B 站那种:点一下就在这条下面展开) ---------- */
 
-  function setReplyTo(id, name) {
-    state.replyTo = id ? { id, name } : null;
-
-    if (els.replyChip) {
-      if (state.replyTo) {
-        els.replyChipText.innerHTML = `正在回复 <b>@${esc(name)}</b>`;
-        els.replyChip.hidden = false;
-      } else {
-        els.replyChip.hidden = true;
-      }
-    }
-    if (els.body) {
-      els.body.placeholder = state.replyTo
-        ? `回复 @${name}…`
-        : els.bodyHome || "那天发生了什么？写下来，就是 103 的历史。";
-    }
-    if (els.submit && !state.busy) els.submit.textContent = submitLabel();
-
-    // 把被回复那张卡描个金边,方便对上号
-    if (!els.list) return;
-    els.list.querySelectorAll(".story-card.is-replying").forEach((c) => c.classList.remove("is-replying"));
-    if (state.replyTo) {
-      const card = els.list.querySelector(`.story-card[data-id="${id}"]`);
-      if (card) card.classList.add("is-replying");
-    }
+  function closeReply() {
+    if (!state.openReply) return;
+    const slot = document.querySelector(`.reply-slot[data-slot="${state.openReply}"]`);
+    if (slot) slot.innerHTML = "";
+    const card = document.querySelector(`.story-card[data-id="${state.openReply}"]`);
+    if (card) card.classList.remove("is-replying");
+    state.openReply = 0;
   }
 
-  function startReply(id, name) {
-    setReplyTo(id, name);
-    if (!els.form) return;
-    els.form.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (els.body) els.body.focus();
+  function openReplyBox(card, id, name) {
+    if (state.openReply === id) {
+      closeReply();
+      return;
+    }
+    closeReply();
+
+    const slot = card.querySelector(".reply-slot");
+    if (!slot) return;
+
+    slot.innerHTML = `<form class="inline-reply" autocomplete="off">
+      <p class="inline-to">回复 <b>@${esc(name)}</b><button type="button" class="inline-x" aria-label="收起">×</button></p>
+      <textarea rows="2" maxlength="4000" placeholder="回复 @${esc(name)}…"></textarea>
+      <div class="inline-row">
+        <input type="file" accept="image/*" multiple hidden>
+        <button type="button" class="pick-btn sm">＋ 加图</button>
+        <div class="thumbs sm"></div>
+      </div>
+      <div class="inline-foot">
+        <p class="form-msg"></p>
+        <button class="submit-btn sm" type="submit">回复</button>
+      </div>
+    </form>`;
+
+    const form = slot.querySelector("form");
+    replyImages.set(form, []);
+    card.classList.add("is-replying");
+    state.openReply = id;
+
+    const file = form.querySelector('input[type="file"]');
+    const pick = form.querySelector(".pick-btn");
+    const thumbs = form.querySelector(".thumbs");
+    const msg = form.querySelector(".form-msg");
+
+    const say = (text, kind) => {
+      msg.textContent = text || "";
+      msg.className = "form-msg" + (kind ? " " + kind : "");
+    };
+    const sync = () => {
+      const list = replyImages.get(form) || [];
+      const full = list.length >= MAX_IMAGES;
+      pick.disabled = full;
+      file.disabled = full;
+    };
+
+    on(pick, "click", () => file.click());
+    on(file, "change", async () => {
+      const files = Array.from(file.files || []);
+      file.value = "";
+      for (const f of files) {
+        const list = replyImages.get(form) || [];
+        if (list.length >= MAX_IMAGES) {
+          say(`最多只能放 ${MAX_IMAGES} 张图`, "err");
+          break;
+        }
+        if (!/^image\//.test(f.type)) {
+          say("只能选图片文件", "err");
+          continue;
+        }
+        const box = document.createElement("div");
+        box.className = "thumb busy";
+        thumbs.appendChild(box);
+        sync();
+        try {
+          const blob = await compressImage(f);
+          const url = URL.createObjectURL(blob);
+          const entry = { blob, url };
+          list.push(entry);
+          replyImages.set(form, list);
+          box.classList.remove("busy");
+          box.innerHTML = `<img src="${url}" alt=""><button type="button" aria-label="移除">×</button>`;
+          box.querySelector("button").addEventListener("click", () => {
+            const cur = replyImages.get(form) || [];
+            const i = cur.indexOf(entry);
+            if (i >= 0) cur.splice(i, 1);
+            URL.revokeObjectURL(url);
+            box.remove();
+            say("");
+            sync();
+          });
+          say("");
+        } catch (err) {
+          box.remove();
+          say(err.message, "err");
+        }
+        sync();
+      }
+    });
+
+    on(form.querySelector(".inline-x"), "click", closeReply);
+
+    on(form, "submit", async (e) => {
+      e.preventDefault();
+      const area = form.querySelector("textarea");
+      const body = area.value.trim();
+      const list = replyImages.get(form) || [];
+      if (!body && list.length === 0) {
+        say("回复总得写点什么吧", "err");
+        return;
+      }
+      const btn = form.querySelector(".submit-btn");
+      btn.disabled = true;
+      btn.textContent = "发送中";
+      try {
+        const keys = await uploadAll(list, say);
+        await api(API + "/posts", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ body: body, images: keys, reply_to_id: id }),
+        });
+        list.forEach((it) => URL.revokeObjectURL(it.url));
+        replyImages.delete(form);
+        state.openReply = 0;
+        await goto(state.page);
+        const back = document.querySelector(`.story-card[data-id="${id}"]`);
+        if (back) back.scrollIntoView({ behavior: "smooth", block: "center" });
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "回复";
+        say(err.message, "err");
+        if (/登录/.test(err.message)) {
+          state.user = null;
+          renderComposer();
+        }
+      }
+    });
+
+    area.focus();
   }
 
   /* ---------- 加载列表 ---------- */
@@ -290,12 +392,10 @@
       if (!data.total) {
         notice("还没有人写下第一句", "<br>第一行字，等你来落笔。");
       } else if (els.list) {
-        els.list.innerHTML = posts.map((p) => cardHTML(p, 0, "")).join("");
+        els.list.innerHTML = posts.map(rootHTML).join("");
       }
       renderPager(data.total);
-      lockForm(false);
     } catch (err) {
-      lockForm(true);
       if (els.list) {
         els.list.innerHTML = `<div class="notice"><b>「103 纪事」正在开通中</b>${esc(
           err.message
@@ -305,7 +405,7 @@
     }
   }
 
-  /* ---------- 选图 ---------- */
+  /* ---------- 顶部发帖框:选图 ---------- */
 
   async function onPick() {
     const files = Array.from(els.file.files || []);
@@ -352,94 +452,79 @@
     syncPick();
   }
 
-  /* ---------- 发帖 / 回复 ---------- */
+  /* ---------- 发一条新帖 ---------- */
 
   async function onSubmit(e) {
     e.preventDefault();
-    if (state.busy || state.locked) return;
-
-    const body = els.body.value.trim();
-    const password = els.pass.value.trim();
-    const replyTo = state.replyTo;
-
-    if (!body && state.images.length === 0) {
-      setMsg(replyTo ? "回复总得写点什么吧" : "写点什么，或者加张图吧", "err");
+    if (state.busy) return;
+    if (!state.user) {
+      toast("登录后才能发言");
       return;
     }
-    if (password.length < 4) {
-      setMsg("删帖口令请设 4 位以上，自己记住", "err");
+
+    const body = els.body.value.trim();
+    if (!body && state.images.length === 0) {
+      setMsg("写点什么，或者加张图吧", "err");
       return;
     }
 
     state.busy = true;
     els.submit.disabled = true;
-    els.submit.textContent = replyTo ? "回复中" : "发布中";
+    els.submit.textContent = "发布中";
+    syncPick();
 
     try {
-      const keys = [];
-      for (let i = 0; i < state.images.length; i++) {
-        setMsg(`正在上传图片 ${i + 1} / ${state.images.length}…`);
-        keys.push(await uploadImage(state.images[i].blob));
-      }
-
+      const keys = await uploadAll(state.images, setMsg);
       setMsg("正在发布…");
       await api(API + "/posts", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: els.name.value.trim(),
-          body: body,
-          password: password,
-          images: keys,
-          cid: cid(),
-          parent_id: replyTo ? replyTo.id : 0,
-        }),
+        body: JSON.stringify({ body: body, images: keys }),
       });
-
-      try {
-        localStorage.setItem("class103-name", els.name.value.trim());
-      } catch (err) {
-        /* 隐私模式下忽略 */
-      }
 
       state.images.forEach((it) => URL.revokeObjectURL(it.url));
       state.images = [];
       els.thumbs.innerHTML = "";
       els.body.value = "";
-      els.pass.value = "";
-      syncPick();
-      setMsg(replyTo ? "回复好了" : "发布好了，谢谢你的记录", "ok");
-      if (replyTo) setReplyTo(null);
+      setMsg("发布好了，谢谢你的记录", "ok");
       await goto(1);
-      if (replyTo && els.list) {
-        const card = els.list.querySelector(`.story-card[data-id="${replyTo.id}"]`);
-        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
     } catch (err) {
       setMsg(err.message, "err");
+      if (/登录/.test(err.message)) {
+        state.user = null;
+        renderComposer();
+      }
     } finally {
       state.busy = false;
       els.submit.disabled = false;
-      els.submit.textContent = submitLabel();
+      els.submit.textContent = "发布";
+      syncPick();
     }
   }
 
-  /* ---------- 删帖 ---------- */
+  /* ---------- 删除 / 置顶 ---------- */
 
   async function onDelete(id) {
-    const password = prompt("删除这条纪事，请输入发帖时设的口令：");
-    if (!password) return;
+    if (!confirm("确定删掉这条？它下面的回复和图片会一起删掉，删了就找不回来了。")) return;
     try {
-      await api(API + "/posts/" + id, {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password: password }),
-      });
-      // 被删的那条可能正是当前在回复的对象,清掉免得发出去时报"那条已经不在了"
-      setReplyTo(null);
+      await api(API + "/posts/" + id, { method: "DELETE" });
+      state.openReply = 0;
       await goto(state.page);
     } catch (err) {
-      alert(err.message);
+      toast(err.message);
+    }
+  }
+
+  async function onPin(id, on_) {
+    try {
+      await api(API + "/posts/" + id, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pinned: !on_ }),
+      });
+      await goto(state.page);
+    } catch (err) {
+      toast(err.message);
     }
   }
 
@@ -447,8 +532,6 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     els.form = $("#composer");
-    els.name = $("#f-name");
-    els.pass = $("#f-pass");
     els.body = $("#f-body");
     els.file = $("#f-file");
     els.pickBtn = $("#pick-btn");
@@ -463,28 +546,32 @@
     els.next = $("#next-btn");
     els.lightbox = $("#lightbox");
     els.lightboxImg = $("#lightbox-img");
-    els.replyChip = $("#reply-chip");
-    els.replyChipText = $("#reply-chip-text");
-
-    if (els.body) els.bodyHome = els.body.placeholder;
-
-    try {
-      if (els.name) els.name.value = localStorage.getItem("class103-name") || "";
-    } catch (e) {
-      /* 隐私模式下忽略 */
-    }
+    els.meName = $("#me-name");
+    els.meAvatar = $("#me-avatar");
+    els.meSig = $("#me-sig");
 
     on(els.form, "submit", onSubmit);
     on(els.pickBtn, "click", () => els.file && els.file.click());
     on(els.file, "change", onPick);
     on(els.prev, "click", () => goto(state.page - 1));
     on(els.next, "click", () => goto(state.page + 1));
-    on($("#reply-chip-x"), "click", () => setReplyTo(null));
 
     on(els.list, "click", (e) => {
       const rep = e.target.closest("[data-reply]");
       if (rep) {
-        startReply(rep.getAttribute("data-reply"), rep.getAttribute("data-name") || "同学");
+        if (!state.user) {
+          toast("登录后才能回复");
+          const gate = $("#login-gate");
+          if (gate) gate.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        const card = rep.closest(".story-card");
+        if (card) openReplyBox(card, rep.getAttribute("data-reply"), rep.getAttribute("data-name") || "同学");
+        return;
+      }
+      const pin = e.target.closest("[data-pin]");
+      if (pin) {
+        onPin(pin.getAttribute("data-pin"), pin.getAttribute("data-on") === "1");
         return;
       }
       const del = e.target.closest("[data-del]");
@@ -506,19 +593,31 @@
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       if (els.lightbox) els.lightbox.classList.remove("open");
-      if (state.replyTo) setReplyTo(null);
+      closeReply();
     });
 
     // 本地双击打开时没有后端,直接给一句人话,别一直转圈
     if (location.protocol === "file:") {
-      lockForm(true);
+      if (els.form) els.form.hidden = true;
       if (els.list) {
         els.list.innerHTML =
-          '<div class="notice"><b>要用官网打开</b>这一页需要联网才能写。请访问 jinzhong2903.ccwu.cc 再试。</div>';
+          '<div class="notice"><b>要用官网打开</b>这一页需要联网才能写。请访问 jinzhong2903.pages.dev 再试。</div>';
       }
       return;
     }
 
-    goto(1);
+    // 等 nav.js 问完服务器「我是谁」再决定发帖框的样子
+    const ready = (window.C103Auth && window.C103Auth.ready) || Promise.resolve(null);
+    ready.then((user) => {
+      state.user = user;
+      renderComposer();
+      if (window.C103Auth) {
+        window.C103Auth.onChange((u) => {
+          state.user = u;
+          renderComposer();
+        });
+      }
+      goto(1);
+    });
   });
 })();

@@ -1,8 +1,8 @@
 /* ============================================================
-   103 纪事 · 删帖
-   DELETE /api/posts/:id   带上发帖时设的口令;
-                           口令等于 ADMIN_PASSWORD 时,可删任意一条(班委/老师清理用)
-                           删主帖会连带删掉它下面整棵回复子树
+   103 纪事 · 单条帖子
+   PUT    /api/posts/:id   { pinned }  服主/管理员置顶或取消置顶(只对主帖有效)
+   DELETE /api/posts/:id               本人可删自己的;服主/管理员可删任意一条
+                                       删主帖会连带删掉它下面所有回复及图片
    ============================================================ */
 
 import {
@@ -10,13 +10,14 @@ import {
   fail,
   notReady,
   ensureSchema,
-  hashPassword,
+  ensureOwner,
+  currentUser,
+  isStaff,
   safeParse,
   IMAGE_KEY_RE,
 } from "../_utils.js";
 
-/* 广度优先把这条帖子下面所有回复的 id 收齐(含自己),
-   顺便把每条带的图片 key 也收集起来 */
+/* 广度优先把这条帖子下面所有回复的 id 收齐(含自己) */
 async function collectSubtree(db, rootId) {
   const ids = [rootId];
   let frontier = [rootId];
@@ -34,9 +35,13 @@ async function collectSubtree(db, rootId) {
   return ids;
 }
 
-export async function onRequestDelete({ request, env, params }) {
+export async function onRequestPut({ request, env, params }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
+  await ensureOwner(env.DB, env);
+
+  const me = await currentUser(request, env);
+  if (!isStaff(me)) return fail("只有服主和管理员能置顶", 403);
 
   const id = parseInt(params.id, 10);
   if (!id) return fail("帖子编号不对");
@@ -45,21 +50,39 @@ export async function onRequestDelete({ request, env, params }) {
   try {
     payload = await request.json();
   } catch (e) {
-    /* 没带 body 也让它往下走,下面会提示补口令 */
+    /* 没有 body 就当取消置顶 */
   }
-  const password = String(payload.password || "").trim();
-  if (!password) return fail("请输入删帖口令");
 
-  const row = await env.DB.prepare("SELECT id, salt, pass_hash FROM posts WHERE id = ?")
+  const row = await env.DB.prepare("SELECT id, parent_id FROM posts WHERE id = ?")
+    .bind(id)
+    .first();
+  if (!row) return fail("这条已经不在了", 404);
+  if (row.parent_id) return fail("只能置顶主帖");
+
+  const pinned = payload.pinned ? 1 : 0;
+  await env.DB.prepare("UPDATE posts SET pinned = ? WHERE id = ?").bind(pinned, id).run();
+
+  return json({ ok: true, id, pinned });
+}
+
+export async function onRequestDelete({ request, env, params }) {
+  if (!env.DB) return notReady("数据库");
+  await ensureSchema(env.DB);
+  await ensureOwner(env.DB, env);
+
+  const me = await currentUser(request, env);
+  if (!me) return fail("请先登录", 401);
+
+  const id = parseInt(params.id, 10);
+  if (!id) return fail("帖子编号不对");
+
+  const row = await env.DB.prepare("SELECT id, user_id FROM posts WHERE id = ?")
     .bind(id)
     .first();
   if (!row) return fail("这条已经不在了", 404);
 
-  const admin = String(env.ADMIN_PASSWORD || "");
-  const isAdmin = admin.length > 0 && password === admin;
-  const isOwner = !!row.pass_hash && (await hashPassword(password, row.salt)) === row.pass_hash;
-
-  if (!isAdmin && !isOwner) return fail("口令不对", 403);
+  const mine = !!row.user_id && row.user_id === me.id;
+  if (!mine && !isStaff(me)) return fail("只能删自己发的，管理身份可以删任意一条", 403);
 
   // 整棵子树一起删:回复挂在不存在的父帖下面会变成孤儿,前端读不到也删不掉
   const ids = await collectSubtree(env.DB, id);

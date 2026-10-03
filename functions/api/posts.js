@@ -1,7 +1,10 @@
 /* ============================================================
    103 纪事 · 帖子接口
-   GET  /api/posts?page=1   读列表(倒序分页)
-   POST /api/posts          发一条
+   GET  /api/posts?page=1   读列表(倒序分页,服主置顶排最前)
+   POST /api/posts          发一条(登录后才能发)
+
+   回复结构参考 B 站:所有回复都拍平成一层挂在主帖下面,
+   每条回复用 reply_to_name 说明「回复的是谁」,不再一层套一层。
    ============================================================ */
 
 import {
@@ -9,37 +12,20 @@ import {
   fail,
   notReady,
   ensureSchema,
-  hashPassword,
-  randomHex,
-  safeParse,
+  ensureOwner,
+  currentUser,
   toPost,
   loadThread,
   IMAGE_KEY_RE,
+  regionOf,
+  POST_COLS,
 } from "./_utils.js";
 
 const PAGE_SIZE = 20;
-const MAX_NAME = 24;
 const MAX_BODY = 4000;
 const MAX_IMAGES = 3;
-const COOLDOWN_MS = 15000; // 同一个浏览器 15 秒内只能发一条新帖
+const COOLDOWN_MS = 15000; // 同一个账号 15 秒内只能发一条新帖
 const REPLY_COOLDOWN_MS = 3000; // 回复放宽到 3 秒,不然聊不起来
-
-/* 把扁平的一页记录拼成「根帖 → replies」的树。
-   深度不限:回复的回复会一直挂在 replies 里,由前端决定怎么缩进。 */
-function buildTree(rows) {
-  const nodes = new Map();
-  for (const row of rows) {
-    nodes.set(row.id, { ...toPost(row), parent_id: row.parent_id || 0, replies: [] });
-  }
-  const tree = [];
-  for (const node of nodes.values()) {
-    const parent = node.parent_id ? nodes.get(node.parent_id) : null;
-    if (parent) parent.replies.push(node);
-    else if (!node.parent_id) tree.push(node);
-  }
-  tree.sort((a, b) => b.created_at - a.created_at || b.id - a.id);
-  return tree;
-}
 
 export async function onRequestGet({ request, env }) {
   if (!env.DB) return notReady("数据库");
@@ -49,16 +35,16 @@ export async function onRequestGet({ request, env }) {
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
   const offset = (page - 1) * PAGE_SIZE;
 
-  // 分页分的是「根帖」,整棵回复树跟着根帖一起出来,不会被翻页截断
+  // 分页分的是「主帖」,回复跟着主帖一起出来,不会被翻页截断
   const totalRow = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM posts WHERE parent_id IS NULL"
   ).first();
 
   const { results: roots } = await env.DB.prepare(
-    `SELECT id, name, body, images, parent_id, created_at
+    `SELECT ${POST_COLS}
        FROM posts
       WHERE parent_id IS NULL
-      ORDER BY created_at DESC, id DESC
+      ORDER BY pinned DESC, created_at DESC, id DESC
       LIMIT ? OFFSET ?`
   )
     .bind(PAGE_SIZE, offset)
@@ -66,19 +52,75 @@ export async function onRequestGet({ request, env }) {
 
   const list = roots || [];
   const rows = [...list, ...(await loadThread(env.DB, list.map((r) => r.id)))];
+  const rowById = new Map(rows.map((r) => [r.id, r]));
 
-  return json({
-    ok: true,
-    total: totalRow ? totalRow.n : 0,
-    page,
-    size: PAGE_SIZE,
-    posts: buildTree(rows),
-  });
+  // 作者资料一次查齐,别逐条查库
+  const uids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+  const authors = new Map();
+  if (uids.length) {
+    const holes = uids.map(() => "?").join(",");
+    const { results: users } = await env.DB.prepare(
+      `SELECT id, username, role, avatar_key FROM users WHERE id IN (${holes})`
+    )
+      .bind(...uids)
+      .all();
+    for (const u of users || []) {
+      authors.set(u.id, {
+        id: u.id,
+        name: u.username,
+        role: u.role || "member",
+        avatar: u.avatar_key || "",
+      });
+    }
+  }
+
+  const out = list.map((r) => ({
+    ...toPost(r),
+    author: authors.get(r.user_id) || null,
+    replies: [],
+  }));
+  const rootById = new Map(out.map((r) => [r.id, r]));
+
+  // 顺着 parent 往上找到主帖(老数据可能更深,这里一律归到根)
+  function rootIdOf(row) {
+    let cur = row;
+    let guard = 0;
+    while (cur && cur.parent_id && guard++ < 50) {
+      const up = rowById.get(cur.parent_id);
+      if (!up) break; // 父帖被删了,就把它自己当根
+      cur = up;
+    }
+    return cur ? cur.id : 0;
+  }
+
+  for (const row of rows) {
+    if (!row.parent_id) continue;
+    const root = rootById.get(rootIdOf(row));
+    if (!root) continue;
+
+    // reply_to_id 是新字段;老回复没有它,那就用真正的父帖当「回复对象」
+    const targetId = row.reply_to_id || row.parent_id;
+    const target = rowById.get(targetId);
+    root.replies.push({
+      ...toPost(row),
+      author: authors.get(row.user_id) || null,
+      reply_to_name: target ? target.name : "",
+    });
+  }
+
+  // 回复按时间从早到晚排,和聊天记录一个方向
+  for (const r of out) r.replies.sort((a, b) => a.created_at - b.created_at || a.id - b.id);
+
+  return json({ ok: true, total: totalRow ? totalRow.n : 0, page, size: PAGE_SIZE, posts: out });
 }
 
 export async function onRequestPost({ request, env }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
+  await ensureOwner(env.DB, env);
+
+  const me = await currentUser(request, env);
+  if (!me) return fail("登录后才能发言", 401);
 
   let payload;
   try {
@@ -87,58 +129,71 @@ export async function onRequestPost({ request, env }) {
     return fail("提交的内容读不出来，请刷新页面重试");
   }
 
-  const name = (String(payload.name || "").trim() || "匿名同学").slice(0, MAX_NAME);
   const body = String(payload.body || "").trim().slice(0, MAX_BODY);
-  const password = String(payload.password || "").trim();
-  const cid = String(payload.cid || "").slice(0, 64);
   const images = (Array.isArray(payload.images) ? payload.images : [])
     .map(String)
     .filter((k) => IMAGE_KEY_RE.test(k))
     .slice(0, MAX_IMAGES);
+  const replyTo = parseInt(payload.reply_to_id, 10) || 0;
 
-  // 回复:带上 parent_id 就挂到那条下面,不带就是新帖
-  const parentId = parseInt(payload.parent_id, 10) || 0;
-  if (parentId) {
-    const parent = await env.DB.prepare("SELECT id FROM posts WHERE id = ?").bind(parentId).first();
-    if (!parent) return fail("要回复的那条已经不在了，刷新一下再看看");
+  // 回复:不管回复的是主帖还是别人,一律挂到主帖下面,回复关系记在 reply_to_id
+  let parentId = null;
+  if (replyTo) {
+    const target = await env.DB.prepare("SELECT id, parent_id FROM posts WHERE id = ?")
+      .bind(replyTo)
+      .first();
+    if (!target) return fail("要回复的那条已经不在了，刷新一下再看看");
+    parentId = target.parent_id || target.id;
   }
 
   if (!body && images.length === 0) return fail("写点什么，或者放张图吧");
-  if (password.length < 4 || password.length > 32) return fail("删帖口令请设 4~32 位");
 
   const now = Date.now();
-
-  if (cid) {
-    const last = await env.DB.prepare(
-      "SELECT created_at FROM posts WHERE cid = ? ORDER BY created_at DESC LIMIT 1"
-    )
-      .bind(cid)
-      .first();
-    const wait_ms = parentId ? REPLY_COOLDOWN_MS : COOLDOWN_MS;
-    if (last && now - last.created_at < wait_ms) {
-      const wait = Math.ceil((wait_ms - (now - last.created_at)) / 1000);
-      return fail(`发得有点快啦，${wait} 秒后再来`, 429);
-    }
+  const last = await env.DB.prepare(
+    "SELECT created_at FROM posts WHERE user_id = ? ORDER BY created_at DESC LIMIT 1"
+  )
+    .bind(me.id)
+    .first();
+  const waitMs = parentId ? REPLY_COOLDOWN_MS : COOLDOWN_MS;
+  if (last && now - last.created_at < waitMs) {
+    const wait = Math.ceil((waitMs - (now - last.created_at)) / 1000);
+    return fail(`发得有点快啦，${wait} 秒后再来`, 429);
   }
 
-  const salt = randomHex(8);
-  const passHash = await hashPassword(password, salt);
+  // IP 属地:只算到省份;服主发的主帖自动置顶
+  const region = regionOf(request);
+  const pinned = me.role === "owner" && !parentId ? 1 : 0;
 
   const res = await env.DB.prepare(
-    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, created_at)
+     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(name, body, JSON.stringify(images), salt, passHash, cid, parentId || null, now)
+    .bind(
+      me.name,
+      body,
+      JSON.stringify(images),
+      parentId,
+      me.id,
+      region,
+      replyTo || null,
+      pinned,
+      now
+    )
     .run();
 
   return json({
     ok: true,
     post: {
       id: res.meta.last_row_id,
-      name,
+      name: me.name,
       body,
       images,
+      region,
       parent_id: parentId,
+      reply_to_id: replyTo,
+      pinned,
+      author: me,
+      reply_to_name: "",
       replies: [],
       created_at: now,
     },

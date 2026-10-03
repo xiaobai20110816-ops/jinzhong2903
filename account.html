@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 个人中心：注册登录、头像与个性签名">
+  <title>个人中心 · 103班 音乐领军班</title>
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#070b14">
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+    } catch (e) {}
+  </script>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/story.css">
+  <style>
+    .acc-wrap { max-width: 520px; margin: 0 auto; }
+
+    .acc-card {
+      padding: 26px 26px 24px;
+      border-radius: 24px;
+      background: var(--glass-surface);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      backdrop-filter: blur(26px) saturate(180%);
+      border: 1px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+      animation: page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+      transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+    }
+    .acc-card[hidden] { display: none; }
+
+    /* ---- 登录 / 注册 两个页签 ---- */
+    .acc-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 5px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      margin-bottom: 22px;
+    }
+    .acc-tab {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.9rem;
+      letter-spacing: 3px;
+      text-indent: 3px;
+      padding: 9px 0;
+      border: none;
+      border-radius: 999px;
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.3s ease, background-color 0.4s ease;
+    }
+    .acc-tab.active {
+      color: #0b0f1a;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+    }
+    .acc-form[hidden] { display: none; }
+    .submit-btn.wide { width: 100%; margin-top: 4px; }
+
+    /* ---- 已登录 ---- */
+    .acc-me {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .acc-face {
+      flex: none;
+      width: 66px;
+      height: 66px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.5rem;
+      color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+      border: 1px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+    }
+    .acc-face img { width: 100%; height: 100%; object-fit: cover; }
+    .acc-me-text { min-width: 0; }
+    .acc-name {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.25rem;
+      letter-spacing: 1px;
+      color: var(--text);
+      transition: color 0.6s ease;
+    }
+    .acc-role {
+      font-size: 0.76rem;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-top: 2px;
+      transition: color 0.6s ease;
+    }
+
+    .acc-block { margin-bottom: 20px; }
+    .acc-label {
+      font-size: 0.74rem;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 8px;
+      transition: color 0.6s ease;
+    }
+    .acc-block input[type="text"] {
+      width: 100%;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      color: var(--text);
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 14px;
+      outline: none;
+      transition: background-color 0.4s ease, border-color 0.3s ease, color 0.6s ease;
+    }
+    .acc-block input[type="text"]:focus { border-color: var(--gold-line); background: var(--gold-soft); }
+    .acc-block .pick-hint { display: inline-block; margin-left: 12px; vertical-align: middle; }
+
+    .acc-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 6px;
+    }
+    .acc-logout {
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      color: var(--faint);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 4px;
+      transition: color 0.3s ease;
+    }
+    .acc-logout:hover { color: #ff7a7a; }
+    .acc-note {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      font-size: 0.78rem;
+      line-height: 1.8;
+      color: var(--muted);
+      transition: color 0.6s ease, border-color 0.6s ease;
+    }
+    .acc-note[hidden] { display: none; }
+
+    @media (max-width: 560px) {
+      .acc-card { padding: 20px 18px; border-radius: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Account</div>
+    <h1><span class="gold-text">个人中心</span></h1>
+    <p>Your 103 Identity</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="acc-wrap">
+
+        <!-- ========== 没登录:登录 / 注册 ========== -->
+        <div class="acc-card" id="acc-guest">
+          <div class="acc-tabs">
+            <button type="button" class="acc-tab active" data-tab="login">登录</button>
+            <button type="button" class="acc-tab" data-tab="register">注册</button>
+          </div>
+
+          <form class="acc-form" id="form-login" autocomplete="on">
+            <label class="field">
+              <span>用户名</span>
+              <input id="login-name" type="text" maxlength="16" autocomplete="username" placeholder="注册时用的名字">
+            </label>
+            <label class="field">
+              <span>密码</span>
+              <input id="login-pass" type="password" maxlength="64" autocomplete="current-password" placeholder="你的密码">
+            </label>
+            <p class="form-msg" id="login-msg"></p>
+            <button class="submit-btn wide" type="submit">登录</button>
+          </form>
+
+          <form class="acc-form" id="form-register" autocomplete="on" hidden>
+            <label class="field">
+              <span>用户名</span>
+              <input id="reg-name" type="text" maxlength="16" autocomplete="username" placeholder="2~16 位，中文、字母、数字、下划线">
+            </label>
+            <label class="field">
+              <span>密码</span>
+              <input id="reg-pass" type="password" maxlength="64" autocomplete="new-password" placeholder="至少 6 位，自己记住">
+            </label>
+            <label class="field">
+              <span>再输一次密码</span>
+              <input id="reg-pass2" type="password" maxlength="64" autocomplete="new-password" placeholder="确认一下">
+            </label>
+            <p class="form-msg" id="reg-msg"></p>
+            <button class="submit-btn wide" type="submit">注册并登录</button>
+          </form>
+        </div>
+
+        <!-- ========== 登录了:头像 + 个性签名 ========== -->
+        <div class="acc-card" id="acc-user" hidden>
+          <div class="acc-me">
+            <span class="acc-face" id="acc-face"></span>
+            <div class="acc-me-text">
+              <p class="acc-name" id="acc-name"></p>
+              <p class="acc-role" id="acc-role"></p>
+            </div>
+          </div>
+
+          <div class="acc-block">
+            <p class="acc-label">头像</p>
+            <input id="acc-file" type="file" accept="image/*" hidden>
+            <button class="pick-btn" type="button" id="acc-pick">换个头像</button>
+            <span class="pick-hint" id="acc-hint">上传前自动压到 1MB 以内</span>
+          </div>
+
+          <div class="acc-block">
+            <p class="acc-label">个性签名</p>
+            <input id="acc-sig" type="text" maxlength="40" placeholder="一句话介绍自己，最多 40 字">
+          </div>
+
+          <p class="form-msg" id="acc-msg"></p>
+          <div class="acc-foot">
+            <button class="submit-btn" type="button" id="acc-save">保存</button>
+            <button class="acc-logout" type="button" id="acc-logout">退出登录</button>
+          </div>
+
+          <p class="acc-note" id="acc-note" hidden></p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const API = "api";
+      const A = window.C103Auth;
+      const $ = (s) => document.querySelector(s);
+      const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
+
+      const ROLE_TEXT = { owner: "服主 · 全站管理", admin: "管理员", member: "普通成员" };
+      let current = null;
+
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      }
+
+      function say(box, text, kind) {
+        box.textContent = text || "";
+        box.className = "form-msg" + (kind ? " " + kind : "");
+      }
+
+      function paintFace(key) {
+        const box = $("#acc-face");
+        if (!box) return;
+        if (key) box.innerHTML = `<img src="${API}/img/${esc(key)}" alt="头像">`;
+        else box.innerHTML = `<span>${esc((current && current.name ? current.name : "?").slice(0, 1))}</span>`;
+      }
+
+      function render(user) {
+        current = user;
+        const guest = $("#acc-guest");
+        const box = $("#acc-user");
+        if (!guest || !box) return;
+
+        const logged = !!user;
+        guest.hidden = logged;
+        box.hidden = !logged;
+        if (!logged) return;
+
+        $("#acc-name").textContent = user.name;
+        $("#acc-role").textContent = ROLE_TEXT[user.role] || ROLE_TEXT.member;
+        $("#acc-sig").value = user.signature || "";
+        paintFace(user.avatar);
+
+        const note = $("#acc-note");
+        if (user.role === "owner" || user.role === "admin") {
+          note.hidden = false;
+          note.innerHTML = user.role === "owner"
+            ? "你是服主：名字旁边会带金色「服主」徽章，发的通知自动置顶，还能置顶 / 删除任何一条留言。"
+            : "你是管理员：可以置顶和删除任意一条留言。";
+        } else {
+          note.hidden = true;
+        }
+      }
+
+      /* ---- 页签切换 ---- */
+      document.querySelectorAll(".acc-tab").forEach((tab) => {
+        on(tab, "click", () => {
+          document.querySelectorAll(".acc-tab").forEach((t) => t.classList.toggle("active", t === tab));
+          const which = tab.getAttribute("data-tab");
+          $("#form-login").hidden = which !== "login";
+          $("#form-register").hidden = which !== "register";
+        });
+      });
+
+      /* ---- 登录 ---- */
+      on($("#form-login"), "submit", async (e) => {
+        e.preventDefault();
+        const msg = $("#login-msg");
+        const btn = $("#form-login .submit-btn");
+        const name = $("#login-name").value.trim();
+        const pass = $("#login-pass").value;
+        if (!name || !pass) { say(msg, "用户名和密码都要填", "err"); return; }
+
+        btn.disabled = true;
+        btn.textContent = "登录中";
+        try {
+          await A.login(name, pass);
+          $("#login-pass").value = "";
+          say(msg, "", "");
+          render(A.user);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "登录";
+        }
+      });
+
+      /* ---- 注册 ---- */
+      on($("#form-register"), "submit", async (e) => {
+        e.preventDefault();
+        const msg = $("#reg-msg");
+        const btn = $("#form-register .submit-btn");
+        const name = $("#reg-name").value.trim();
+        const pass = $("#reg-pass").value;
+        const pass2 = $("#reg-pass2").value;
+        if (!name || !pass) { say(msg, "用户名和密码都要填", "err"); return; }
+        if (pass !== pass2) { say(msg, "两次输入的密码不一样", "err"); return; }
+
+        btn.disabled = true;
+        btn.textContent = "注册中";
+        try {
+          await A.register(name, pass);
+          say(msg, "", "");
+          render(A.user);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "注册并登录";
+        }
+      });
+
+      /* ---- 换头像:压缩 → 上传 → 保存 ---- */
+      on($("#acc-pick"), "click", () => $("#acc-file").click());
+
+      on($("#acc-file"), "change", async (e) => {
+        const file = (e.target.files || [])[0];
+        e.target.value = "";
+        if (!file) return;
+        if (!/^image\//.test(file.type)) { say($("#acc-msg"), "只能选图片文件", "err"); return; }
+
+        const msg = $("#acc-msg");
+        const btn = $("#acc-pick");
+        btn.disabled = true;
+        say(msg, "正在压缩头像…");
+        try {
+          const blob = await window.C103Image.compress(file, { maxEdge: 512 });
+          say(msg, "正在上传…");
+          const up = await fetch(API + "/upload", {
+            method: "POST",
+            headers: { "content-type": blob.type || "image/jpeg" },
+            body: blob,
+          });
+          const data = await up.json().catch(() => ({}));
+          if (!up.ok || !data.ok) throw new Error(data.error || "上传失败了");
+
+          await A.saveProfile({ signature: current.signature || "", avatar_key: data.key });
+          render(A.user);
+          say(msg, "头像换好了", "ok");
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      /* ---- 保存个性签名 ---- */
+      on($("#acc-save"), "click", async () => {
+        const msg = $("#acc-msg");
+        const btn = $("#acc-save");
+        btn.disabled = true;
+        btn.textContent = "保存中";
+        try {
+          await A.saveProfile({
+            signature: $("#acc-sig").value.trim(),
+            avatar_key: (A.user && A.user.avatar) || "",
+          });
+          render(A.user);
+          say(msg, "保存好了", "ok");
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "保存";
+        }
+      });
+
+      /* ---- 退出 ---- */
+      on($("#acc-logout"), "click", async () => {
+        if (!confirm("确定退出登录？")) return;
+        await A.logout();
+        render(null);
+        document.querySelectorAll(".acc-tab").forEach((t) =>
+          t.classList.toggle("active", t.getAttribute("data-tab") === "login")
+        );
+        $("#form-login").hidden = false;
+        $("#form-register").hidden = true;
+        $("#login-name").value = "";
+        $("#login-pass").value = "";
+      });
+
+      // nav.js 已经在问服务器「我是谁」,有结果就会回调
+      A.onChange(render);
+    })();
+  </script>
+</body>
+</html>

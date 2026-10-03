@@ -20,21 +20,84 @@
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 
-.composer-title {
-  font-family: var(--font-display);
-  font-weight: 900;
-  font-size: 1rem;
-  letter-spacing: 4px;
-  color: var(--gold);
+/* 发帖框顶部:显示登录的是谁 */
+.composer-me {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  transition: border-color 0.6s ease;
+}
+.composer-face { flex: none; display: block; }
+.composer-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.composer-sig {
+  font-size: 0.74rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: color 0.6s ease;
 }
-
-.composer-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+.composer-center {
+  margin-left: auto;
+  flex: none;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  transition: color 0.3s ease;
 }
+.composer-center:hover { color: var(--gold-2); }
+
+/* 没登录时挡在发帖框位置上的提示 */
+.login-gate {
+  padding: 30px 26px;
+  border-radius: 24px;
+  margin-bottom: 38px;
+  text-align: center;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+}
+.login-gate[hidden] { display: none; }
+.gate-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.05rem;
+  letter-spacing: 4px;
+  color: var(--gold);
+  transition: color 0.6s ease;
+}
+.gate-sub {
+  margin-top: 10px;
+  font-size: 0.84rem;
+  line-height: 1.8;
+  color: var(--muted);
+  transition: color 0.6s ease;
+}
+.gate-btn {
+  display: inline-block;
+  margin-top: 18px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 2px;
+  color: #0b0f1a;
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  border-radius: 999px;
+  padding: 11px 28px;
+  box-shadow: 0 8px 22px rgba(240, 185, 11, 0.24);
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+.gate-btn:hover { transform: translateY(-1px); }
 
 .field { display: block; margin-bottom: 14px; }
 .field > span {
@@ -194,14 +257,51 @@
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 
+/* 置顶的帖子:金色描边 + 右上角一枚小章 */
+.story-card.is-pinned { border-color: var(--gold-line); }
+.story-pin {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #0b0f1a;
+  font-size: 0.66rem;
+  letter-spacing: 1px;
+}
+
 .story-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: 11px;
   margin-bottom: 10px;
 }
+.story-avatar {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--glass-brd);
+  transition: border-color 0.6s ease;
+}
+.story-avatar-fallback {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1rem;
+  color: #0b0f1a;
+  background: linear-gradient(135deg, var(--gold), var(--gold-2));
+}
+.story-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
 .story-name {
+  display: flex;
+  align-items: center;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.95rem;
@@ -209,12 +309,35 @@
   color: var(--gold);
   transition: color 0.6s ease;
 }
-.story-time {
-  flex: none;
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
+.story-meta {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
   color: var(--faint);
   transition: color 0.6s ease;
+}
+
+/* 身份徽章:服主是实心金,管理员是描边金 */
+.role-badge {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 1px;
+  vertical-align: middle;
+}
+.role-badge.owner {
+  color: #0b0f1a;
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  box-shadow: 0 0 14px rgba(240, 185, 11, 0.45);
+}
+.role-badge.admin {
+  color: var(--gold);
+  border: 1px solid var(--gold-line);
+  background: var(--gold-soft);
 }
 
 .story-body {
@@ -273,6 +396,17 @@
   transition: color 0.3s ease;
 }
 .story-del:hover { color: #ff7a7a; }
+.story-pin-btn {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.3s ease;
+}
+.story-pin-btn:hover { color: var(--gold); }
 
 /* ---------- 回复 @某某 ---------- */
 .story-to {
@@ -284,27 +418,16 @@
 }
 .story-to b { color: var(--gold); font-weight: 700; }
 
-/* 子回复整体往右收一档,并用一条竖向引导线连起来 */
+/* 回复区:平铺一层(参考 B 站),不再一层层往右缩 */
 .story-replies {
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   margin-top: 14px;
-  padding-left: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  transition: border-color 0.6s ease;
 }
-.story-replies::before {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 4px;
-  bottom: 4px;
-  width: 1px;
-  background: linear-gradient(180deg, var(--gold-line), transparent);
-}
-/* 缩进到第 4 层就到顶:再深的不再右移,靠「回复 @某某」认出层级 */
-.story-replies.no-indent { padding-left: 0; }
-.story-replies.no-indent::before { display: none; }
 
 /* 嵌在回复里的卡片:轻一点、紧一点,不然一层层玻璃叠着太闷 */
 .story-replies .story-card {
@@ -330,27 +453,29 @@
   box-shadow: var(--glass-rim), 0 0 0 3px var(--gold-soft);
 }
 
-/* ---------- 发帖卡里的「正在回复 @某某」提示条 ---------- */
-.reply-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: -6px 0 14px;
-  padding: 9px 12px;
-  border-radius: 12px;
+/* ---------- 就地展开的回复框(B 站那种,点「回复」在这条下面弹出来) ---------- */
+.reply-slot:empty { display: none; }
+
+.inline-reply {
+  margin-top: 12px;
+  padding: 14px 16px 12px;
+  border-radius: 16px;
   background: var(--gold-soft);
   border: 1px solid var(--gold-line);
-  font-size: 0.78rem;
+  transition: background-color 0.6s ease, border-color 0.6s ease;
+}
+.inline-to {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+  font-size: 0.76rem;
   letter-spacing: 0.03em;
   color: var(--muted);
-  transition: background-color 0.6s ease, border-color 0.6s ease, color 0.6s ease;
+  transition: color 0.6s ease;
 }
-.reply-chip[hidden] { display: none; }
-.reply-chip b {
-  color: var(--gold);
-  font-weight: 700;
-}
-.reply-chip button {
+.inline-to b { color: var(--gold); font-weight: 700; }
+.inline-x {
   margin-left: auto;
   width: 22px;
   height: 22px;
@@ -365,7 +490,78 @@
   cursor: pointer;
   transition: color 0.3s ease;
 }
-.reply-chip button:hover { color: #ff7a7a; }
+.inline-x:hover { color: #ff7a7a; }
+
+.inline-reply textarea {
+  width: 100%;
+  min-height: 64px;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--chip);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+  resize: vertical;
+  transition: background-color 0.4s ease, border-color 0.3s ease, color 0.6s ease;
+}
+.inline-reply textarea:focus { border-color: var(--gold-line); }
+.inline-reply textarea::placeholder { color: var(--faint); }
+
+.inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.inline-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+.inline-foot .form-msg { flex: 1; }
+
+/* 小一号的按钮:回复框里用,不抢正文的视觉 */
+.pick-btn.sm {
+  font-size: 0.74rem;
+  padding: 6px 13px;
+}
+.submit-btn.sm {
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+  padding: 8px 20px;
+  box-shadow: 0 6px 16px rgba(240, 185, 11, 0.2);
+}
+.thumbs.sm .thumb { width: 58px; height: 58px; border-radius: 10px; }
+.thumbs.sm .thumb button { width: 17px; height: 17px; font-size: 11px; }
+
+/* ---------- 一句轻提示 ---------- */
+.story-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  z-index: 400;
+  transform: translate(-50%, 14px);
+  max-width: 82vw;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.story-toast.in { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- 空状态 / 未接通提示 ---------- */
 .notice {
@@ -483,15 +679,13 @@
 /* ---------- 响应式 ---------- */
 @media (max-width: 640px) {
   .composer { padding: 20px 18px 16px; border-radius: 20px; }
-  .composer-row { grid-template-columns: 1fr; gap: 0; }
   .composer-foot { flex-direction: column-reverse; align-items: stretch; }
-  .submit-btn { width: 100%; }
+  .composer-foot .submit-btn { width: 100%; }
   .story-card { padding: 18px 16px 14px; }
   .story-imgs { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
   .pager { gap: 10px; }
   .pager button { padding: 9px 14px; letter-spacing: 0.5px; }
-  /* 手机上缩进收窄,不然回复两层就把正文挤没了 */
-  .story-replies { padding-left: 12px; }
-  .story-replies::before { left: 1px; }
   .story-replies .story-card { padding: 12px 13px 8px; }
+  .inline-foot { flex-direction: column-reverse; align-items: stretch; }
+  .inline-foot .submit-btn.sm { width: 100%; }
 }

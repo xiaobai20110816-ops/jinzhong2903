@@ -1,6 +1,9 @@
 /* ============================================================
-   103班：音乐领军班 · 顶部导航脚本
-   动态注入导航栏 + 主题开关 + 底部,所有页面共用
+   103班：音乐领军班 · 全站公共脚本
+   1) 动态注入导航栏 + 主题开关 + 底部信息栏
+   2) 账号系统:window.C103Auth(登录 / 注册 / 退出 / 改资料)
+   3) 10.3 开屏弹窗:官网正式成立(每台设备只弹一次)
+   所有页面共用这一份,子页面不用各自写导航和登录逻辑。
    ============================================================ */
 
 // 导航配置：改了导航项,所有页面一起变
@@ -33,6 +36,284 @@ function applyTheme(theme) {
   try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* 隐私模式下忽略 */ }
 }
 
+/* ============================================================
+   账号:全站的登录状态都从这里取
+   story.js / account.html 用 window.C103Auth
+   ============================================================ */
+
+const API = "api"; // 相对路径:官网根目录、子目录都能用
+
+async function apiFetch(url, options) {
+  const res = await fetch(url, Object.assign({ credentials: "same-origin" }, options || {}));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || "网络不太顺，稍后再试");
+  return data;
+}
+
+// 同一台设备一个随机 id,只用来做「别发太快」的限流(全班共用校园网时不会互相卡住)
+function deviceId() {
+  try {
+    let v = localStorage.getItem("class103-cid");
+    if (!v) {
+      v = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now();
+      localStorage.setItem("class103-cid", v);
+    }
+    return v;
+  } catch (e) {
+    return "";
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+}
+
+const ROLE_LABEL = { owner: "服主", admin: "管理员" };
+
+/* ============================================================
+   图片压缩:留言配图和头像共用同一套逻辑
+   长边压到 1600 以内,质量从 0.85 逐档降到 0.45,还超标就缩尺寸,
+   一直到 ≤1MB —— 手机上直出的几 MB 照片也能顺利上传
+   ============================================================ */
+
+function toBlob(canvas, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+}
+
+async function decodeImage(file) {
+  // createImageBitmap 能顺手按 EXIF 方向摆正,iPhone 竖拍的照片不会躺倒
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch (e) {
+      /* 个别浏览器不认这个选项,退回 <img> */
+    }
+  }
+  return await new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("decode"));
+    };
+    img.src = url;
+  });
+}
+
+const C103Image = {
+  async compress(file, opts) {
+    const maxEdge = (opts && opts.maxEdge) || 1600;
+    const target = (opts && opts.targetBytes) || 1024 * 1024;
+
+    let src;
+    try {
+      src = await decodeImage(file);
+    } catch (e) {
+      throw new Error("这张图浏览器读不出来（iPhone 的 HEIC 格式最常见），请在相册里先导出成 JPG 再传。");
+    }
+
+    const w0 = src.width || 1;
+    const h0 = src.height || 1;
+    const fit = Math.min(1, maxEdge / Math.max(w0, h0));
+    let w = Math.max(1, Math.round(w0 * fit));
+    let h = Math.max(1, Math.round(h0 * fit));
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    let quality = 0.85;
+    let blob = null;
+
+    for (let round = 0; round < 10; round++) {
+      canvas.width = w;
+      canvas.height = h;
+      ctx.fillStyle = "#ffffff"; // JPEG 没有透明通道,先铺白底免得透明区发黑
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(src, 0, 0, w, h);
+
+      blob = await toBlob(canvas, quality);
+      if (blob && blob.size <= target) break;
+
+      if (quality > 0.46) {
+        quality -= 0.12;
+      } else {
+        w = Math.max(1, Math.round(w * 0.8));
+        h = Math.max(1, Math.round(h * 0.8));
+        quality = 0.8;
+      }
+    }
+
+    if (src.close) src.close();
+    if (!blob) throw new Error("图片压缩失败了，换一张试试");
+
+    // 原图本来就很小就别硬撑,直接用原文件更清楚
+    if (blob.size > file.size && file.size <= target) return file;
+    return blob;
+  },
+};
+
+window.C103Image = C103Image;
+
+const C103Auth = {
+  user: null,
+  ready: null,
+  _subs: [],
+
+  onChange(fn) {
+    this._subs.push(fn);
+    fn(this.user);
+  },
+
+  _emit() {
+    for (const fn of this._subs) {
+      try { fn(this.user); } catch (e) { /* 单个回调出错不影响别人 */ }
+    }
+    renderAccount();
+  },
+
+  refresh() {
+    this.ready = apiFetch(API + "/auth/me")
+      .then((d) => {
+        this.user = d.user || null;
+        this._emit();
+        return this.user;
+      })
+      .catch(() => {
+        // 后端没接上 / 断网时不能让整页卡住:当作未登录
+        this.user = null;
+        this._emit();
+        return null;
+      });
+    return this.ready;
+  },
+
+  async login(username, password) {
+    const d = await apiFetch(API + "/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: username, password: password }),
+    });
+    this.user = d.user;
+    this._emit();
+    return this.user;
+  },
+
+  async register(username, password) {
+    const d = await apiFetch(API + "/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: username, password: password, cid: deviceId() }),
+    });
+    this.user = d.user;
+    this._emit();
+    return this.user;
+  },
+
+  async logout() {
+    try {
+      await apiFetch(API + "/auth/logout", { method: "POST" });
+    } catch (e) {
+      /* 后端不认也得把本地状态清掉 */
+    }
+    this.user = null;
+    this._emit();
+    return null;
+  },
+
+  async saveProfile(fields) {
+    const d = await apiFetch(API + "/profile", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    this.user = d.user;
+    this._emit();
+    return this.user;
+  },
+};
+
+window.C103Auth = C103Auth;
+
+/* 导航栏右侧的账号入口:没登录写「登录」,登录了显示头像/首字 */
+function renderAccount() {
+  const btn = document.getElementById("nav-account");
+  if (!btn) return;
+  const u = C103Auth.user;
+
+  if (!u) {
+    btn.classList.remove("is-in");
+    btn.title = "登录 / 注册";
+    btn.innerHTML =
+      '<svg class="acc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.4" r="3.6"></circle><path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0"></path></svg>' +
+      '<span class="acc-text">登录</span>';
+    return;
+  }
+
+  btn.classList.add("is-in");
+  btn.title = u.name + (ROLE_LABEL[u.role] ? "（" + ROLE_LABEL[u.role] + "）" : "");
+  const face = u.avatar
+    ? `<img class="acc-avatar" src="${API}/img/${esc(u.avatar)}" alt="">`
+    : `<span class="acc-avatar acc-letter">${esc(u.name.slice(0, 1))}</span>`;
+  btn.innerHTML = face + '<span class="acc-text">' + esc(u.name) + "</span>";
+}
+
+/* ============================================================
+   10.3 开屏弹窗:官网正式成立
+   每台设备只弹一次(记住之后就不再打扰)
+   ============================================================ */
+
+const SPLASH_KEY = "class103-splash-2026-10-03";
+
+function showSplash() {
+  try {
+    if (localStorage.getItem(SPLASH_KEY)) return;
+    localStorage.setItem(SPLASH_KEY, "1");
+  } catch (e) {
+    /* 隐私模式下每次都弹,也没什么大不了 */
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "splash";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.innerHTML = `
+    <div class="splash-card">
+      <p class="splash-no">2026.10.03</p>
+      <h2 class="splash-title">103 官网正式成立</h2>
+      <p class="splash-lead">金秋十月，属于我们的数字阵地正式上线。</p>
+      <ul class="splash-list">
+        <li>自由注册登录 —— 起个名字、传头像、写个性签名</li>
+        <li>留言板升级 —— 像 B 站一样逐条回复，每条都标注 IP 属地</li>
+        <li>服主标识 —— 班委账号带金色「服主」徽章，发言自动置顶</li>
+        <li>图片上传 —— 最多 3 张，自动压缩，传得快也看得清</li>
+      </ul>
+      <div class="splash-foot">
+        <a class="splash-btn ghost" href="announcements.html">看公告</a>
+        <button class="splash-btn" type="button" id="splash-ok">开始逛逛</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(wrap);
+  requestAnimationFrame(() => wrap.classList.add("in"));
+
+  const close = () => {
+    wrap.classList.remove("in");
+    setTimeout(() => wrap.remove(), 320);
+  };
+  wrap.addEventListener("click", (e) => {
+    if (e.target === wrap) close();
+  });
+  document.getElementById("splash-ok").addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // 当前页面文件名,用于高亮
   const current = location.pathname.split("/").pop() || "index.html";
@@ -62,6 +343,7 @@ document.addEventListener("DOMContentLoaded", () => {
           (n) => `<a href="${n.href}" data-nav ${n.href === current ? 'class="active"' : ""}>${n.label}</a>`
         ).join("")}
       </nav>
+      <a class="nav-account" id="nav-account" href="account.html" data-nav></a>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换深色 / 浅色模式">
         <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" aria-hidden="true">
@@ -82,8 +364,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---- 注入底部信息栏(固定不随滚动消失) ----
   const footer = document.createElement("footer");
   footer.className = "site-footer";
-  footer.innerHTML = `青春交响，永不散场<i>/</i>金华一中 103班<i>/</i>班主任：盛老师<i>/</i>鸣谢：小柏制作 · 方胤锐发行`;
+  footer.innerHTML = `青春交响，永不散场<i>/</i>金华一中 103班<i>/</i>班主任：盛老师<i>/</i>鸣谢：小柏制作`;
   document.body.appendChild(footer);
+
+  // ---- 账号:先按未登录渲染,再问服务器要真实状态 ----
+  renderAccount();
+  C103Auth.refresh();
+
+  // ---- 10.3 开屏弹窗 ----
+  showSplash();
 
   // ---- 主题开关 ----
   const themeBtn = document.getElementById("theme-toggle");
