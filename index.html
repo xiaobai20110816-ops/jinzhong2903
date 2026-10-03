@@ -24,6 +24,8 @@
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/layout.css">
   <link rel="stylesheet" href="assets/css/home.css">
+  <!-- 留言板板块复用 103 纪事 的样式 -->
+  <link rel="stylesheet" href="assets/css/story.css">
 </head>
 <body class="poster">
 
@@ -52,6 +54,67 @@
         <span>SCROLL</span>
         <span class="line" aria-hidden="true"></span>
       </button>
+    </section>
+
+    <!-- ========== 留言板:全班都能写,还能在评论下面继续回复 ========== -->
+    <section class="showcase board-section" id="board" aria-label="留言板">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">NEW</span>
+          <h2>留言板</h2>
+          <span class="en">MESSAGE BOARD</span>
+          <a class="more" href="story.html" data-veil>进入 103 纪事<i>→</i></a>
+        </div>
+
+        <div class="story-wrap">
+          <form class="composer" id="composer" autocomplete="off">
+            <p class="composer-title">写一条</p>
+
+            <!-- 点了某条下面的「回复」才会出现,点 × 取消 -->
+            <div class="reply-chip" id="reply-chip" hidden>
+              <span id="reply-chip-text"></span>
+              <button type="button" id="reply-chip-x" aria-label="取消回复">×</button>
+            </div>
+
+            <div class="composer-row">
+              <label class="field">
+                <span>你的名字</span>
+                <input id="f-name" type="text" maxlength="24" placeholder="留空就署名「匿名同学」">
+              </label>
+              <label class="field">
+                <span>删帖口令（4 位以上）</span>
+                <input id="f-pass" type="text" maxlength="32" placeholder="自己记住，用来删自己的帖子">
+              </label>
+            </div>
+
+            <label class="field">
+              <span>正文</span>
+              <textarea id="f-body" rows="4" maxlength="4000" placeholder="那天发生了什么？写下来，就是 103 的历史。"></textarea>
+            </label>
+
+            <div class="picker">
+              <input id="f-file" type="file" accept="image/*" multiple hidden>
+              <button class="pick-btn" type="button" id="pick-btn">＋ 加图片</button>
+              <span class="pick-hint" id="pick-hint">最多 3 张，上传前自动压到 1MB 以内</span>
+              <div class="thumbs" id="thumbs"></div>
+            </div>
+
+            <div class="composer-foot">
+              <p class="form-msg" id="form-msg"></p>
+              <button class="submit-btn" type="submit" id="submit-btn">发布</button>
+            </div>
+          </form>
+
+          <div class="story-list" id="story-list"></div>
+
+          <!-- 首页只放最近几条,翻页按钮在紧凑模式下不显示 -->
+          <div class="pager" id="pager" hidden>
+            <button type="button" id="prev-btn">‹ 更新的</button>
+            <span id="page-info"></span>
+            <button type="button" id="next-btn">更早的 ›</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ========== 01 学生风采 ========== -->
@@ -302,7 +365,7 @@
 
     // ========== 点击海报任意处 / SCROLL → 平滑滚到第一个内容区 ==========
     (function () {
-      const target = document.getElementById("students");
+      const target = document.getElementById("board") || document.getElementById("students");
       const go = () => target.scrollIntoView({ behavior: "smooth" });
       document.getElementById("scroll-hint").addEventListener("click", (e) => {
         e.stopPropagation(); go();
@@ -555,5 +618,14 @@
       schedule(1000);   // 进来先停一秒,再开始一张一张地转
     })();
   </script>
+
+  <!-- 点图看大图 -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <img id="lightbox-img" alt="">
+  </div>
+
+  <!-- 首页留言板:只显示最近 3 条主帖、不显示翻页;回复可以无限层往下接 -->
+  <script>window.CLASS103_BOARD = { limit: 3, compact: true };</script>
+  <script src="assets/js/story.js"></script>
 </body>
 </html>

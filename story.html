@@ -42,6 +42,12 @@
         <form class="composer" id="composer" autocomplete="off">
           <p class="composer-title">写一条</p>
 
+          <!-- 点了某条下面的「回复」才会出现,点 × 取消 -->
+          <div class="reply-chip" id="reply-chip" hidden>
+            <span id="reply-chip-text"></span>
+            <button type="button" id="reply-chip-x" aria-label="取消回复">×</button>
+          </div>
+
           <div class="composer-row">
             <label class="field">
               <span>你的名字</span>

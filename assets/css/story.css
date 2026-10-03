@@ -246,9 +246,22 @@
 
 .story-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 16px;
   margin-top: 12px;
 }
+.story-reply {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.3s ease;
+}
+.story-reply:hover { color: var(--gold-2); }
 .story-del {
   font-size: 0.72rem;
   letter-spacing: 0.12em;
@@ -260,6 +273,99 @@
   transition: color 0.3s ease;
 }
 .story-del:hover { color: #ff7a7a; }
+
+/* ---------- 回复 @某某 ---------- */
+.story-to {
+  margin: 0 0 8px;
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  transition: color 0.6s ease;
+}
+.story-to b { color: var(--gold); font-weight: 700; }
+
+/* 子回复整体往右收一档,并用一条竖向引导线连起来 */
+.story-replies {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+  padding-left: 20px;
+}
+.story-replies::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: linear-gradient(180deg, var(--gold-line), transparent);
+}
+/* 缩进到第 4 层就到顶:再深的不再右移,靠「回复 @某某」认出层级 */
+.story-replies.no-indent { padding-left: 0; }
+.story-replies.no-indent::before { display: none; }
+
+/* 嵌在回复里的卡片:轻一点、紧一点,不然一层层玻璃叠着太闷 */
+.story-replies .story-card {
+  padding: 14px 16px 10px;
+  border-radius: 16px;
+  background: var(--chip);
+  box-shadow: none;
+  animation: none;
+}
+
+.story-more {
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+.story-more:hover { color: var(--gold-2); }
+
+/* 正在回复的那张卡描个金边,方便对上号 */
+.story-card.is-replying {
+  border-color: var(--gold-line);
+  box-shadow: var(--glass-rim), 0 0 0 3px var(--gold-soft);
+}
+
+/* ---------- 发帖卡里的「正在回复 @某某」提示条 ---------- */
+.reply-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -6px 0 14px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  transition: background-color 0.6s ease, border-color 0.6s ease, color 0.6s ease;
+}
+.reply-chip[hidden] { display: none; }
+.reply-chip b {
+  color: var(--gold);
+  font-weight: 700;
+}
+.reply-chip button {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+.reply-chip button:hover { color: #ff7a7a; }
 
 /* ---------- 空状态 / 未接通提示 ---------- */
 .notice {
@@ -369,6 +475,11 @@
   transition: color 0.6s ease;
 }
 
+/* ---------- 首页留言板板块 ---------- */
+/* 板块外壳复用首页 .showcase / .showcase-head,这里只把内容和标题行接起来 */
+.board-section .showcase-head { margin-bottom: 34px; }
+.board-section .story-wrap { margin: 0 auto; }
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 640px) {
   .composer { padding: 20px 18px 16px; border-radius: 20px; }
@@ -379,4 +490,8 @@
   .story-imgs { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
   .pager { gap: 10px; }
   .pager button { padding: 9px 14px; letter-spacing: 0.5px; }
+  /* 手机上缩进收窄,不然回复两层就把正文挤没了 */
+  .story-replies { padding-left: 12px; }
+  .story-replies::before { left: 1px; }
+  .story-replies .story-card { padding: 12px 13px 8px; }
 }

@@ -3,7 +3,12 @@
    1) 发帖:纯文字 + 最多 3 张图
    2) 图片在上传前用 canvas 压到 1MB 以内
    3) 倒序列表 + 翻页
-   4) 凭口令删掉自己发的帖子
+   4) 无限层嵌套回复(缩进最多到第 4 层,更深的靠「回复 @某某」辨认)
+   5) 凭口令删掉自己发的帖子
+
+   同一份脚本同时给 story.html 和首页板块用:
+   首页在引入本文件之前先设 window.CLASS103_BOARD = { limit: 3, compact: true },
+   紧凑模式下只显示前 N 条主帖、不显示翻页。
    ============================================================ */
 
 (function () {
@@ -13,10 +18,17 @@
   const MAX_IMAGES = 3;
   const MAX_EDGE = 1600;             // 长边像素上限
   const TARGET_BYTES = 1024 * 1024;  // 压到 1MB 以内
+  const INDENT_MAX = 4;              // 缩进最多 4 层,再深就不缩了
+  const COMPACT_REPLIES = 5;         // 首页紧凑模式:一条主帖最多先展开 5 条回复
+
+  const CFG = Object.assign({ limit: 0, compact: false }, window.CLASS103_BOARD || {});
 
   const $ = (sel) => document.querySelector(sel);
+  const on = (el, ev, fn) => {
+    if (el) el.addEventListener(ev, fn);
+  };
 
-  const state = { page: 1, totalPages: 1, images: [], busy: false, locked: false };
+  const state = { page: 1, totalPages: 1, images: [], busy: false, locked: false, replyTo: null };
   const els = {};
 
   /* ---------- 小工具 ---------- */
@@ -48,8 +60,13 @@
   }
 
   function setMsg(text, kind) {
+    if (!els.msg) return;
     els.msg.textContent = text || "";
     els.msg.className = "form-msg" + (kind ? " " + kind : "");
+  }
+
+  function submitLabel() {
+    return state.replyTo ? "回复" : "发布";
   }
 
   /* ---------- 图片压缩:长边 ≤1600,质量从 0.85 逐档降到 0.45,
@@ -149,32 +166,58 @@
   /* ---------- 渲染 ---------- */
 
   function notice(title, text) {
+    if (!els.list) return;
     els.list.innerHTML = `<div class="notice"><b>${title}</b>${text || ""}</div>`;
   }
 
-  function cardHTML(p) {
+  // depth:当前这条在第几层(0 = 主帖);parentName:它回复的是谁
+  function cardHTML(p, depth, parentName) {
+    depth = depth || 0;
+
+    const to = parentName ? `<p class="story-to">回复 <b>@${esc(parentName)}</b></p>` : "";
     const body = p.body ? `<p class="story-body">${esc(p.body)}</p>` : "";
     const imgs = p.images.length
       ? `<div class="story-imgs">${p.images
           .map((k) => `<img src="${API}/img/${k}" alt="纪事配图" loading="lazy">`)
           .join("")}</div>`
       : "";
-    return `<article class="story-card">
+
+    // 子回复:首页紧凑模式下一条主帖最多先展开 5 条,其余给个入口去纪事页看
+    const kids = p.replies || [];
+    const shown = CFG.compact ? kids.slice(0, COMPACT_REPLIES) : kids;
+    const rest = kids.length - shown.length;
+    let replies = "";
+    if (shown.length || rest > 0) {
+      const inner = shown.map((r) => cardHTML(r, depth + 1, p.name)).join("");
+      const more = rest > 0
+        ? `<a class="story-more" href="story.html">还有 ${rest} 条回复，去 103 纪事看 →</a>`
+        : "";
+      const flat = depth + 1 > INDENT_MAX ? " no-indent" : "";
+      replies = `<div class="story-replies${flat}">${inner}${more}</div>`;
+    }
+
+    return `<article class="story-card" data-id="${p.id}">
+      ${to}
       <div class="story-head">
         <span class="story-name">${esc(p.name)}</span>
         <span class="story-time">${fmtTime(p.created_at)}</span>
       </div>
       ${body}${imgs}
-      <div class="story-actions"><button class="story-del" type="button" data-del="${p.id}">删除</button></div>
+      <div class="story-actions">
+        <button class="story-reply" type="button" data-reply="${p.id}" data-name="${esc(p.name)}">回复</button>
+        <button class="story-del" type="button" data-del="${p.id}">删除</button>
+      </div>
+      ${replies}
     </article>`;
   }
 
   function renderPager(total) {
-    const show = total > 0 && state.totalPages > 1;
+    if (!els.pager) return;
+    const show = !CFG.compact && total > 0 && state.totalPages > 1;
     els.pager.hidden = !show;
-    els.pageInfo.textContent = `第 ${state.page} / ${state.totalPages} 页`;
-    els.prev.disabled = state.page <= 1;
-    els.next.disabled = state.page >= state.totalPages;
+    if (els.pageInfo) els.pageInfo.textContent = `第 ${state.page} / ${state.totalPages} 页`;
+    if (els.prev) els.prev.disabled = state.page <= 1;
+    if (els.next) els.next.disabled = state.page >= state.totalPages;
   }
 
   function lockForm(locked) {
@@ -186,12 +229,49 @@
   }
 
   function syncPick() {
+    if (!els.pickBtn || !els.pickHint) return;
     const full = state.images.length >= MAX_IMAGES;
     els.pickBtn.disabled = state.locked || full;
-    els.file.disabled = state.locked || full;
+    if (els.file) els.file.disabled = state.locked || full;
     els.pickHint.textContent = full
       ? `已选满 ${MAX_IMAGES} 张`
       : `最多 ${MAX_IMAGES} 张，上传前自动压到 1MB 以内`;
+  }
+
+  /* ---------- 正在回复谁 ---------- */
+
+  function setReplyTo(id, name) {
+    state.replyTo = id ? { id, name } : null;
+
+    if (els.replyChip) {
+      if (state.replyTo) {
+        els.replyChipText.innerHTML = `正在回复 <b>@${esc(name)}</b>`;
+        els.replyChip.hidden = false;
+      } else {
+        els.replyChip.hidden = true;
+      }
+    }
+    if (els.body) {
+      els.body.placeholder = state.replyTo
+        ? `回复 @${name}…`
+        : els.bodyHome || "那天发生了什么？写下来，就是 103 的历史。";
+    }
+    if (els.submit && !state.busy) els.submit.textContent = submitLabel();
+
+    // 把被回复那张卡描个金边,方便对上号
+    if (!els.list) return;
+    els.list.querySelectorAll(".story-card.is-replying").forEach((c) => c.classList.remove("is-replying"));
+    if (state.replyTo) {
+      const card = els.list.querySelector(`.story-card[data-id="${id}"]`);
+      if (card) card.classList.add("is-replying");
+    }
+  }
+
+  function startReply(id, name) {
+    setReplyTo(id, name);
+    if (!els.form) return;
+    els.form.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (els.body) els.body.focus();
   }
 
   /* ---------- 加载列表 ---------- */
@@ -199,24 +279,29 @@
   async function goto(page) {
     if (page < 1) return;
     notice("读取中", "<br>正在翻开 103 的纪事…");
-    els.pager.hidden = true;
+    if (els.pager) els.pager.hidden = true;
     try {
       const data = await api(API + "/posts?page=" + page);
       state.page = data.page;
       state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
+      let posts = data.posts || [];
+      if (CFG.limit > 0) posts = posts.slice(0, CFG.limit);
+
       if (!data.total) {
         notice("还没有人写下第一句", "<br>第一行字，等你来落笔。");
-      } else {
-        els.list.innerHTML = data.posts.map(cardHTML).join("");
+      } else if (els.list) {
+        els.list.innerHTML = posts.map((p) => cardHTML(p, 0, "")).join("");
       }
       renderPager(data.total);
       lockForm(false);
     } catch (err) {
       lockForm(true);
-      els.list.innerHTML = `<div class="notice"><b>「103 纪事」正在开通中</b>${esc(
-        err.message
-      )}<br>稍后再来看看。</div>`;
-      els.pager.hidden = true;
+      if (els.list) {
+        els.list.innerHTML = `<div class="notice"><b>「103 纪事」正在开通中</b>${esc(
+          err.message
+        )}<br>稍后再来看看。</div>`;
+      }
+      if (els.pager) els.pager.hidden = true;
     }
   }
 
@@ -267,7 +352,7 @@
     syncPick();
   }
 
-  /* ---------- 发帖 ---------- */
+  /* ---------- 发帖 / 回复 ---------- */
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -275,9 +360,10 @@
 
     const body = els.body.value.trim();
     const password = els.pass.value.trim();
+    const replyTo = state.replyTo;
 
     if (!body && state.images.length === 0) {
-      setMsg("写点什么，或者加张图吧", "err");
+      setMsg(replyTo ? "回复总得写点什么吧" : "写点什么，或者加张图吧", "err");
       return;
     }
     if (password.length < 4) {
@@ -287,8 +373,7 @@
 
     state.busy = true;
     els.submit.disabled = true;
-    const label = els.submit.textContent;
-    els.submit.textContent = "发布中";
+    els.submit.textContent = replyTo ? "回复中" : "发布中";
 
     try {
       const keys = [];
@@ -307,6 +392,7 @@
           password: password,
           images: keys,
           cid: cid(),
+          parent_id: replyTo ? replyTo.id : 0,
         }),
       });
 
@@ -322,14 +408,19 @@
       els.body.value = "";
       els.pass.value = "";
       syncPick();
-      setMsg("发布好了，谢谢你的记录", "ok");
+      setMsg(replyTo ? "回复好了" : "发布好了，谢谢你的记录", "ok");
+      if (replyTo) setReplyTo(null);
       await goto(1);
+      if (replyTo && els.list) {
+        const card = els.list.querySelector(`.story-card[data-id="${replyTo.id}"]`);
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     } catch (err) {
       setMsg(err.message, "err");
     } finally {
       state.busy = false;
       els.submit.disabled = false;
-      els.submit.textContent = label;
+      els.submit.textContent = submitLabel();
     }
   }
 
@@ -344,6 +435,8 @@
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password: password }),
       });
+      // 被删的那条可能正是当前在回复的对象,清掉免得发出去时报"那条已经不在了"
+      setReplyTo(null);
       await goto(state.page);
     } catch (err) {
       alert(err.message);
@@ -370,44 +463,59 @@
     els.next = $("#next-btn");
     els.lightbox = $("#lightbox");
     els.lightboxImg = $("#lightbox-img");
+    els.replyChip = $("#reply-chip");
+    els.replyChipText = $("#reply-chip-text");
+
+    if (els.body) els.bodyHome = els.body.placeholder;
 
     try {
-      els.name.value = localStorage.getItem("class103-name") || "";
+      if (els.name) els.name.value = localStorage.getItem("class103-name") || "";
     } catch (e) {
       /* 隐私模式下忽略 */
     }
 
-    els.form.addEventListener("submit", onSubmit);
-    els.pickBtn.addEventListener("click", () => els.file.click());
-    els.file.addEventListener("change", onPick);
-    els.prev.addEventListener("click", () => goto(state.page - 1));
-    els.next.addEventListener("click", () => goto(state.page + 1));
+    on(els.form, "submit", onSubmit);
+    on(els.pickBtn, "click", () => els.file && els.file.click());
+    on(els.file, "change", onPick);
+    on(els.prev, "click", () => goto(state.page - 1));
+    on(els.next, "click", () => goto(state.page + 1));
+    on($("#reply-chip-x"), "click", () => setReplyTo(null));
 
-    els.list.addEventListener("click", (e) => {
+    on(els.list, "click", (e) => {
+      const rep = e.target.closest("[data-reply]");
+      if (rep) {
+        startReply(rep.getAttribute("data-reply"), rep.getAttribute("data-name") || "同学");
+        return;
+      }
       const del = e.target.closest("[data-del]");
       if (del) {
         onDelete(del.getAttribute("data-del"));
         return;
       }
       if (e.target.tagName === "IMG" && e.target.closest(".story-imgs")) {
+        if (!els.lightbox) return;
         els.lightboxImg.src = e.target.src;
         els.lightbox.classList.add("open");
       }
     });
 
-    els.lightbox.addEventListener("click", () => {
+    on(els.lightbox, "click", () => {
       els.lightbox.classList.remove("open");
       els.lightboxImg.src = "";
     });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") els.lightbox.classList.remove("open");
+      if (e.key !== "Escape") return;
+      if (els.lightbox) els.lightbox.classList.remove("open");
+      if (state.replyTo) setReplyTo(null);
     });
 
     // 本地双击打开时没有后端,直接给一句人话,别一直转圈
     if (location.protocol === "file:") {
       lockForm(true);
-      els.list.innerHTML =
-        '<div class="notice"><b>要用官网打开</b>这一页需要联网才能写。请访问 jinzhong2903.ccwu.cc 再试。</div>';
+      if (els.list) {
+        els.list.innerHTML =
+          '<div class="notice"><b>要用官网打开</b>这一页需要联网才能写。请访问 jinzhong2903.ccwu.cc 再试。</div>';
+      }
       return;
     }
 
