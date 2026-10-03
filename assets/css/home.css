@@ -366,10 +366,17 @@ body.poster .site-header:not(.is-scrolled) {
 .showcase-head .more:hover { color: var(--gold); }
 .showcase-head .more:hover i { transform: translateX(5px); }
 
-/* ---- 01 学生风采:未公布时的空状态 ---- */
+/* ---- 01 学生风采:未公布时的空状态(同样做成一块玻璃,别在板块里留一块"裸底") ---- */
 .soon-inline {
   text-align: center;
-  padding: 20px 20px 0;
+  padding: 52px 24px 56px;
+  border-radius: 22px;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .soon-inline .soon-en {
   font-family: var(--font-latin);
@@ -430,11 +437,11 @@ body.poster .site-header:not(.is-scrolled) {
   color: var(--text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  box-shadow: var(--glass-rim);
   transition: transform 0.25s ease, color 0.25s ease,
     background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
@@ -453,11 +460,11 @@ body.poster .site-header:not(.is-scrolled) {
   width: 252px;
   padding: 8px;
   border-radius: 22px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  box-shadow: var(--glass-rim);
   /* 缩放值由 JS 每帧写进 --s:越靠轨道中心越大、越靠两端越小。
      所以这里不能给 transform 加 transition,否则每帧都会跟不上。
      也不加 will-change:十几二十张带 backdrop-filter 的卡常驻合成层反而更卡,
@@ -475,7 +482,7 @@ body.poster .site-header:not(.is-scrolled) {
   aspect-ratio: 4 / 3;
   border-radius: 15px;
   overflow: hidden;
-  background: var(--bg2);
+  background: var(--glass-bg);   /* 照片没加载出来时,底也是玻璃,不会露一块实色 */
 }
 .dorm-mini-photo img {
   width: 100%;
@@ -522,11 +529,11 @@ body.poster .site-header:not(.is-scrolled) {
   padding: 6px;
   overflow: hidden;
   border-radius: 20px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  box-shadow: var(--glass-rim);
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
     background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
@@ -572,11 +579,11 @@ body.poster .site-header:not(.is-scrolled) {
   gap: 20px;
   padding: 24px 26px;
   border-radius: 18px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  box-shadow: var(--glass-rim);
   transition: transform 0.25s, color 0.6s ease,
     background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
@@ -615,7 +622,13 @@ body.poster .site-header:not(.is-scrolled) {
 .news:hover p { color: var(--text); }
 
 /* 逐条上浮动画(IntersectionObserver 触发) */
-.io-rise { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.io-rise {
+  opacity: 0;
+  transform: translateY(30px);
+  /* 顺带把玻璃面的换色过渡也挂上,否则切主题时这块玻璃是硬切 */
+  transition: opacity 0.7s ease, transform 0.7s ease,
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+}
 .io-rise.in { opacity: 1; transform: translateY(0); }
 
 /* ========== 转场幕布 ========== */

@@ -36,6 +36,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // 当前页面文件名,用于高亮
   const current = location.pathname.split("/").pop() || "index.html";
 
+  // ---- 注入动态氛围柔光层:五团色斑缓慢漂移 ----
+  // 玻璃卡背后的"磨砂"全靠它:没有东西可糊,backdrop-filter 就只剩一块半透明色。
+  // 放在所有内容之前,由 base.css 的 .frost-layer 固定到视口背后(z-index:-1)。
+  const frost = document.createElement("div");
+  frost.className = "frost-layer";
+  frost.setAttribute("aria-hidden", "true");
+  frost.innerHTML = ["b1", "b2", "b3", "b4", "b5"]
+    .map((c) => `<span class="frost-blob ${c}"></span>`)
+    .join("");
+  document.body.prepend(frost);
+
   // ---- 注入导航栏 ----
   const header = document.createElement("header");
   header.className = "site-header";

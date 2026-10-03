@@ -30,11 +30,12 @@
   height: 58px;
   padding: 0 10px 0 18px;
   border-radius: 999px;
-  background: var(--nav-bg);
+  /* 掠光 + --nav-bg:首屏会临时把 --nav-bg 换成更深的版本,这里跟着一起变 */
+  background: var(--glass-sheen), var(--nav-bg);
   -webkit-backdrop-filter: blur(26px) saturate(180%);
   backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--nav-brd);
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  box-shadow: var(--glass-rim);
   /* 0.6s:和页面底色一起慢速淡变,切主题时不会"导航先变、背景后变" */
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
@@ -156,9 +157,16 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   font-size: 0.68rem;
   letter-spacing: 0.15em;
   color: var(--faint);
-  background: linear-gradient(180deg, transparent, var(--bg0-veil) 65%);
+  /* 玻璃底栏:全站统一的固定信息栏也做成毛玻璃 */
+  background-color: var(--glass-bg);
+  background-image: var(--glass-sheen);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border-top: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
   pointer-events: none; /* 不干扰主视觉与点击 */
-  transition: color 0.6s ease, background 0.6s ease;
+  transition: color 0.6s ease, background-color 0.6s ease,
+    border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .site-footer b {
   color: var(--muted);
@@ -176,12 +184,16 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   text-align: center;
   position: relative;
   overflow: hidden;
-  border-bottom: 1px solid var(--line);
-  background:
-    radial-gradient(circle at 50% 0%, var(--gold-soft), transparent 55%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
+  /* 玻璃横幅:半透明 + 背景模糊 + 顶部内高光,替掉原来的实色渐变带 */
+  background-color: var(--glass-bg);
+  background-image: var(--glass-sheen),
+    radial-gradient(circle at 50% -6%, var(--gold-soft), transparent 58%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border-bottom: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
   animation: page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; /* 柔和落地 */
-  transition: background 0.6s ease, border-color 0.6s ease;
+  transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .page-hero .no {
   font-family: var(--font-latin);
@@ -235,11 +247,11 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
     padding: 10px 14px 14px;
     border-radius: 24px;
     /* 用 --nav-bg:首页首屏(深色导航)时展开也是深色,不会白字白底 */
-    background: var(--nav-bg);
+    background: var(--glass-sheen), var(--nav-bg);
     -webkit-backdrop-filter: blur(26px) saturate(180%);
     backdrop-filter: blur(26px) saturate(180%);
     border: 1px solid var(--nav-brd);
-    box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+    box-shadow: var(--glass-rim);
     transform: translateY(-130%);
     opacity: 0;
     pointer-events: none;

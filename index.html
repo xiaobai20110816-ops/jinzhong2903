@@ -179,30 +179,58 @@
       }
     })();
 
-    // ========== 背景粒子:纯 Canvas,缓慢流动 ==========
+    // ========== 背景粒子:纯 Canvas,数量更多、飘得更快 ==========
     (function () {
       const canvas = document.getElementById("particles");
+      if (!canvas) return;
       const ctx = canvas.getContext("2d");
       const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      let W, H, DPR, parts = [];
+      let W, H, DPR, parts = [], sprites = {}, spriteTheme = "";
+      let running = false, rafId = 0;
       const mouse = { x: 0.5, y: 0.5 };
+      const R = 34;                 // 光晕雪碧图的半径(px)
+
+      // 光晕粒子用离屏雪碧图:每帧现算径向渐变太贵,一次性画好再缩放贴上去
+      function makeSprite(rgb) {
+        const s = document.createElement("canvas");
+        s.width = s.height = R * 2;
+        const c = s.getContext("2d");
+        const g = c.createRadialGradient(R, R, 0, R, R, R);
+        g.addColorStop(0, "rgba(" + rgb + ",0.55)");
+        g.addColorStop(0.35, "rgba(" + rgb + ",0.16)");
+        g.addColorStop(1, "rgba(" + rgb + ",0)");
+        c.fillStyle = g;
+        c.fillRect(0, 0, R * 2, R * 2);
+        return s;
+      }
+      function buildSprites(theme) {
+        spriteTheme = theme;
+        sprites = theme === "light"
+          ? { gold: makeSprite("179,129,10"), ink: makeSprite("16,19,26") }
+          : { gold: makeSprite("240,185,11"), ink: makeSprite("200,220,255") };
+      }
 
       function resize() {
         DPR = Math.min(window.devicePixelRatio || 1, 2);
         W = innerWidth; H = innerHeight;
         canvas.width = W * DPR; canvas.height = H * DPR;
         canvas.style.width = W + "px"; canvas.style.height = H + "px";
-        const count = Math.min(90, Math.max(36, Math.floor((W * H) / 18000)));
+        // 密度翻倍:之前按 18000 铺、上限 90,看起来太稀
+        const count = Math.min(190, Math.max(72, Math.floor((W * H) / 7000)));
         parts = [];
         for (let i = 0; i < count; i++) {
           parts.push({
             x: Math.random() * W, y: Math.random() * H,
-            r: Math.random() * 1.6 + 0.6,
-            a: Math.random() * 0.45 + 0.15,
-            gold: Math.random() < 0.32,               // 约三分之一金色粒子
+            r: Math.random() * 1.9 + 0.5,
+            a: Math.random() * 0.5 + 0.16,
+            gold: Math.random() < 0.34,               // 约三分之一金色粒子
+            glow: Math.random() < 0.14,               // 少量大颗带光晕
             phase: Math.random() * Math.PI * 2,
-            vx: (Math.random() - 0.5) * 0.12,
-            vy: (Math.random() - 0.5) * 0.12,
+            sp: 0.003 + Math.random() * 0.007,        // 摆动快慢错开
+            vx: (Math.random() - 0.5) * 0.36,
+            vy: (Math.random() - 0.5) * 0.36 - 0.05,  // 整体略向上飘
+            ax: 6 + Math.random() * 13,
+            ay: 6 + Math.random() * 13,
           });
         }
       }
@@ -212,16 +240,29 @@
         ctx.save();
         ctx.scale(DPR, DPR);
         const light = document.documentElement.dataset.theme === "light"; // 浅色底下粒子要变深才看得见
-        const ox = (mouse.x - 0.5) * 24, oy = (mouse.y - 0.5) * 24; // 轻微视差
+        const theme = light ? "light" : "dark";
+        if (spriteTheme !== theme) buildSprites(theme);
+        const ox = (mouse.x - 0.5) * 30, oy = (mouse.y - 0.5) * 30; // 轻微视差
         for (const p of parts) {
-          p.phase += 0.004;
+          p.phase += p.sp;
           p.x += p.vx; p.y += p.vy;
-          if (p.x < -12) p.x = W + 12; else if (p.x > W + 12) p.x = -12;
-          if (p.y < -12) p.y = H + 12; else if (p.y > H + 12) p.y = -12;
-          const dx = Math.sin(p.phase) * 9, dy = Math.cos(p.phase * 0.8) * 9;
-          const flicker = 0.72 + 0.28 * Math.sin(p.phase * 2.1);
+          if (p.x < -14) p.x = W + 14; else if (p.x > W + 14) p.x = -14;
+          if (p.y < -14) p.y = H + 14; else if (p.y > H + 14) p.y = -14;
+
+          const dx = Math.sin(p.phase) * p.ax, dy = Math.cos(p.phase * 0.8) * p.ay;
+          const cx = p.x + dx - ox, cy = p.y + dy - oy;
+          const flicker = 0.68 + 0.32 * Math.sin(p.phase * 2.3);
+
+          if (p.glow) {   // 先铺一层柔光,再叠实心点,粒子就有了"发光"的层次
+            const size = p.r * 16;
+            ctx.globalAlpha = Math.min(1, p.a * flicker * (light ? 0.5 : 0.85));
+            ctx.drawImage(p.gold ? sprites.gold : sprites.ink,
+              cx - size / 2, cy - size / 2, size, size);
+            ctx.globalAlpha = 1;
+          }
+
           ctx.beginPath();
-          ctx.arc(p.x + dx - ox, p.y + dy - oy, p.r, 0, Math.PI * 2);
+          ctx.arc(cx, cy, p.r, 0, Math.PI * 2);
           ctx.fillStyle = p.gold
             ? (light ? "rgba(179,129,10," : "rgba(240,185,11,") + (p.a * flicker).toFixed(3) + ")"
             : (light ? "rgba(16,19,26," : "rgba(255,255,255,") + (p.a * 0.8 * flicker).toFixed(3) + ")";
@@ -230,16 +271,33 @@
         ctx.restore();
       }
 
-      function loop() { render(); requestAnimationFrame(loop); }
+      function loop() {
+        if (!running) return;
+        render();
+        rafId = requestAnimationFrame(loop);
+      }
+      function start() {
+        if (running || reduceMotion) return;
+        running = true;
+        rafId = requestAnimationFrame(loop);
+      }
+      function stop() {
+        running = false;
+        cancelAnimationFrame(rafId);
+      }
 
       resize();
       addEventListener("resize", resize);
       addEventListener("mousemove", (e) => {
         mouse.x = e.clientX / innerWidth; mouse.y = e.clientY / innerHeight;
       }, { passive: true });
+      // 切到别的标签页就停帧,别在后台白烧 CPU
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) stop(); else start();
+      });
 
       if (reduceMotion) render(); // 尊重"减少动效":只画一帧静态
-      else requestAnimationFrame(loop);
+      else start();
     })();
 
     // ========== 点击海报任意处 / SCROLL → 平滑滚到第一个内容区 ==========

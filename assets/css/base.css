@@ -11,7 +11,16 @@
   --bg0: #070b14;        /* 最底层夜空 */
   --bg1: #0d1424;        /* 卡片/表面 */
   --bg2: #141d33;        /* 更深一块 / 悬浮 */
-  --bg0-veil: rgba(7, 11, 20, 0.92);      /* 底部信息栏的渐隐底 */
+
+  /* 毛玻璃基底:固定在视口背后的大团柔光。
+     玻璃卡的 backdrop-filter 必须"背后有东西"才糊得出磨砂感,
+     否则就退化成一块半透明色(以前看起来不像毛玻璃就是这个原因) */
+  --frost-1: rgba(70, 128, 255, 0.36);   /* 蓝 */
+  --frost-2: rgba(240, 185, 11, 0.26);   /* 金 */
+  --frost-3: rgba(255, 122, 26, 0.22);   /* 橙 */
+  --frost-4: rgba(0, 214, 200, 0.16);    /* 青 */
+  --frost-5: rgba(150, 110, 255, 0.18);  /* 紫 */
+  --grain: 0.05;         /* 玻璃表面细颗粒强度(0 则关闭) */
 
   /* 点缀色：金 + 橙 */
   --gold: #f0b90b;       /* 主金 */
@@ -28,15 +37,28 @@
   --line: rgba(255, 255, 255, 0.08);
   --chip: rgba(255, 255, 255, 0.045);
 
-  /* 苹果式玻璃材质 */
-  --glass-bg: rgba(20, 27, 42, 0.46);
+  /* 苹果式玻璃材质(仿 macOS / iOS 的"液态玻璃"):
+     半透明底 + 斜向镜面高光 + 四边描边,让它看起来是一块有厚度的玻璃,
+     而不是一张半透明色卡 */
+  --glass-bg: rgba(20, 27, 42, 0.34);
   --glass-brd: rgba(255, 255, 255, 0.14);
-  --glass-hi: rgba(255, 255, 255, 0.22);   /* 顶部内高光 */
+  --glass-hi: rgba(255, 255, 255, 0.24);   /* 顶部内高光 */
   --glass-shadow: 0 20px 52px rgba(0, 0, 0, 0.45);
-
-  /* 页面底色上的两团氛围光 */
-  --glow-top: rgba(20, 29, 51, 0.62);
-  --glow-btm: rgba(255, 138, 0, 0.06);
+  /* 表面那层斜向掠光:左上更亮、右下再回一点,模拟玻璃的折射 */
+  --glass-sheen: linear-gradient(158deg,
+    rgba(255, 255, 255, 0.13) 0%,
+    rgba(255, 255, 255, 0.03) 34%,
+    rgba(255, 255, 255, 0) 58%,
+    rgba(255, 255, 255, 0.07) 100%);
+  /* 所有玻璃面统一用它当背景:掠光 + 半透明底(最后一个色层即 background-color) */
+  --glass-surface: var(--glass-sheen), var(--glass-bg);
+  /* 四边内描边 = 玻璃的"厚度",比只有一条顶光更像真玻璃 */
+  --glass-rim:
+    inset 0 1px 0 var(--glass-hi),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+    inset 1px 0 0 rgba(255, 255, 255, 0.05),
+    inset -1px 0 0 rgba(255, 255, 255, 0.05),
+    var(--glass-shadow);
 
   /* 尺寸 */
   --radius: 18px;
@@ -61,7 +83,14 @@
   --bg0: #f4f6fa;
   --bg1: #ffffff;
   --bg2: #eaeef6;
-  --bg0-veil: rgba(244, 246, 250, 0.92);
+
+  /* 浅色下的柔光基底:更亮更淡,避免脏 */
+  --frost-1: rgba(80, 132, 255, 0.40);   /* 蓝 */
+  --frost-2: rgba(255, 170, 50, 0.42);   /* 金 */
+  --frost-3: rgba(255, 110, 180, 0.26);  /* 粉 */
+  --frost-4: rgba(0, 190, 180, 0.22);    /* 青 */
+  --frost-5: rgba(160, 120, 255, 0.26);  /* 紫 */
+  --grain: 0.035;
 
   /* 白色底上金色必须压深,否则看不清 */
   --gold: #b3810a;
@@ -76,13 +105,22 @@
   --line: rgba(16, 19, 26, 0.10);
   --chip: rgba(16, 19, 26, 0.035);
 
-  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-bg: rgba(255, 255, 255, 0.55);
   --glass-brd: rgba(255, 255, 255, 0.92);
   --glass-hi: rgba(255, 255, 255, 0.98);
   --glass-shadow: 0 18px 44px rgba(16, 19, 26, 0.13);
-
-  --glow-top: rgba(255, 255, 255, 0.92);
-  --glow-btm: rgba(217, 116, 0, 0.05);
+  /* 浅色下掠光要更含蓄,否则玻璃会糊成一块白 */
+  --glass-sheen: linear-gradient(158deg,
+    rgba(255, 255, 255, 0.60) 0%,
+    rgba(255, 255, 255, 0.16) 36%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.34) 100%);
+  --glass-rim:
+    inset 0 1px 0 var(--glass-hi),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.65),
+    inset 1px 0 0 rgba(255, 255, 255, 0.55),
+    inset -1px 0 0 rgba(255, 255, 255, 0.55),
+    var(--glass-shadow);
 
   --shadow: 0 18px 50px rgba(16, 19, 26, 0.14);
 }
@@ -96,12 +134,97 @@ body {
   background-color: var(--bg0);
   color: var(--text);
   line-height: 1.75;
-  /* 页面底色上的两团氛围光(随主题换色) */
-  background-image:
-    radial-gradient(circle at 50% 0%, var(--glow-top), transparent 60%),
-    radial-gradient(circle at 15% 100%, var(--glow-btm), transparent 45%);
+  /* 氛围光统一交给下面的 body::before 毛玻璃基底,这里不再叠第二层,
+     否则会把柔光冲淡、玻璃又不"糊"了 */
   /* 主题切换时平滑过渡,不要闪一下 */
   transition: background-color 0.6s ease, color 0.6s ease;
+}
+
+/* 毛玻璃基底 —— 全站玻璃效果的地基:
+   所有 backdrop-filter 的玻璃块"背后必须有东西",否则就退化成一块半透明色。
+   这里只铺一层很淡的静态底光(顶金 / 底蓝)垫住画面,
+   真正会动的那五团色斑交给下面 .frost-layer(nav.js 注入到每个页面)。 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(62vw 52vw at 50% -14%, var(--frost-2), transparent 64%),
+    radial-gradient(72vw 60vw at 50% 116%, var(--frost-1), transparent 66%);
+}
+
+/* ============================================================
+   动态氛围柔光层:五团色斑各自缓慢漂移
+   由 nav.js 注入到 <body> 最前面,五个页面共用同一份。
+   只动 transform(不碰 background-position):渐变重新绘制每帧都要
+   重新光栅化,滚动时立刻掉帧;transform 走合成器,基本不花钱。
+   ============================================================ */
+.frost-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;          /* 隔离成独立图层,色斑漂移不牵连主文档重绘 */
+}
+.frost-blob {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+  animation: frost-drift var(--dur, 36s) ease-in-out var(--delay, 0s) infinite;
+}
+/* 每团给一组不同的漂移方向 / 幅度 / 时长,错开后永远不会整齐地同步动 */
+.frost-blob.b1 {
+  width: 74vw; height: 74vw; left: -20vw; top: -26vw;
+  background: radial-gradient(circle at 50% 50%, var(--frost-1), transparent 66%);
+  --dx: 16vw; --dy: 12vh; --sc: 1.18; --dur: 34s; --delay: -4s;
+}
+.frost-blob.b2 {
+  width: 66vw; height: 66vw; right: -16vw; top: -20vw;
+  background: radial-gradient(circle at 50% 50%, var(--frost-2), transparent 64%);
+  --dx: -14vw; --dy: 16vh; --sc: 1.12; --dur: 41s; --delay: -13s;
+}
+.frost-blob.b3 {
+  width: 78vw; height: 78vw; right: -22vw; bottom: -30vw;
+  background: radial-gradient(circle at 50% 50%, var(--frost-3), transparent 66%);
+  --dx: -18vw; --dy: -14vh; --sc: 1.20; --dur: 47s; --delay: -21s;
+}
+.frost-blob.b4 {
+  width: 64vw; height: 64vw; left: -18vw; bottom: -22vw;
+  background: radial-gradient(circle at 50% 50%, var(--frost-4), transparent 64%);
+  --dx: 20vw; --dy: -12vh; --sc: 1.10; --dur: 38s; --delay: -9s;
+}
+.frost-blob.b5 {
+  width: 58vw; height: 58vw; left: 26vw; top: 22vh;
+  background: radial-gradient(circle at 50% 50%, var(--frost-5), transparent 66%);
+  --dx: -16vw; --dy: 18vh; --sc: 1.24; --dur: 52s; --delay: -30s;
+}
+
+@keyframes frost-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(var(--dx, 10vw), var(--dy, 8vh), 0) scale(var(--sc, 1.15)); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* 尊重系统"减少动效":色斑停在原地,玻璃效果不变 */
+@media (prefers-reduced-motion: reduce) {
+  .frost-blob { animation: none; }
+}
+
+/* 玻璃表面的细颗粒:极淡一层噪点,去掉"数码平",更接近真实磨砂玻璃 */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  transition: opacity 0.6s ease;
 }
 
 img { max-width: 100%; display: block; }
@@ -136,11 +259,11 @@ ul { list-style: none; }
    会自动退化为半透明底,依然可读
    ============================================================ */
 .glass {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
-  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  box-shadow: var(--glass-rim);
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 
@@ -254,7 +377,10 @@ ul { list-style: none; }
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(3, 5, 10, 0.94);
+  /* 毛玻璃遮罩:背后画面糊掉但仍透出来,比纯黑更"玻璃" */
+  background: rgba(3, 5, 10, 0.52);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+  backdrop-filter: blur(30px) saturate(150%);
   padding: 30px;
 }
 .lightbox.show { display: flex; }
@@ -264,11 +390,11 @@ ul { list-style: none; }
   object-fit: contain;          /* 完整显示,不裁切 */
   padding: 8px;                 /* 玻璃卡纸:图片四周留一圈,和内容区统一 */
   border-radius: 20px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
-  box-shadow: inset 0 1px 0 var(--glass-hi), 0 30px 80px rgba(0, 0, 0, 0.8);
+  box-shadow: var(--glass-rim), 0 30px 80px rgba(0, 0, 0, 0.8);
 }
 .lightbox-caption {
   text-align: center;
