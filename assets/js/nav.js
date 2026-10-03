@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---- 注入底部信息栏(固定不随滚动消失) ----
   const footer = document.createElement("footer");
   footer.className = "site-footer";
-  footer.innerHTML = `青春交响，永不散场<i>/</i>金华一中 103班<i>/</i>班主任：盛姗`;
+  footer.innerHTML = `青春交响，永不散场<i>/</i>金华一中 103班<i>/</i>班主任：盛老师<i>/</i>鸣谢：小柏制作 · 方胤锐发行`;
   document.body.appendChild(footer);
 
   // ---- 主题开关 ----

@@ -66,30 +66,69 @@ body.poster .site-header:not(.is-scrolled) {
   object-fit: cover;
   z-index: 0;
   background: #05070d;
-  /* 下沿渐隐:多段停靠点逼近平滑曲线,比两点直线更像"化开",不会看着突然暗下去 */
+  /* 画面一路铺到最底下,只在最后 8% 收口 —— 不再"从下往上"把内容刷掉 */
   -webkit-mask-image: linear-gradient(180deg,
-    #000 0%, #000 60%, rgba(0, 0, 0, 0.92) 70%, rgba(0, 0, 0, 0.72) 80%,
-    rgba(0, 0, 0, 0.46) 88%, rgba(0, 0, 0, 0.20) 95%, transparent 100%);
+    #000 0%, #000 92%, rgba(0, 0, 0, 0.6) 97%, transparent 100%);
   mask-image: linear-gradient(180deg,
-    #000 0%, #000 60%, rgba(0, 0, 0, 0.92) 70%, rgba(0, 0, 0, 0.72) 80%,
-    rgba(0, 0, 0, 0.46) 88%, rgba(0, 0, 0, 0.20) 95%, transparent 100%);
+    #000 0%, #000 92%, rgba(0, 0, 0, 0.6) 97%, transparent 100%);
 }
 
-/* 电影暗角:四周压黑,中间留亮,视线自然收到标题上
-   最上一层是"接到页面底色"的渐隐,必须放在最前面(图层越靠前越在上),
-   这样画面最下沿正好等于内容区的底色,视频与下方内容之间就没有接缝了。
-   用 var(--bg0) 而不是写死深色:浅色主题下也能对上。 */
+/* 底部"向下弥散":把画面最底下那几行像素化开、继续往下延展。
+   做法是三层 backdrop-filter(取的是身后的视频像素本身),模糊量由弱到强层层叠上去,
+   而不是叠一层颜色盖住 —— 所以看到的是视频内容自己"扩散出去",不是白色朦胧。
+   三层是同级元素(父级没有 backdrop-filter),各自都能取到视频;后画的层更模糊。 */
+.poster-dissolve {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28%;
+  z-index: 2;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(12px) saturate(112%);
+  backdrop-filter: blur(12px) saturate(112%);
+  -webkit-mask-image: linear-gradient(180deg,
+    transparent 14%, rgba(0, 0, 0, 0.45) 48%, transparent 82%);
+  mask-image: linear-gradient(180deg,
+    transparent 14%, rgba(0, 0, 0, 0.45) 48%, transparent 82%);
+}
+/* 上段:轻微模糊,让"开始化开"这件事没有硬边 */
+.poster-dissolve::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  -webkit-backdrop-filter: blur(5px) saturate(108%);
+  backdrop-filter: blur(5px) saturate(108%);
+  -webkit-mask-image: linear-gradient(180deg,
+    transparent 0%, rgba(0, 0, 0, 0.5) 22%, transparent 48%);
+  mask-image: linear-gradient(180deg,
+    transparent 0%, rgba(0, 0, 0, 0.5) 22%, transparent 48%);
+}
+/* 下段:最重的模糊,把画面最底沿彻底化开,像像素继续往画面外延展 */
+.poster-dissolve::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  -webkit-backdrop-filter: blur(28px) saturate(112%);
+  backdrop-filter: blur(28px) saturate(112%);
+  -webkit-mask-image: linear-gradient(180deg,
+    transparent 52%, rgba(0, 0, 0, 0.7) 84%, #000 100%);
+  mask-image: linear-gradient(180deg,
+    transparent 52%, rgba(0, 0, 0, 0.7) 84%, #000 100%);
+}
+
+/* 电影暗角:只在"上方"压暗,让导航和标题站得住;
+   中下部留亮,让视频一路看得见,底部交给上面的弥散层收口 */
 .poster-shade {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(180deg, transparent 0%, transparent 55%, var(--bg0) 100%),
-    radial-gradient(125% 85% at 50% 44%,
-      rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.42) 56%, rgba(3, 5, 10, 0.90) 100%),
     linear-gradient(180deg,
-      rgba(3, 5, 10, 0.64) 0%, rgba(3, 5, 10, 0.18) 36%, rgba(3, 5, 10, 0.84) 100%);
+      rgba(3, 5, 10, 0.66) 0%, rgba(3, 5, 10, 0.30) 22%, rgba(3, 5, 10, 0.12) 46%,
+      rgba(3, 5, 10, 0.07) 76%, rgba(3, 5, 10, 0.04) 100%),
+    radial-gradient(122% 72% at 50% 34%, transparent 32%, rgba(3, 5, 10, 0.34) 100%);
 }
 
 /* 胶片颗粒:极轻的一层噪点,消除"数码平"的感觉 */
@@ -418,13 +457,16 @@ body.poster .site-header:not(.is-scrolled) {
   backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), color 0.6s ease,
-    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+  /* 缩放值由 JS 每帧写进 --s:越靠轨道中心越大、越靠两端越小。
+     所以这里不能给 transform 加 transition,否则每帧都会跟不上。
+     提升为合成层,避免每帧重算背后的 backdrop-filter */
+  transform: scale(var(--s, 1));
+  transform-origin: center center;
+  will-change: transform;
+  transition: color 0.6s ease, background-color 0.6s ease,
+    border-color 0.6s ease, box-shadow 0.6s ease;
 }
-.dorm-mini:hover {
-  transform: translateY(-6px);
-  border-color: var(--gold-line);
-}
+.dorm-mini:hover { border-color: var(--gold-line); }
 .dorm-mini-photo {
   display: block;
   aspect-ratio: 4 / 3;
