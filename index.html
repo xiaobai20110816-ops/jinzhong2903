@@ -300,7 +300,10 @@
       items.forEach((el) => io.observe(el));
     })();
 
-    // ========== 宿舍滑轨:无限循环 + 中间最大 + 悬停缓停 ==========
+    // ========== 宿舍滑轨:走—停节奏 + 中间大幅放大 + 无限循环 ==========
+    // 节奏是"转到位 → 停一会儿 → 再转下一张",不是连续匀速转。
+    // 停住的那段时间一帧都不跑,只有 0.76 秒的转动期间才排 rAF——
+    // 老版是常驻 rAF、每帧都写 scrollLeft 和 18 张玻璃卡的缩放,所以显得帧数很低。
     (function () {
       const rail = document.getElementById("dorm-rail");
       if (!rail) return;
@@ -310,24 +313,27 @@
       const originals = Array.from(rail.querySelectorAll(".dorm-mini"));
       if (!originals.length) return;
 
-      const SPEED = 30;       // 自动滚动速度:30px/秒,慢到不打扰阅读
-      const TAU = 0.45;       // 缓停时间常数(秒):越大停得越慢
-      const MIN_SCALE = 0.82; // 最靠边的卡片缩到多小(中间那张是 1)
-      const DUR = 560;        // 箭头翻一张的时长
+      const MAX_SCALE = 1.28;   // 停在正中那张:放大到 1.28 倍
+      const MIN_SCALE = 0.5;    // 滑到两端:缩掉一半,和中景拉开 2.5 倍差距
+      const TURN = 760;         // 从这张转到下一张用多久
+      const HOLD = 2200;        // 转到位之后停住多久
+      const AFTER_USER = 2800;  // 用户自己拨过之后,隔多久恢复自动转
 
-      let unit = 0;           // 一份卡片的宽度:画面每滚过 unit 就完全重复一次
-      let stride = 0;         // 一张卡宽度 + 间距
-      let cards = [];         // 全部卡片(含克隆出来的)
-      let centers = [];       // 每张卡在"内容坐标"里的中心位置(缓存,不必每帧测量)
-      let scales = [];        // 上一帧写过的缩放值,避免无意义的样式写入
+      let unit = 0;             // 一份卡片的宽度:画面每滚过 unit 就完全重复一次
+      let stride = 0;           // 一张卡宽度 + 间距
+      let cards = [];           // 全部卡片(含克隆出来的)
+      let centers = [];         // 每张卡在"内容坐标"里的中心位置(布局值,不受缩放影响)
+      let scales = [];          // 上一帧写过的缩放值,避免无意义的样式写入
 
-      let speed = 0;
-      let targetSpeed = reduceMotion ? 0 : SPEED;
-      let gesture = false;    // 用户正在手动滚(触摸/滚轮):交给浏览器,不抢 scrollLeft
-      let nudging = false;    // 箭头翻页动画进行中
-      let gestureTimer = 0;
+      let phase = "hold";       // hold:停着不动 | turn:正在转到下一张
+      let hover = false;        // 鼠标停在滑轨上
+      let from = 0, to = 0, t0 = 0;
+      let raf = 0;              // 0 表示"睡着":停住时完全不排动画帧
+      let holdTimer = 0, armed = false, nextHold = HOLD, settleTimer = 0;
 
-      // ---- 铺足份数的克隆卡:一直往右滚也不会"滚到尽头",这是无限循环的关键 ----
+      const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+
+      // ---- 铺足份数的克隆卡:一直往右转也不会"转到尽头",这是无限循环的关键 ----
       function build() {
         cards.forEach((c) => { if (c.dataset.clone) c.remove(); });
         const gap = parseFloat(getComputedStyle(rail).columnGap) || 16;
@@ -345,10 +351,12 @@
           });
         }
         cards = Array.from(rail.querySelectorAll(".dorm-mini"));
-        scales = cards.map(() => 1);
+        scales = cards.map(() => -1);           // -1 保证第一帧把所有卡的样式写一遍
         measure();
-        // 停在"第二份"的开头:左右都还有内容,归一化时看不出跳位
-        rail.scrollLeft = unit;
+        rail.scrollLeft = unit;                                             // 先落到"第二份"开头
+        rail.scrollLeft = centers[nearest()] - rail.clientWidth / 2;        // 再让一张卡正好落在正中
+        normalize();
+        applyScale();
       }
 
       function measure() {
@@ -362,80 +370,116 @@
         if (Math.abs(n - x) > 0.5) rail.scrollLeft = n;   // 值没变就不写,少一次无谓的滚动写入
       }
 
-      // 越靠近轨道中心越大,越靠两端越小(只在值真的变了时才写样式)
+      // 离画面正中最近的是第几张
+      function nearest() {
+        const mid = rail.scrollLeft + rail.clientWidth / 2;
+        let best = 0, bd = Infinity;
+        for (let i = 0; i < centers.length; i++) {
+          const d = Math.abs(centers[i] - mid);
+          if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+      }
+
+      // 越靠中间越大:带宽只有 1.6 个步长,所以相邻那张已经明显小一圈、第三张就缩到底
       function applyScale() {
-        const center = rail.scrollLeft + rail.clientWidth / 2;
-        const half = Math.max(1, rail.clientWidth * 0.52);
+        const mid = rail.scrollLeft + rail.clientWidth / 2;
+        const band = Math.max(stride * 1.6, 300);
         for (let i = 0; i < cards.length; i++) {
-          const t = Math.max(0, 1 - Math.abs(centers[i] - center) / half);
+          const t = Math.max(0, 1 - Math.abs(centers[i] - mid) / band);
           const e = t * t * (3 - 2 * t);        // smoothstep:两端更扁,过渡更柔
-          const s = MIN_SCALE + (1 - MIN_SCALE) * e;
-          if (Math.abs(s - scales[i]) > 0.002) {
+          const s = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * e;
+          if (Math.abs(s - scales[i]) > 0.0015) {   // 阈值要小,否则最中间那张会一格一格地跳
             scales[i] = s;
             cards[i].style.setProperty("--s", s.toFixed(4));
+            cards[i].style.setProperty("--z", String(Math.round(s * 100)));  // 中间那张压在邻居上面
           }
         }
       }
 
-      // ---- 主循环 ----
-      let last = performance.now();
-      function tick(now) {
-        // 标签页切回来时 now-last 会很大,截断一下,否则画面会瞬移
-        const dt = Math.min(now - last, 64) / 1000;
-        last = now;
-        if (nudging || gesture) {
-          // 手动操作期间不抢 scrollLeft,只让速度平滑归零
-          speed += (0 - speed) * (1 - Math.exp(-dt / TAU));
-        } else {
-          speed += (targetSpeed - speed) * (1 - Math.exp(-dt / TAU)); // 缓起 / 缓停
-          rail.scrollLeft += speed * dt;
-          normalize();
-        }
+      // ---- 转到第 i 张 ----
+      function turnTo(i) {
+        if (i < 0 || i >= centers.length) return;
+        from = rail.scrollLeft;
+        to = centers[i] - rail.clientWidth / 2;
+        t0 = performance.now();
+        phase = "turn";
+        armed = false;
+        clearTimeout(holdTimer);
+        if (!raf) raf = requestAnimationFrame(frame);
+      }
+      function advance(dir) { turnTo(nearest() + dir); }
+
+      function frame(now) {
+        raf = 0;
+        const p = Math.min(1, (now - t0) / TURN);
+        rail.scrollLeft = from + (to - from) * ease(p);
         applyScale();
-        requestAnimationFrame(tick);
+        if (p < 1) { raf = requestAnimationFrame(frame); return; }
+        phase = "hold";
+        normalize();
+        applyScale();
+        settle();          // 已经落在正中,这里只负责把"下一次转"排上
       }
 
-      // ---- 触屏 / 滚轮:先交给浏览器原生滚动,结束后再平滑接入自动滚动 ----
-      function beginGesture() { gesture = true; clearTimeout(gestureTimer); }
-      function endGesture() {
-        clearTimeout(gestureTimer);
-        gestureTimer = setTimeout(() => {
-          gesture = false;
-          last = performance.now();
-          normalize();
-        }, 220);
+      // 排下一次自动转(停住期间没有任何动画帧在跑)
+      function schedule(ms) {
+        clearTimeout(holdTimer);
+        armed = false;
+        if (reduceMotion || hover || phase === "turn") return;
+        armed = true;
+        holdTimer = setTimeout(() => {
+          armed = false;
+          if (phase !== "hold") return;
+          nextHold = HOLD;
+          advance(1);
+        }, ms);
       }
-      rail.addEventListener("touchstart", beginGesture, { passive: true });
-      rail.addEventListener("touchend", endGesture, { passive: true });
-      rail.addEventListener("touchcancel", endGesture, { passive: true });
-      rail.addEventListener("wheel", () => { beginGesture(); endGesture(); }, { passive: true });
-      rail.addEventListener("focusin", () => { beginGesture(); endGesture(); });
 
-      // ---- 鼠标停在滑轨上:把速度目标设成 0,缓缓停住,而不是急刹 ----
+      // 停稳了:没对正在中的就吸附过去,已经在正中的就排下一张
+      function settle() {
+        if (phase === "turn" || reduceMotion) return;
+        const i = nearest();
+        const off = centers[i] - (rail.scrollLeft + rail.clientWidth / 2);
+        if (Math.abs(off) > 1.5) { turnTo(i); return; }
+        if (!armed) schedule(nextHold);
+      }
+
+      // ---- 用户自己拨动:手上这张立刻停下(别和手指抢),之后多停一会儿再恢复自动 ----
+      function userTakeOver() {
+        nextHold = AFTER_USER;
+        armed = false;
+        clearTimeout(holdTimer);
+        if (phase === "turn") { rail.scrollLeft = to; phase = "hold"; normalize(); }
+      }
+
+      rail.addEventListener("touchstart", userTakeOver, { passive: true });
+      rail.addEventListener("wheel", userTakeOver, { passive: true });
+      rail.addEventListener("focusin", userTakeOver);
+
+      // 滚动停下来之后(含触屏惯性):对正到最近的一张,再重新计时
+      rail.addEventListener("scroll", () => {
+        if (phase === "turn") return;       // 自己转的时候不用管
+        applyScale();
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(settle, 240);
+      }, { passive: true });
+
+      // ---- 鼠标停上去:转完手上这张就停住,不急着转下一张 ----
       if (matchMedia("(hover: hover)").matches) {
-        rail.addEventListener("pointerenter", () => { targetSpeed = 0; });
+        rail.addEventListener("pointerenter", () => {
+          hover = true;
+          armed = false;
+          clearTimeout(holdTimer);
+        });
         rail.addEventListener("pointerleave", () => {
-          targetSpeed = reduceMotion ? 0 : SPEED;
-          last = performance.now();
+          hover = false;
+          if (phase === "hold") schedule(HOLD);
         });
       }
 
-      // ---- 箭头:平滑翻一张卡(无限循环,不用夹到两端) ----
-      function nudge(sign) {
-        if (nudging || !stride) return;
-        const from = rail.scrollLeft;
-        const to = from + sign * stride;
-        const t0 = performance.now();
-        nudging = true;
-        (function run(now) {
-          const p = Math.min(1, (now - t0) / DUR);
-          rail.scrollLeft = from + (to - from) * (1 - Math.pow(1 - p, 3)); // easeOutCubic
-          if (p < 1) requestAnimationFrame(run);
-          else { nudging = false; last = performance.now(); normalize(); }
-        })(t0);
-      }
-      if (btnPrev) btnPrev.addEventListener("click", () => nudge(-1));
-      if (btnNext) btnNext.addEventListener("click", () => nudge(1));
+      if (btnPrev) btnPrev.addEventListener("click", () => { userTakeOver(); advance(-1); });
+      if (btnNext) btnNext.addEventListener("click", () => { userTakeOver(); advance(1); });
 
       // ---- 视口尺寸变了:重新量步长,必要时重铺克隆 ----
       let rzTimer = 0;
@@ -444,15 +488,13 @@
         rzTimer = setTimeout(() => {
           const gap = parseFloat(getComputedStyle(rail).columnGap) || 16;
           if (Math.abs(originals[0].offsetWidth + gap - stride) > 0.5) build();
-          else measure();
+          else { measure(); applyScale(); }
+          schedule(1000);
         }, 220);
       });
 
       build();
-      applyScale();
-
-      // 尊重"减少动效":不自动滚,箭头与手势仍可用
-      if (!reduceMotion) requestAnimationFrame(tick);
+      schedule(1000);   // 进来先停一秒,再开始一张一张地转
     })();
   </script>
 </body>
