@@ -246,6 +246,23 @@
       background: var(--gold);
       color: #0b0f1a;
     }
+    /* 删账号:危险操作,低调的红,别太扎眼但要点得清楚 */
+    .member .m-del {
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      color: #ff9b9b;
+      background: transparent;
+      border: 1px solid rgba(255, 100, 100, 0.4);
+      border-radius: 10px;
+      padding: 7px 12px;
+      cursor: pointer;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
+    }
+    .member .m-del:hover {
+      background: rgba(255, 80, 80, 0.14);
+      border-color: rgba(255, 100, 100, 0.72);
+    }
+    .member .m-del:disabled { opacity: 0.45; cursor: default; }
 
     .note {
       margin-top: 22px;
@@ -404,7 +421,7 @@
           <div class="glass panel" id="panel-members" hidden>
             <div class="panel-head">
               <h2>成员权限</h2>
-              <p>只有服主能改权限。管理员能改全站内容、能置顶和删留言；普通成员只能发帖回复。</p>
+              <p>只有服主能改权限、删账号。管理员能改全站内容、能置顶和删留言；普通成员只能发帖回复。删账号会释放用户名，TA 发过的留言保留为无主老帖。</p>
             </div>
             <div class="rows" id="mem-list"></div>
             <p class="msg" id="mem-msg"></p>
@@ -786,6 +803,36 @@
                   }
                 });
                 right.appendChild(sel);
+
+                // 彻底删账号:危险操作,先弹一次确认
+                const del = document.createElement("button");
+                del.type = "button";
+                del.className = "m-del";
+                del.textContent = "删除";
+                del.addEventListener("click", async () => {
+                  const sure = confirm(
+                    `确定永久删除「${u.name}」？\n\n` +
+                      `· 账号从数据库消失，用户名会被释放，可以再被别人注册\n` +
+                      `· TA 发过的留言保留，变成无主老帖\n` +
+                      `· 删了就找不回来`
+                  );
+                  if (!sure) return;
+                  del.disabled = true;
+                  try {
+                    const res = await fetch(API + "/users/" + u.id, {
+                      method: "DELETE",
+                      credentials: "same-origin",
+                    });
+                    const rd = await res.json().catch(() => ({}));
+                    if (!res.ok || !rd.ok) throw new Error(rd.error || "删不掉");
+                    el.remove();
+                    say("mem-msg", `已删除账号「${u.name}」`, "ok");
+                  } catch (err) {
+                    say("mem-msg", err.message, "err");
+                    del.disabled = false;
+                  }
+                });
+                right.appendChild(del);
               } else {
                 right.innerHTML = `<span class="m-sub">${u.role === "admin" ? "管理员" : "普通成员"}</span>`;
               }
