@@ -22,7 +22,8 @@
   backdrop-filter: blur(22px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
-  transition: transform 0.25s, border-color 0.25s;
+  transition: transform 0.25s, color 0.6s ease,
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 /* 让照片墙高低错落 */
 .moment-item:nth-child(3n) { grid-row: span 2; }
@@ -47,34 +48,45 @@
   border-radius: 0 0 12px 12px;
   background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.85));
   opacity: 0;
-  transition: opacity 0.25s;
+  transition: opacity 0.25s, color 0.6s ease;
 }
 .moment-item:hover figcaption { opacity: 1; }
 
 /* ---- 灯箱 ---- */
 /* 灯箱样式已移至 base.css,供高光时刻与宿舍风采共用 */
 
-/* ---- 活动视频(宿舍游行) ---- */
-.video-block { max-width: 880px; margin: 0 auto; }
-.video-head {
+/* ---- 分组小标题(天桥文化 / 宿舍游行 共用) ---- */
+.group-head {
   display: flex;
   align-items: baseline;
   gap: 14px;
   margin-bottom: 16px;
 }
-.video-head .en {
+.group-head .en {
   font-family: var(--font-latin);
   font-weight: 300;
   font-size: 0.72rem;
   letter-spacing: 0.4em;
   color: var(--gold);
   opacity: 0.85;
+  transition: color 0.6s ease;
 }
-.video-head h2 {
+.group-head h2 {
   font-family: var(--font-display);
   font-size: 1.45rem;
   letter-spacing: 3px;
 }
+
+/* ---- 天桥文化:居中一组,以后接着往 .bridge-grid 里加图会自动排成网格 ---- */
+.bridge-grid {
+  max-width: 940px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.bridge-grid .moment-item { aspect-ratio: 4 / 3; }
+/* 这里不用照片墙的高低错落,统一成规整的一排 */
+.bridge-grid .moment-item:nth-child(3n) { grid-row: auto; }
 /* 多个视频竖排,每个一段 */
 .video-list { display: grid; gap: 30px; }
 /* 玻璃外框包住视频:视频 100% 铺满会遮住模糊,所以留 10px 内边距 */
@@ -87,6 +99,7 @@
   backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .video-block video {
   display: block;
@@ -101,6 +114,7 @@
   color: var(--muted);
   font-size: 0.8rem;
   letter-spacing: 2px;
+  transition: color 0.6s ease;
 }
 
 @media (max-width: 900px) { .moments-grid { grid-template-columns: repeat(3, 1fr); grid-auto-rows: 170px; } }

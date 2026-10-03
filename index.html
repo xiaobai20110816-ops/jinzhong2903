@@ -80,31 +80,35 @@
           <a class="more" href="dormitory.html" data-veil>查看全部<i>→</i></a>
         </div>
       </div>
-      <div class="showcase-rail" data-io>
-        <a class="dorm-mini" href="dormitory.html" data-veil>
-          <span class="dorm-mini-photo"><img src="assets/images/dorm/311/1.jpg" alt="311 宿舍"></span>
-          <span class="dorm-mini-body"><b>311</b><em>皇家园区</em></span>
-        </a>
-        <a class="dorm-mini" href="dormitory.html" data-veil>
-          <span class="dorm-mini-photo"><img src="assets/images/dorm/312/1.jpg" alt="312 宿舍"></span>
-          <span class="dorm-mini-body"><b>312</b><em>大诚酒店</em></span>
-        </a>
-        <a class="dorm-mini" href="dormitory.html" data-veil>
-          <span class="dorm-mini-photo"><img src="assets/images/avatars/avatar-placeholder.svg" alt="409 宿舍"></span>
-          <span class="dorm-mini-body"><b>409</b><em>待补充</em></span>
-        </a>
-        <a class="dorm-mini" href="dormitory.html" data-veil>
-          <span class="dorm-mini-photo"><img src="assets/images/dorm/410/1.jpg" alt="410 宿舍"></span>
-          <span class="dorm-mini-body"><b>410</b><em>金楚涵教总部</em></span>
-        </a>
-        <a class="dorm-mini" href="dormitory.html" data-veil>
-          <span class="dorm-mini-photo"><img src="assets/images/dorm/411/1.jpg" alt="411 宿舍"></span>
-          <span class="dorm-mini-body"><b>411</b><em>法兰西室联盟</em></span>
-        </a>
-        <a class="dorm-mini" href="dormitory.html" data-veil>
-          <span class="dorm-mini-photo"><img src="assets/images/dorm/412/1.jpg" alt="412 宿舍"></span>
-          <span class="dorm-mini-body"><b>412</b><em>待补充</em></span>
-        </a>
+      <div class="rail-wrap" data-io>
+        <button class="rail-btn prev" type="button" aria-label="往前看">‹</button>
+        <div class="showcase-rail" id="dorm-rail">
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/311/1.jpg" alt="311 宿舍"></span>
+            <span class="dorm-mini-body"><b>311</b><em>皇家园区</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/312/1.jpg" alt="312 宿舍"></span>
+            <span class="dorm-mini-body"><b>312</b><em>大诚酒店</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/avatars/avatar-placeholder.svg" alt="409 宿舍"></span>
+            <span class="dorm-mini-body"><b>409</b><em>待补充</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/410/1.jpg" alt="410 宿舍"></span>
+            <span class="dorm-mini-body"><b>410</b><em>金楚涵教总部</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/411/1.jpg" alt="411 宿舍"></span>
+            <span class="dorm-mini-body"><b>411</b><em>法兰西室联盟</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/412/1.jpg" alt="412 宿舍"></span>
+            <span class="dorm-mini-body"><b>412</b><em>待补充</em></span>
+          </a>
+        </div>
+        <button class="rail-btn next" type="button" aria-label="往后看">›</button>
       </div>
     </section>
 
@@ -292,6 +296,76 @@
         });
       }, { threshold: 0.15 });
       items.forEach((el) => io.observe(el));
+    })();
+
+    // ========== 宿舍滑轨:慢速自动滚动 + 左右箭头翻页 ==========
+    (function () {
+      const rail = document.getElementById("dorm-rail");
+      if (!rail) return;
+      const btnPrev = document.querySelector(".rail-btn.prev");
+      const btnNext = document.querySelector(".rail-btn.next");
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      const maxScroll = () => Math.max(0, rail.scrollWidth - rail.clientWidth);
+      const SPEED = 30;        // 自动滚动速度:30px/秒,慢到不打扰阅读
+      const RESUME_DELAY = 2600; // 手动操作后多久恢复自动滚动
+
+      let dir = 1;             // 走到头就折返,避免"跳回开头"那种突跳
+      let paused = false;
+      let resumeTimer = 0;
+      let last = performance.now();
+
+      function tick(now) {
+        // 标签页切回来时 now-last 会很大,截断一下,否则画面会瞬移
+        const dt = Math.min(now - last, 64);
+        last = now;
+        if (!paused && maxScroll() > 0) {
+          rail.scrollLeft += dir * (SPEED * dt) / 1000;
+          if (rail.scrollLeft >= maxScroll() - 0.5) dir = -1;
+          else if (rail.scrollLeft <= 0.5) dir = 1;
+        }
+        requestAnimationFrame(tick);
+      }
+
+      // 手动操作(滚轮 / 触摸 / 键盘 / 箭头)后暂停一会儿再自动滚
+      function holdBriefly() {
+        paused = true;
+        clearTimeout(resumeTimer);
+        resumeTimer = setTimeout(() => {
+          paused = false;
+          last = performance.now();
+        }, RESUME_DELAY);
+      }
+
+      // 鼠标停在滑轨上时彻底暂停(触屏设备没有真正的 hover,跳过)
+      const hoverable = matchMedia("(hover: hover)").matches;
+      if (hoverable) {
+        rail.addEventListener("pointerenter", () => { paused = true; clearTimeout(resumeTimer); });
+        rail.addEventListener("pointerleave", () => { paused = false; last = performance.now(); });
+      }
+      rail.addEventListener("wheel", holdBriefly, { passive: true });
+      rail.addEventListener("focusin", holdBriefly);
+
+      // 箭头:一次翻一张卡的宽度,easeOutCubic 收尾
+      function step(sign) {
+        const card = rail.querySelector(".dorm-mini");
+        const dist = card ? card.offsetWidth + 16 : rail.clientWidth * 0.8;
+        const from = rail.scrollLeft;
+        const to = Math.max(0, Math.min(maxScroll(), from + sign * dist));
+        const t0 = performance.now();
+        const DUR = 520;
+        holdBriefly();
+        (function run(now) {
+          const p = Math.min(1, (now - t0) / DUR);
+          rail.scrollLeft = from + (to - from) * (1 - Math.pow(1 - p, 3));
+          if (p < 1) requestAnimationFrame(run);
+        })(t0);
+      }
+      if (btnPrev) btnPrev.addEventListener("click", () => step(-1));
+      if (btnNext) btnNext.addEventListener("click", () => step(1));
+
+      // 尊重"减少动效":不自动滚,箭头仍可手动翻
+      if (!reduceMotion) requestAnimationFrame(tick);
     })();
   </script>
 </body>

@@ -66,11 +66,13 @@ body.poster .site-header:not(.is-scrolled) {
   object-fit: cover;
   z-index: 0;
   background: #05070d;
-  /* 下沿渐隐:视频本身淡出,不在 100vh 处留一条硬边 */
+  /* 下沿渐隐:多段停靠点逼近平滑曲线,比两点直线更像"化开",不会看着突然暗下去 */
   -webkit-mask-image: linear-gradient(180deg,
-    #000 0%, #000 74%, rgba(0, 0, 0, 0.45) 90%, transparent 100%);
+    #000 0%, #000 60%, rgba(0, 0, 0, 0.92) 70%, rgba(0, 0, 0, 0.72) 80%,
+    rgba(0, 0, 0, 0.46) 88%, rgba(0, 0, 0, 0.20) 95%, transparent 100%);
   mask-image: linear-gradient(180deg,
-    #000 0%, #000 74%, rgba(0, 0, 0, 0.45) 90%, transparent 100%);
+    #000 0%, #000 60%, rgba(0, 0, 0, 0.92) 70%, rgba(0, 0, 0, 0.72) 80%,
+    rgba(0, 0, 0, 0.46) 88%, rgba(0, 0, 0, 0.20) 95%, transparent 100%);
 }
 
 /* 电影暗角:四周压黑,中间留亮,视线自然收到标题上
@@ -83,7 +85,7 @@ body.poster .site-header:not(.is-scrolled) {
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(180deg, transparent 0%, transparent 70%, var(--bg0) 100%),
+    linear-gradient(180deg, transparent 0%, transparent 55%, var(--bg0) 100%),
     radial-gradient(125% 85% at 50% 44%,
       rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.42) 56%, rgba(3, 5, 10, 0.90) 100%),
     linear-gradient(180deg,
@@ -288,6 +290,7 @@ body.poster .site-header:not(.is-scrolled) {
   font-weight: 500;
   letter-spacing: 0.2em;
   color: var(--gold);
+  transition: color 0.6s ease;
 }
 .showcase-head h2 {
   font-family: var(--font-display);
@@ -303,6 +306,7 @@ body.poster .site-header:not(.is-scrolled) {
   letter-spacing: 0.45em;
   text-transform: uppercase;
   color: var(--faint);
+  transition: color 0.6s ease;
 }
 .showcase-head .more {
   margin-left: auto;
@@ -312,7 +316,7 @@ body.poster .site-header:not(.is-scrolled) {
   letter-spacing: 2px;
   color: var(--muted);
   white-space: nowrap;
-  transition: color 0.25s;
+  transition: color 0.6s ease;
 }
 .showcase-head .more i {
   font-style: normal;
@@ -335,6 +339,7 @@ body.poster .site-header:not(.is-scrolled) {
   letter-spacing: 0.6em;
   color: var(--gold);
   opacity: 0.85;
+  transition: color 0.6s ease;
 }
 .soon-inline .soon-cn {
   font-family: var(--font-display);
@@ -344,32 +349,68 @@ body.poster .site-header:not(.is-scrolled) {
   text-indent: 0.18em;         /* 抵消字距造成的右偏 */
   color: var(--text);
   margin: 16px 0 12px;
+  transition: color 0.6s ease;
 }
 .soon-inline .soon-note {
   color: var(--muted);
   font-size: 0.9rem;
   letter-spacing: 1px;
+  transition: color 0.6s ease;
 }
 
-/* ---- 02 宿舍风采:横向滑轨 ---- */
+/* ---- 02 宿舍风采:横向滑轨(自动慢速滚动 + 左右箭头翻页) ---- */
+.rail-wrap { position: relative; }
+
 .showcase-rail {
   display: flex;
   gap: 16px;
   overflow-x: auto;
   padding: 4px 20px 22px;
-  scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
+  /* 自动滚动时滚动条会一直抖,而且现在有箭头做操作入口,直接隐藏 */
+  scrollbar-width: none;
 }
-.showcase-rail::-webkit-scrollbar { height: 6px; }
-.showcase-rail::-webkit-scrollbar-thumb {
-  background: var(--gold-line);
-  border-radius: 999px;
+.showcase-rail::-webkit-scrollbar { display: none; }
+
+/* 左右玻璃圆钮:浮在滑轨两端 */
+.rail-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  padding-bottom: 3px;          /* 视觉居中:‹ › 字形本身偏上 */
+  border-radius: 50%;
+  font-family: var(--font-latin);
+  font-size: 1.45rem;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  transition: transform 0.25s ease, color 0.25s ease,
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
+.rail-btn:hover {
+  color: var(--gold);
+  border-color: var(--gold-line);
+  transform: translateY(-50%) scale(1.06);
+}
+.rail-btn:active { transform: translateY(-50%) scale(0.94); }
+.rail-btn.prev { left: 22px; }
+.rail-btn.next { right: 22px; }
+
 /* 玻璃卡:外框留 8px 内边距,模糊才在照片四周看得见 */
 .dorm-mini {
   flex: 0 0 auto;
   width: 252px;
-  scroll-snap-align: start;
   padding: 8px;
   border-radius: 22px;
   background: var(--glass-bg);
@@ -377,7 +418,8 @@ body.poster .site-header:not(.is-scrolled) {
   backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s, box-shadow 0.3s;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), color 0.6s ease,
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .dorm-mini:hover {
   transform: translateY(-6px);
@@ -410,6 +452,7 @@ body.poster .site-header:not(.is-scrolled) {
   font-weight: 700;
   letter-spacing: 1px;
   color: var(--gold);
+  transition: color 0.6s ease;
 }
 .dorm-mini-body em {
   font-style: normal;
@@ -417,6 +460,7 @@ body.poster .site-header:not(.is-scrolled) {
   font-size: 0.9rem;
   letter-spacing: 1px;
   color: var(--text);
+  transition: color 0.6s ease;
 }
 
 /* ---- 03 高光时刻:照片墙 ---- */
@@ -438,7 +482,8 @@ body.poster .site-header:not(.is-scrolled) {
   backdrop-filter: blur(22px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .showcase-grid .ph:hover { transform: translateY(-4px); border-color: var(--gold-line); }
 .showcase-grid .ph img {
@@ -465,6 +510,7 @@ body.poster .site-header:not(.is-scrolled) {
   letter-spacing: 0.3em;
   text-transform: uppercase;
   color: var(--faint);
+  transition: color 0.6s ease;
 }
 .showcase-note i {
   font-style: normal;
@@ -486,7 +532,8 @@ body.poster .site-header:not(.is-scrolled) {
   backdrop-filter: blur(22px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
-  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+  transition: transform 0.25s, color 0.6s ease,
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .news:hover {
   border-color: var(--gold-line);
@@ -499,6 +546,7 @@ body.poster .site-header:not(.is-scrolled) {
   font-size: 0.8rem;
   letter-spacing: 0.15em;
   color: var(--gold-2);
+  transition: color 0.6s ease;
 }
 .news-date .pin {
   display: inline-block;
@@ -517,7 +565,7 @@ body.poster .site-header:not(.is-scrolled) {
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.7;
-  transition: color 0.25s;
+  transition: color 0.6s ease;
 }
 .news:hover p { color: var(--text); }
 
@@ -572,6 +620,8 @@ body.leaving .page-veil { opacity: 1; }
   .showcase-head .more { margin-left: 0; }
   .showcase-grid { grid-template-columns: repeat(2, 1fr); }
   .showcase-grid .ph:first-child { grid-column: span 2; }
+  /* 手机上卡片本就占满屏宽,箭头会压住画面,交给手势滑动 + 自动滚动 */
+  .rail-btn { display: none; }
   .news { flex-direction: column; gap: 8px; }
   .news-date { min-width: 0; }
   .scroll-hint { bottom: 52px; }

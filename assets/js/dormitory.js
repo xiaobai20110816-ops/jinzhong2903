@@ -56,7 +56,6 @@ const DORMS = [
       "assets/images/dorm/411/2.jpg",
       "assets/images/dorm/411/3.jpg",
       "assets/images/dorm/411/4.jpg",
-      "assets/images/dorm/411/5.jpg",
     ],
   },
   {
@@ -68,6 +67,7 @@ const DORMS = [
       "assets/images/dorm/412/2.jpg",
       "assets/images/dorm/412/3.jpg",
       "assets/images/dorm/412/4.jpg",
+      "assets/images/dorm/412/5.jpg",
     ],
   },
 ];

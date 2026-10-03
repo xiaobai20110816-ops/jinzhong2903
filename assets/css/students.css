@@ -24,7 +24,8 @@
   overflow: hidden;
   text-align: center;
   padding: 30px 18px 24px;
-  transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+  transition: transform 0.25s, color 0.6s ease,
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 .student-card:hover {
   transform: translateY(-8px);
@@ -69,6 +70,7 @@
   border: 1px solid var(--gold-line);
   padding: 4px 14px;
   border-radius: 999px;
+  transition: color 0.6s ease;
 }
 /* 卡片顶部一条金线装饰 */
 .student-card::before {
@@ -96,6 +98,7 @@
   letter-spacing: 0.6em;
   color: var(--gold);
   opacity: 0.8;
+  transition: color 0.6s ease;
 }
 .students-soon .soon-cn {
   font-family: var(--font-display);
@@ -105,11 +108,13 @@
   text-indent: 0.18em;          /* 抵消字距造成的右偏 */
   color: var(--text);
   margin: 18px 0 14px;
+  transition: color 0.6s ease;
 }
 .students-soon .soon-note {
   color: var(--muted);
   font-size: 0.92rem;
   letter-spacing: 1px;
+  transition: color 0.6s ease;
 }
 
 /* 响应式 */
