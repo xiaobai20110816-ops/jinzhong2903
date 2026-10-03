@@ -128,10 +128,15 @@
   }
 
   function headHTML(p) {
+    // 有账号的作者:头像和名字都能点进 TA 的个人主页;早期匿名老帖保持不可点
+    const uid = p.author && p.author.id;
+    const href = uid ? `u.html?id=${uid}` : "";
+    const face = avatarHTML(p.author);
+    const name = `<span class="story-name">${esc(p.name)}${badgeHTML(p.author)}</span>`;
     return `<div class="story-head">
-      ${avatarHTML(p.author)}
+      ${href ? `<a class="story-face-link" href="${href}">${face}</a>` : face}
       <div class="story-who">
-        <span class="story-name">${esc(p.name)}${badgeHTML(p.author)}</span>
+        ${href ? `<a class="story-name-link" href="${href}">${name}</a>` : name}
         <span class="story-meta">${metaHTML(p)}</span>
       </div>
     </div>`;
@@ -149,15 +154,16 @@
 
   function actionsHTML(p) {
     const mine = !!(p.author && state.user && p.author.id === state.user.id);
-    const canDel = mine || isStaff();
+    const canManage = mine || isStaff();
     let pin = "";
     if (isStaff() && !p.parent_id) {
       pin = `<button class="story-pin-btn" type="button" data-pin="${p.id}" data-on="${p.pinned ? 1 : 0}">${p.pinned ? "取消置顶" : "置顶"}</button>`;
     }
-    const del = canDel ? `<button class="story-del" type="button" data-del="${p.id}">删除</button>` : "";
+    const edit = canManage ? `<button class="story-edit" type="button" data-edit="${p.id}">编辑</button>` : "";
+    const del = canManage ? `<button class="story-del" type="button" data-del="${p.id}">删除</button>` : "";
     return `<div class="story-actions">
       <button class="story-reply" type="button" data-reply="${p.id}" data-name="${esc(p.name)}">回复</button>
-      ${pin}${del}
+      ${edit}${pin}${del}
     </div>`;
   }
 
@@ -528,6 +534,33 @@
     }
   }
 
+  /* ---------- 编辑正文 ---------- */
+
+  async function onEdit(id) {
+    const card = document.querySelector(`.story-card[data-id="${id}"]`);
+    if (!card) return;
+    const bodyEl = card.querySelector(":scope > .story-body");
+    const current = bodyEl ? bodyEl.textContent : "";
+    const next = prompt("改这条留言的正文：", current);
+    if (next === null) return;                 // 点了取消
+    const body = next.trim();
+    if (!body || body === current) return;     // 空内容或没改动,不折腾
+
+    try {
+      await api(API + "/posts/" + id, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: body }),
+      });
+      // 只改这一处文本,不整页刷新;用 textContent 而不是 innerHTML,免得有人把标签写进来
+      if (bodyEl) bodyEl.textContent = body;
+      else await goto(state.page); // 原来只有图没字,得重画一次才会出现正文
+      toast("改好了");
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
   /* ---------- 启动 ---------- */
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -572,6 +605,11 @@
       const pin = e.target.closest("[data-pin]");
       if (pin) {
         onPin(pin.getAttribute("data-pin"), pin.getAttribute("data-on") === "1");
+        return;
+      }
+      const edit = e.target.closest("[data-edit]");
+      if (edit) {
+        onEdit(edit.getAttribute("data-edit"));
         return;
       }
       const del = e.target.closest("[data-del]");

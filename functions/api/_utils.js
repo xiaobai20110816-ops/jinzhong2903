@@ -114,6 +114,7 @@ export function ensureSchema(db) {
       await addColumn(db, "posts", "region", "TEXT");         // IP 属地,只到省份,如「浙江」
       await addColumn(db, "posts", "reply_to_id", "INTEGER"); // B 站式回复:回复的是哪一条
       await addColumn(db, "posts", "pinned", "INTEGER DEFAULT 0");
+      await addColumn(db, "posts", "wall_id", "INTEGER");      // 挂在谁的「个人主页留言墙」下(主留言板为 NULL)
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_parent ON posts(parent_id, created_at)`)
         .run();
@@ -135,6 +136,22 @@ export function ensureSchema(db) {
         )
         .run();
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_users_cid ON users(cid)`).run();
+
+      // 老库升级:封禁标记(1 = 登不进来,但账号和留言都还在)
+      await addColumn(db, "users", "banned", "INTEGER DEFAULT 0");
+
+      // ---- 个人主页点赞:一人对一人只能点一次,靠联合主键去重 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS profile_likes (
+             from_id INTEGER NOT NULL,
+             to_id INTEGER NOT NULL,
+             created_at INTEGER NOT NULL,
+             PRIMARY KEY (from_id, to_id)
+           )`
+        )
+        .run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_likes_to ON profile_likes(to_id)`).run();
 
       // ---- 登录会话:token 存库,浏览器只拿 httpOnly Cookie ----
       await db
@@ -209,6 +226,7 @@ export function publicUser(row) {
     role: row.role || "member",
     avatar: row.avatar_key || "",
     signature: row.signature || "",
+    banned: row.banned ? 1 : 0,
   };
 }
 
@@ -220,7 +238,7 @@ export async function currentUser(request, env) {
   if (!token) return null;
 
   const row = await env.DB.prepare(
-    `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, s.expires_at
+    `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, u.banned, s.expires_at
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ?`
   )
@@ -230,6 +248,11 @@ export async function currentUser(request, env) {
 
   if (!row) return null;
   if (row.expires_at < Date.now()) {
+    await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run().catch(() => {});
+    return null;
+  }
+  // 被封禁的账号等于没登录:留着会话也进不来,顺便把这条废会话清掉
+  if (row.banned) {
     await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run().catch(() => {});
     return null;
   }
@@ -326,7 +349,7 @@ export async function loadThread(db, rootIds) {
 
 /* 列表要读的列:集中一处,加字段时不会漏掉某条 SQL */
 export const POST_COLS =
-  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, created_at";
+  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, wall_id, created_at";
 
 /* 一行数据库记录 → 前端要的样子 */
 export function toPost(row) {
@@ -339,6 +362,7 @@ export function toPost(row) {
     region: row.region || "",
     reply_to_id: row.reply_to_id || 0,
     pinned: row.pinned ? 1 : 0,
+    wall_id: row.wall_id || 0,
     created_at: row.created_at,
   };
 }

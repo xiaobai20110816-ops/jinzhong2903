@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 个人主页">
+  <title>个人主页 · 103班 音乐领军班</title>
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#070b14">
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+    } catch (e) {}
+  </script>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <style>
+    /* 个人主页:资料卡 + 两个板块 + 留言墙,全部沿用全站玻璃令牌 */
+    .pf-card {
+      display: flex;
+      align-items: center;
+      gap: 26px;
+      padding: 30px 32px;
+      border-radius: 22px;
+      flex-wrap: wrap;
+    }
+    .pf-face-wrap { flex: none; }
+    .pf-face {
+      width: 116px;
+      height: 116px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 2.6rem;
+      color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+      border: 2px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+    }
+    .pf-info { flex: 1 1 240px; min-width: 0; }
+    .pf-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.7rem;
+      letter-spacing: 2px;
+      color: var(--text);
+      transition: color 0.6s ease;
+    }
+    .pf-badge {
+      font-style: normal;
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      vertical-align: middle;
+    }
+    .pf-badge.owner { color: #0b0f1a; background: linear-gradient(120deg, var(--gold), var(--gold-2)); }
+    .pf-badge.admin { color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-line); }
+    .pf-sig { margin-top: 8px; color: var(--muted); font-size: 0.95rem; word-break: break-word; transition: color 0.6s ease; }
+    .pf-sig.empty { opacity: 0.6; font-style: italic; }
+    .pf-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 22px;
+      margin-top: 14px;
+      font-size: 0.82rem;
+      letter-spacing: 1px;
+      color: var(--muted);
+      transition: color 0.6s ease;
+    }
+    .pf-meta i { font-style: normal; color: var(--faint); margin-right: 6px; }
+
+    /* 点赞按钮:已赞时金色高亮 */
+    .pf-like {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 18px;
+      padding: 9px 20px;
+      border-radius: 999px;
+      border: 1px solid var(--glass-brd);
+      background: var(--chip);
+      color: var(--muted);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.92rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.2s ease, background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+    }
+    .pf-like:hover { transform: translateY(-2px); }
+    .pf-like .heart { color: var(--muted); transition: color 0.3s ease; }
+    .pf-like.on { color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }
+    .pf-like.on .heart { color: var(--gold); }
+
+    /* 板块小标题:沿用高光时刻 .group-head 的样子 */
+    .pf-block { margin-top: 54px; }
+    .pf-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+    .pf-head .en {
+      font-family: var(--font-latin);
+      font-weight: 300;
+      font-size: 0.72rem;
+      letter-spacing: 0.4em;
+      color: var(--gold);
+      opacity: 0.85;
+      transition: color 0.6s ease;
+    }
+    .pf-head h2 {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.45rem;
+      letter-spacing: 3px;
+      color: var(--text);
+      transition: color 0.6s ease;
+    }
+
+    /* 留言卡片 */
+    .pf-list { display: grid; gap: 16px; }
+    .pf-post { padding: 20px 22px; border-radius: 18px; }
+    .pf-post-head { display: flex; align-items: center; gap: 12px; }
+    .pf-post-who { display: flex; flex-direction: column; min-width: 0; }
+    .pf-post-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.98rem;
+      color: var(--text);
+      transition: color 0.6s ease;
+    }
+    .pf-post-time { font-size: 0.76rem; letter-spacing: 1px; color: var(--faint); }
+    .pf-mini {
+      flex: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 1rem;
+      color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+    }
+    .pf-post-body {
+      margin-top: 12px;
+      font-size: 0.95rem;
+      line-height: 1.85;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      transition: color 0.6s ease;
+    }
+    .pf-imgs {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .pf-imgs img {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid var(--glass-brd);
+    }
+    .pf-post-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      margin-top: 12px;
+      font-size: 0.76rem;
+      letter-spacing: 1px;
+      color: var(--faint);
+    }
+
+    /* 留言墙:窄屏自动塌成单列 */
+    .pf-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+
+    /* 空状态 / 提示卡 */
+    .pf-empty {
+      padding: 28px 24px;
+      border-radius: 18px;
+      text-align: center;
+      font-size: 0.88rem;
+      color: var(--muted);
+      transition: color 0.6s ease;
+    }
+    .pf-notice {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 42px 30px;
+      border-radius: 22px;
+      text-align: center;
+    }
+    .pf-notice b {
+      display: block;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      color: var(--gold);
+      transition: color 0.6s ease;
+    }
+    .pf-notice p { margin-top: 12px; font-size: 0.9rem; line-height: 1.9; color: var(--muted); transition: color 0.6s ease; }
+    .pf-link { color: var(--gold); border-bottom: 1px solid var(--gold-line); }
+
+    /* 发留言 */
+    .pf-compose { margin-top: 20px; padding: 18px 20px; border-radius: 18px; }
+    .pf-compose textarea {
+      width: 100%;
+      min-height: 84px;
+      resize: vertical;
+      padding: 13px 15px;
+      border-radius: 14px;
+      border: 1px solid var(--glass-brd);
+      background: var(--chip);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 0.92rem;
+      line-height: 1.7;
+      outline: none;
+      transition: border-color 0.3s ease, background-color 0.4s ease, color 0.6s ease;
+    }
+    .pf-compose textarea:focus { border-color: var(--gold-line); }
+    .pf-compose-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+    .pf-msg { font-size: 0.8rem; color: var(--muted); transition: color 0.4s ease; }
+    .pf-msg.ok { color: var(--gold); }
+    .pf-send {
+      flex: none;
+      padding: 10px 26px;
+      border: none;
+      border-radius: 999px;
+      font-family: var(--font-display);
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #0b0f1a;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.3s ease;
+    }
+    .pf-send:hover { transform: translateY(-1px); }
+    .pf-send:disabled { opacity: 0.6; cursor: default; }
+    .pf-gate {
+      margin-top: 20px;
+      padding: 22px;
+      border-radius: 18px;
+      text-align: center;
+      font-size: 0.88rem;
+      color: var(--muted);
+      transition: color 0.6s ease;
+    }
+    .pf-gate a { color: var(--gold); border-bottom: 1px solid var(--gold-line); }
+
+    /* 轻提示 */
+    .pf-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 84px;
+      transform: translate(-50%, 12px);
+      z-index: 500;
+      padding: 11px 22px;
+      border-radius: 999px;
+      background: var(--glass-surface);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      backdrop-filter: blur(26px) saturate(180%);
+      border: 1px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+      color: var(--text);
+      font-size: 0.84rem;
+      letter-spacing: 1px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease, color 0.6s ease;
+    }
+    .pf-toast.in { opacity: 1; transform: translate(-50%, 0); }
+
+    /* 窄屏:单列,头像和名字上下排开,不再挤在一起 */
+    @media (max-width: 620px) {
+      .pf-card { flex-direction: column; text-align: center; padding: 26px 20px; gap: 18px; }
+      .pf-info { flex: 1 1 auto; width: 100%; }
+      .pf-name { justify-content: center; }
+      .pf-meta { justify-content: center; }
+      .pf-face { width: 96px; height: 96px; font-size: 2.1rem; }
+      .pf-block { margin-top: 40px; }
+      .pf-head { justify-content: center; }
+      .pf-wall { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Profile</div>
+    <h1><span class="gold-text">个人主页</span></h1>
+    <p>TA 的数字名片</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <!-- 资料卡与两个板块都由下面的脚本渲染 -->
+      <div id="profile-root">
+        <p class="glass pf-empty">正在读取…</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // 个人主页:资料卡 + 「TA 的留言」+ 「留言墙」
+    // 通过 u.html?id=12 查看某个成员;所有接口拿不到时都有兜底文案,不会白屏
+    (function () {
+      "use strict";
+
+      const API = "api"; // 相对路径:官网根目录、子目录都能用
+
+      // 来自接口的文本统一转义后再拼进 innerHTML
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      // 图片地址必须过 C103Img(后台 key 与仓库相对路径都认)
+      const img = window.C103Img || ((v) => v);
+      const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
+      const $ = (sel) => document.querySelector(sel);
+
+      // URL 上的 ?id=
+      const uid = parseInt(new URLSearchParams(location.search).get("id") || "0", 10) || 0;
+
+      const state = { user: null, liked: 0, likes: 0, busy: false };
+      let wall = []; // 留言墙列表(最新的排最前)
+
+      // ---------- 小工具 ----------
+      const pad = (n) => String(n).padStart(2, "0");
+
+      // 毫秒时间戳 → 2026.10.03
+      function fmtDate(ms) {
+        const t = Number(ms) || 0;
+        if (!t) return "";
+        const d = new Date(t);
+        return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+      }
+
+      // 毫秒时间戳 → 刚刚 / 5 分钟前 / 2026.10.03
+      function fmtRel(ms) {
+        const t = Number(ms) || 0;
+        const diff = Date.now() - t;
+        if (diff < 60000) return "刚刚";
+        if (diff < 3600000) return Math.floor(diff / 60000) + " 分钟前";
+        if (diff < 86400000) return Math.floor(diff / 3600000) + " 小时前";
+        return fmtDate(t);
+      }
+
+      function badge(role) {
+        if (role === "owner") return '<em class="pf-badge owner">服主</em>';
+        if (role === "admin") return '<em class="pf-badge admin">管理员</em>';
+        return "";
+      }
+
+      // 头像:有图用图,没有就用名字首字兜底
+      function avatar(author, cls) {
+        const c = cls || "pf-mini";
+        if (author && author.avatar) {
+          return `<img class="${c}" src="${esc(img(author.avatar))}" alt="" loading="lazy">`;
+        }
+        const ch = author && author.name ? String(author.name).slice(0, 1) : "匿";
+        return `<span class="${c} pf-avatar-fallback">${esc(ch)}</span>`;
+      }
+
+      async function api(url, options) {
+        const res = await fetch(url, options);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || "网络不太顺，稍后再试");
+        return data;
+      }
+
+      // 一句轻提示:飘在底部,两秒后自己消失
+      let toastTimer = 0;
+      function toast(text) {
+        let t = document.getElementById("pf-toast");
+        if (!t) {
+          t = document.createElement("div");
+          t.id = "pf-toast";
+          t.className = "pf-toast";
+          document.body.appendChild(t);
+        }
+        t.textContent = text;
+        t.classList.add("in");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("in"), 2200);
+      }
+
+      // 整页换成一张玻璃提示卡,永远不留白屏
+      function failCard(title, text) {
+        const root = $("#profile-root");
+        if (!root) return;
+        root.innerHTML = `<div class="glass pf-notice">
+          <b>${esc(title)}</b>
+          <p>${esc(text)}</p>
+          <p><a class="pf-link" href="index.html">回首页</a></p>
+        </div>`;
+      }
+
+      // ---------- 渲染资料卡 ----------
+      function renderProfile(data) {
+        const root = $("#profile-root");
+        if (!root) return;
+        const u = data.user || {};
+        const hasSig = !!u.signature;
+        const sig = hasSig ? esc(u.signature) : "这个人很神秘，什么都没写";
+        const name = esc(u.name);
+
+        root.innerHTML = `
+          <article class="glass pf-card">
+            <div class="pf-face-wrap">${avatar(u, "pf-face")}</div>
+            <div class="pf-info">
+              <h2 class="pf-name">${name}${badge(u.role)}</h2>
+              <p class="pf-sig${hasSig ? "" : " empty"}">${sig}</p>
+              <div class="pf-meta">
+                <span><i>注册</i>${esc(fmtDate(u.created_at))}</span>
+                <span><i>发帖</i>${Number(data.postCount) || 0}</span>
+              </div>
+              <button class="pf-like" id="pf-like" type="button" aria-pressed="false">
+                <span class="heart">❤</span><span id="pf-like-n">${Number(state.likes) || 0}</span>
+              </button>
+            </div>
+          </article>
+
+          <section class="pf-block">
+            <div class="pf-head"><span class="en">Posts</span><h2>TA 的留言</h2></div>
+            <div id="pf-posts" class="pf-list"><p class="glass pf-empty">读取中…</p></div>
+          </section>
+
+          <section class="pf-block">
+            <div class="pf-head"><span class="en">Wall</span><h2>留言墙</h2></div>
+            <div id="pf-wall" class="pf-wall"><p class="glass pf-empty">读取中…</p></div>
+            <form id="pf-form" class="glass pf-compose" hidden>
+              <textarea id="pf-body" rows="3" maxlength="4000" placeholder="给 ${name} 留句话…"></textarea>
+              <div class="pf-compose-foot">
+                <p class="pf-msg" id="pf-msg"></p>
+                <button class="pf-send" type="submit">留言</button>
+              </div>
+            </form>
+            <p class="glass pf-gate" id="pf-gate" hidden>登录后才能留言，去 <a href="account.html">account.html</a> 登录</p>
+          </section>`;
+
+        on($("#pf-like"), "click", onLike);
+        on($("#pf-form"), "submit", onWallSubmit);
+        paintLike();
+        renderWallGate();
+      }
+
+      function paintLike() {
+        const btn = $("#pf-like");
+        if (!btn) return;
+        btn.classList.toggle("on", !!state.liked);
+        btn.setAttribute("aria-pressed", state.liked ? "true" : "false");
+        const n = document.getElementById("pf-like-n");
+        if (n) n.textContent = String(Number(state.likes) || 0);
+      }
+
+      // 登录了才给发留言,没登录显示引导
+      function renderWallGate() {
+        const form = $("#pf-form");
+        const gate = $("#pf-gate");
+        const logged = !!state.user;
+        if (form) form.hidden = !logged;
+        if (gate) gate.hidden = logged;
+      }
+
+      // ---------- 点赞 ----------
+      async function onLike() {
+        if (state.busy) return;
+        if (!state.user) {
+          toast("登录后才能点赞，去 account.html 登录吧");
+          return;
+        }
+        state.busy = true;
+        try {
+          const d = await api(API + "/users/" + uid + "/like", { method: "POST" });
+          // 用返回的 liked / likes 就地更新,不整页刷新
+          state.liked = d.liked ? 1 : 0;
+          state.likes = Number(d.likes) || 0;
+          paintLike();
+        } catch (err) {
+          // 后端说没登录(会话过期):顺手把本地状态也当成未登录
+          if (/登录/.test(err.message)) {
+            state.user = null;
+            renderWallGate();
+          }
+          toast(err.message);
+        } finally {
+          state.busy = false;
+        }
+      }
+
+      // ---------- 一张留言卡(主帖与留言墙共用) ----------
+      function postCard(p) {
+        const list = p.images || [];
+        const imgs = list.length
+          ? `<div class="pf-imgs">${list
+              .map((k) => `<img src="${esc(img(k))}" alt="留言配图" loading="lazy">`)
+              .join("")}</div>`
+          : "";
+        const region = p.region ? `<span>IP 属地：${esc(p.region)}</span>` : "";
+        const reps = (p.replies || []).length;
+        const replies = reps ? `<span>${reps} 条回复</span>` : "";
+        const author = p.author || { name: p.name };
+        const foot = region || replies ? `<div class="pf-post-foot">${region}${replies}</div>` : "";
+
+        return `<article class="glass pf-post">
+          <div class="pf-post-head">
+            ${avatar(author, "pf-mini")}
+            <div class="pf-post-who">
+              <span class="pf-post-name">${esc(p.name)}${badge(author.role)}</span>
+              <span class="pf-post-time">${esc(fmtRel(p.created_at))}</span>
+            </div>
+          </div>
+          ${p.body ? `<p class="pf-post-body">${esc(p.body)}</p>` : ""}
+          ${imgs}
+          ${foot}
+        </article>`;
+      }
+
+      // ---------- 板块一:TA 的留言 ----------
+      async function loadPosts() {
+        const box = $("#pf-posts");
+        if (!box) return;
+        try {
+          const d = await api(API + "/posts?author=" + uid);
+          const list = d.posts || [];
+          box.innerHTML = list.length
+            ? list.map(postCard).join("")
+            : `<p class="glass pf-empty">还没有发过留言</p>`;
+        } catch (err) {
+          box.innerHTML = `<p class="glass pf-empty">暂时读不到 TA 的留言</p>`;
+        }
+      }
+
+      // ---------- 板块二:留言墙 ----------
+      function paintWall() {
+        const box = $("#pf-wall");
+        if (!box) return;
+        box.innerHTML = wall.length
+          ? wall.map(postCard).join("")
+          : `<p class="glass pf-empty">留言墙还是空的，来做第一个吧</p>`;
+      }
+
+      async function loadWall() {
+        try {
+          const d = await api(API + "/posts?wall=" + uid);
+          wall = d.posts || [];
+          paintWall();
+        } catch (err) {
+          const box = $("#pf-wall");
+          if (box) box.innerHTML = `<p class="glass pf-empty">暂时读不到留言</p>`;
+        }
+      }
+
+      function setWallMsg(text, ok) {
+        const m = $("#pf-msg");
+        if (!m) return;
+        m.textContent = text || "";
+        m.className = "pf-msg" + (ok ? " ok" : "");
+      }
+
+      async function onWallSubmit(e) {
+        e.preventDefault();
+        if (state.busy) return;
+        if (!state.user) {
+          toast("登录后才能留言");
+          return;
+        }
+        const area = $("#pf-body");
+        const body = area ? area.value.trim() : "";
+        if (!body) {
+          setWallMsg("写点什么再发吧");
+          return;
+        }
+
+        state.busy = true;
+        const btn = $("#pf-form .pf-send");
+        if (btn) { btn.disabled = true; btn.textContent = "发送中"; }
+        try {
+          // 字段名就是 wall,值是对方的用户 id
+          const d = await api(API + "/posts", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ body: body, wall: uid }),
+          });
+          // 新留言插到列表最上面并清空输入框
+          wall.unshift(
+            d.post || {
+              name: state.user.name,
+              body: body,
+              images: [],
+              region: "",
+              author: state.user,
+              created_at: Date.now(),
+              replies: [],
+            }
+          );
+          if (area) area.value = "";
+          setWallMsg("留言好了", true);
+          paintWall();
+        } catch (err) {
+          setWallMsg(err.message);
+        } finally {
+          state.busy = false;
+          if (btn) { btn.disabled = false; btn.textContent = "留言"; }
+        }
+      }
+
+      // ---------- 启动 ----------
+      async function load() {
+        try {
+          const data = await api(API + "/users/" + uid);
+          state.liked = data.liked ? 1 : 0;
+          state.likes = Number(data.likes) || 0;
+          renderProfile(data);
+          loadPosts();
+          loadWall();
+        } catch (err) {
+          const msg = (err && err.message) || "";
+          if (/找不到这个人/.test(msg)) {
+            failCard("找不到这个人", "这个人可能还没注册，或者已经离开了。");
+          } else {
+            failCard("个人主页暂时打不开", msg || "网络不太顺，稍后再试");
+          }
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        if (!uid) {
+          failCard("找不到这个人", "链接里没有指定成员编号。");
+          return;
+        }
+        if (!window.C103Auth) {
+          // nav.js 没加载出来:不能白屏,给一句人话
+          failCard("个人主页暂时打不开", "页面脚本没加载完整，刷新一下再试。");
+          return;
+        }
+
+        load();
+
+        // 登录状态一律等 C103Auth 通知,不自己猜
+        const ready = window.C103Auth.ready || Promise.resolve(null);
+        ready.then((user) => {
+          state.user = user;
+          renderWallGate();
+        });
+        window.C103Auth.onChange((user) => {
+          state.user = user;
+          renderWallGate();
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

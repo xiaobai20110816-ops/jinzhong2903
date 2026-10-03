@@ -1,24 +1,13 @@
 /* ============================================================
    103 · 成员管理
-   GET /api/users            成员列表(服主 / 管理员)
-   PUT /api/users { id, role }  改角色(仅服主)
+   GET /api/users   成员列表(服主 / 管理员)
 
-   角色只开放 member / admin 两档:
-   服主是「一次性口令」换来的,不能在这儿转手,也不能被降级。
+   列表把每个人的账号信息一次摊开:角色、签名、注册时间、发帖数、封禁状态。
+   改角色 / 改名 / 重置密码 / 封禁解封 / 删除都在 /api/users/:id 上,
+   全部仅服主可用,这里只读。
    ============================================================ */
 
-import {
-  json,
-  fail,
-  notReady,
-  ensureSchema,
-  currentUser,
-  isStaff,
-  ROLE_OWNER,
-  ROLE_ADMIN,
-} from "./_utils.js";
-
-const PICK_ROLES = [ROLE_ADMIN, "member"];
+import { json, fail, notReady, ensureSchema, currentUser, isStaff } from "./_utils.js";
 
 export async function onRequestGet({ request, env }) {
   if (!env.DB) return notReady("数据库");
@@ -28,10 +17,17 @@ export async function onRequestGet({ request, env }) {
   if (!isStaff(me)) return fail("只有服主和管理员能看成员列表", 403);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, username, role, avatar_key, signature, created_at
+    `SELECT id, username, role, avatar_key, signature, banned, created_at
        FROM users
       ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, id ASC`
   ).all();
+
+  // 发帖数一次聚合算完,不逐个成员查库
+  const counts = new Map();
+  const { results: agg } = await env.DB.prepare(
+    "SELECT user_id, COUNT(*) AS n FROM posts WHERE user_id IS NOT NULL GROUP BY user_id"
+  ).all();
+  for (const r of agg || []) counts.set(r.user_id, r.n);
 
   const users = (results || []).map((u) => ({
     id: u.id,
@@ -39,35 +35,10 @@ export async function onRequestGet({ request, env }) {
     role: u.role || "member",
     avatar: u.avatar_key || "",
     signature: u.signature || "",
+    banned: u.banned ? 1 : 0,
     created_at: u.created_at,
+    posts: counts.get(u.id) || 0,
   }));
 
   return json({ ok: true, users, me: me.id });
-}
-
-export async function onRequestPut({ request, env }) {
-  if (!env.DB) return notReady("数据库");
-  await ensureSchema(env.DB);
-
-  const me = await currentUser(request, env);
-  if (!me || me.role !== ROLE_OWNER) return fail("只有服主能改权限", 403);
-
-  let payload;
-  try {
-    payload = await request.json();
-  } catch (e) {
-    return fail("提交的内容读不出来，请刷新页面重试");
-  }
-
-  const id = parseInt(payload.id, 10) || 0;
-  const role = String(payload.role || "");
-  if (!id) return fail("成员编号不对");
-  if (!PICK_ROLES.includes(role)) return fail("只能设为管理员或普通成员");
-
-  const row = await env.DB.prepare("SELECT id, role FROM users WHERE id = ?").bind(id).first();
-  if (!row) return fail("找不到这个成员", 404);
-  if (row.role === ROLE_OWNER) return fail("服主不能被改权限");
-
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return json({ ok: true, id, role });
 }

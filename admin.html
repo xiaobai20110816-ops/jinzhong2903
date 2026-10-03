@@ -217,17 +217,27 @@
     }
     .avatar-slot img { width: 100%; height: 100%; object-fit: cover; }
 
-    /* ---- 成员表 ---- */
-    .member { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+    /* ---- 成员表:把每个人的资料摊开展示 ---- */
+    .member { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
     .member .m-face {
-      flex: none; width: 38px; height: 38px; border-radius: 50%; overflow: hidden;
-      display: grid; place-items: center; font-weight: 900; color: #0b0f1a;
+      flex: none; width: 52px; height: 52px; border-radius: 50%; overflow: hidden;
+      display: grid; place-items: center; font-weight: 900; font-size: 1.15rem; color: #0b0f1a;
       background: linear-gradient(135deg, var(--gold), var(--gold-2));
     }
     .member .m-face img { width: 100%; height: 100%; object-fit: cover; }
+    .member .m-info { flex: 1 1 180px; min-width: 0; }
+    .member .m-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .member .m-name { font-family: var(--font-display); font-weight: 700; color: var(--text); }
-    .member .m-sub { font-size: 0.74rem; color: var(--faint); margin-top: 2px; }
-    .member .m-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .member .m-sub {
+      font-size: 0.76rem; color: var(--faint); margin-top: 3px; line-height: 1.6;
+      word-break: break-word;
+    }
+    .member .m-meta { font-size: 0.72rem; color: var(--faint); margin-top: 4px; letter-spacing: 0.4px; }
+    /* 操作区:按钮多,窄屏让它整行换下去,别挤成一条 */
+    .member .m-right {
+      margin-left: auto; display: flex; align-items: center; justify-content: flex-end;
+      gap: 8px; flex-wrap: wrap; max-width: 100%;
+    }
     .member select {
       font-family: var(--font-body);
       font-size: 0.82rem;
@@ -235,18 +245,52 @@
       background: var(--bg0);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 8px 10px;
+      padding: 7px 10px;
       cursor: pointer;
     }
     .badge-pill {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       letter-spacing: 1px;
       padding: 3px 10px;
       border-radius: 999px;
       background: var(--gold);
       color: #0b0f1a;
+      white-space: nowrap;
     }
-    /* 删账号:危险操作,低调的红,别太扎眼但要点得清楚 */
+    /* 服主金色、管理员描金、普通成员中性 —— 全用变量,浅色主题也看得清 */
+    .badge-pill.role-owner { background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #0b0f1a; }
+    .badge-pill.role-admin { background: var(--chip); border: 1px solid var(--gold-line); color: var(--gold); }
+    .badge-pill.role-member { background: var(--chip); border: 1px solid var(--line); color: var(--muted); }
+    /* 封禁:头像和资料灰掉,但红色小标签要保持醒目 */
+    .member.is-banned .m-face { filter: grayscale(1); opacity: 0.5; }
+    .member.is-banned .m-name,
+    .member.is-banned .m-sub,
+    .member.is-banned .m-meta { opacity: 0.5; }
+    .badge-ban {
+      font-size: 0.66rem;
+      letter-spacing: 1px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      white-space: nowrap;
+      color: #ff7a7a;
+      background: rgba(255, 80, 80, 0.12);
+      border: 1px solid rgba(255, 100, 100, 0.55);
+    }
+    /* 改名 / 重置密码:中性小按钮,颜色走变量,深浅主题都不糊 */
+    .member .m-btn {
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      color: var(--text);
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 12px;
+      cursor: pointer;
+      transition: color 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
+    }
+    .member .m-btn:hover { color: var(--gold); border-color: var(--gold-line); }
+    .member .m-btn:disabled { opacity: 0.45; cursor: default; }
+    /* 删除 / 封禁:危险操作,低调的红,别太扎眼但要点得清楚 */
     .member .m-del {
       font-family: var(--font-body);
       font-size: 0.78rem;
@@ -282,6 +326,10 @@
     @media (max-width: 620px) {
       .panel { padding: 18px 14px; border-radius: 18px; }
       .w-date { width: 96px; }
+      /* 窄屏:操作按钮整行换下去,按钮再小一号 */
+      .member { flex-wrap: wrap; align-items: flex-start; }
+      .member .m-right { margin-left: 0; width: 100%; justify-content: flex-start; }
+      .member .m-btn, .member .m-del { padding: 6px 10px; font-size: 0.74rem; }
     }
   </style>
 </head>
@@ -420,8 +468,8 @@
           <!-- ========== 成员 ========== -->
           <div class="glass panel" id="panel-members" hidden>
             <div class="panel-head">
-              <h2>成员权限</h2>
-              <p>只有服主能改权限、删账号。管理员能改全站内容、能置顶和删留言；普通成员只能发帖回复。删账号会释放用户名，TA 发过的留言保留为无主老帖。</p>
+              <h2>成员管理</h2>
+              <p>只有服主能改角色、改名、重置密码、封禁和删除账号；管理员能改全站内容、置顶和删留言；普通成员只能发帖回复。封禁后 TA 立刻掉线、登不进来，但账号和留言都还在，随时可以解封。删账号会释放用户名，TA 发过的留言保留为无主老帖。</p>
             </div>
             <div class="rows" id="mem-list"></div>
             <p class="msg" id="mem-msg"></p>
@@ -750,96 +798,184 @@
       }
 
       /* ============ 成员 ============ */
-      function renderMembers() {
+      /* 注册时间:毫秒时间戳 → 2026.10.03 */
+      function fmtDate(ts) {
+        const d = new Date(Number(ts));
+        if (!ts || isNaN(d.getTime())) return "—";
+        const p = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate());
+      }
+      /* 角色徽章:服主金色、管理员描金、普通成员中性 */
+      function roleBadge(role) {
+        if (role === "owner") return `<span class="badge-pill role-owner">服主</span>`;
+        if (role === "admin") return `<span class="badge-pill role-admin">管理员</span>`;
+        return `<span class="badge-pill role-member">普通成员</span>`;
+      }
+      /* 改资料:PUT api/users/<id>,失败时把后端的中文错误抛出来 */
+      async function patchUser(id, body) {
+        const res = await fetch(API + "/users/" + id, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || !d.ok) throw new Error(d.error || "改不动，待会儿再试");
+        return d;
+      }
+      /* 删账号:PUT 改不了,走 DELETE */
+      async function delUser(id) {
+        const res = await fetch(API + "/users/" + id, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || !d.ok) throw new Error(d.error || "删不掉");
+        return d;
+      }
+      /* 统一跑一个成员操作:禁用按钮 → 请求 → 成功刷列表 / 失败复原按钮 */
+      async function runMemberOp(btn, doneText, task) {
+        btn.disabled = true;
+        try {
+          await task();
+          renderMembers(doneText);
+          return true;
+        } catch (err) {
+          say("mem-msg", err.message, "err");
+          btn.disabled = false;
+          return false;
+        }
+      }
+      /* 角色下拉 */
+      function roleSelect(u) {
+        const sel = document.createElement("select");
+        [["member", "普通成员"], ["admin", "管理员"]].forEach(([v, t]) => {
+          const o = document.createElement("option");
+          o.value = v;
+          o.textContent = t;
+          if (u.role === v) o.selected = true;
+          sel.appendChild(o);
+        });
+        const old = u.role;
+        sel.addEventListener("change", async () => {
+          const label = sel.value === "admin" ? "管理员" : "普通成员";
+          const ok = await runMemberOp(sel, `「${u.name}」现在是${label}了`,
+            () => patchUser(u.id, { role: sel.value }));
+          if (!ok) sel.value = old;   // 失败就退回原角色,别让界面骗人
+        });
+        return sel;
+      }
+      /* 改名:默认值填当前名字 */
+      function nameBtn(u) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "m-btn";
+        btn.textContent = "改名";
+        btn.addEventListener("click", () => {
+          const v = prompt(`给「${u.name}」换个新名字（2~16 位，中文、字母、数字、下划线）：`, u.name);
+          if (v === null) return;
+          const name = v.trim();
+          if (!name || name === u.name) return;
+          runMemberOp(btn, `已把「${u.name}」改名为「${name}」`, () => patchUser(u.id, { username: name }));
+        });
+        return btn;
+      }
+      /* 重置密码 */
+      function pwdBtn(u) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "m-btn";
+        btn.textContent = "重置密码";
+        btn.addEventListener("click", () => {
+          const v = prompt(`给「${u.name}」设一个新的登录密码（至少 6 位）：`, "");
+          if (v === null || v === "") return;
+          runMemberOp(btn, `已重置「${u.name}」的密码`, () => patchUser(u.id, { password: v }));
+        });
+        return btn;
+      }
+      /* 封禁 / 解封 */
+      function banBtn(u) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "m-del";
+        btn.textContent = u.banned ? "解封" : "封禁";
+        btn.addEventListener("click", () => {
+          if (!u.banned) {
+            const sure = confirm(
+              `确定封禁「${u.name}」？\n\n` +
+                `· 封禁后 TA 立刻掉线、登不进来\n` +
+                `· 账号和 TA 发过的留言都还在，随时可以解封`
+            );
+            if (!sure) return;
+          }
+          runMemberOp(btn, u.banned ? `已解封「${u.name}」` : `已封禁「${u.name}」`,
+            () => patchUser(u.id, { banned: u.banned ? 0 : 1 }));
+        });
+        return btn;
+      }
+      /* 彻底删账号:危险操作,先弹一次确认 */
+      function delBtn(u) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "m-del";
+        btn.textContent = "删除";
+        btn.addEventListener("click", () => {
+          const sure = confirm(
+            `确定永久删除「${u.name}」？\n\n` +
+              `· 账号从数据库消失，用户名会被释放，可以再被别人注册\n` +
+              `· TA 发过的留言保留，变成无主老帖\n` +
+              `· 删了就找不回来`
+          );
+          if (!sure) return;
+          runMemberOp(btn, `已删除账号「${u.name}」`, () => delUser(u.id));
+        });
+        return btn;
+      }
+      /* 一行的完整渲染 */
+      function memberRow(u) {
+        const el = document.createElement("div");
+        el.className = "row member" + (u.banned ? " is-banned" : "");
+        const isOwner = u.role === "owner";
+        const face = u.avatar
+          ? `<img src="${esc(img(u.avatar))}" alt="">`
+          : esc(String(u.name || "?").slice(0, 1));
+        const banTag = u.banned ? `<span class="badge-ban">已封禁</span>` : "";
+        el.innerHTML = `
+          <span class="m-face">${face}</span>
+          <div class="m-info">
+            <div class="m-line">
+              <span class="m-name">${esc(u.name)}</span>
+              ${roleBadge(u.role)}
+              ${banTag}
+            </div>
+            <div class="m-sub">${esc(u.signature || "（还没写个性签名）")}</div>
+            <div class="m-meta">注册于 ${esc(fmtDate(u.created_at))} · 已发 ${Number(u.posts) || 0} 条</div>
+          </div>
+          <div class="m-right"></div>`;
+        // 只有服主能看到操作按钮,而且服主账号本身不给任何按钮
+        if (!isOwner && me && me.role === "owner") {
+          const right = $(".m-right", el);
+          right.appendChild(roleSelect(u));
+          right.appendChild(nameBtn(u));
+          right.appendChild(pwdBtn(u));
+          right.appendChild(banBtn(u));
+          right.appendChild(delBtn(u));
+        }
+        return el;
+      }
+      async function renderMembers(okMsg) {
         say("mem-msg", "");
-        fetch(API + "/users", { credentials: "same-origin" })
-          .then((r) => r.json())
-          .then((d) => {
-            if (!d.ok) throw new Error(d.error || "读不到成员列表");
-            const box = $("#mem-list");
-            box.innerHTML = "";
-            d.users.forEach((u) => {
-              const el = document.createElement("div");
-              el.className = "row member";
-              const isOwner = u.role === "owner";
-              const face = u.avatar
-                ? `<img src="${esc(img(u.avatar))}" alt="">`
-                : esc(u.name.slice(0, 1));
-              el.innerHTML = `
-                <span class="m-face">${face}</span>
-                <div>
-                  <div class="m-name">${esc(u.name)}</div>
-                  <div class="m-sub">${esc(u.signature || "（还没写个性签名）")}</div>
-                </div>
-                <div class="m-right"></div>`;
-              const right = $(".m-right", el);
-              if (isOwner) {
-                right.innerHTML = `<span class="badge-pill">服主</span>`;
-              } else if (me && me.role === "owner") {
-                const sel = document.createElement("select");
-                [["member", "普通成员"], ["admin", "管理员"]].forEach(([v, t]) => {
-                  const o = document.createElement("option");
-                  o.value = v;
-                  o.textContent = t;
-                  if (u.role === v) o.selected = true;
-                  sel.appendChild(o);
-                });
-                sel.addEventListener("change", async () => {
-                  sel.disabled = true;
-                  try {
-                    const res = await fetch(API + "/users", {
-                      method: "PUT",
-                      headers: { "content-type": "application/json" },
-                      credentials: "same-origin",
-                      body: JSON.stringify({ id: u.id, role: sel.value }),
-                    });
-                    const rd = await res.json().catch(() => ({}));
-                    if (!res.ok || !rd.ok) throw new Error(rd.error || "改不了");
-                    say("mem-msg", `${u.name} 现在是${sel.value === "admin" ? "管理员" : "普通成员"}了`, "ok");
-                  } catch (err) {
-                    say("mem-msg", err.message, "err");
-                  } finally {
-                    sel.disabled = false;
-                  }
-                });
-                right.appendChild(sel);
-
-                // 彻底删账号:危险操作,先弹一次确认
-                const del = document.createElement("button");
-                del.type = "button";
-                del.className = "m-del";
-                del.textContent = "删除";
-                del.addEventListener("click", async () => {
-                  const sure = confirm(
-                    `确定永久删除「${u.name}」？\n\n` +
-                      `· 账号从数据库消失，用户名会被释放，可以再被别人注册\n` +
-                      `· TA 发过的留言保留，变成无主老帖\n` +
-                      `· 删了就找不回来`
-                  );
-                  if (!sure) return;
-                  del.disabled = true;
-                  try {
-                    const res = await fetch(API + "/users/" + u.id, {
-                      method: "DELETE",
-                      credentials: "same-origin",
-                    });
-                    const rd = await res.json().catch(() => ({}));
-                    if (!res.ok || !rd.ok) throw new Error(rd.error || "删不掉");
-                    el.remove();
-                    say("mem-msg", `已删除账号「${u.name}」`, "ok");
-                  } catch (err) {
-                    say("mem-msg", err.message, "err");
-                    del.disabled = false;
-                  }
-                });
-                right.appendChild(del);
-              } else {
-                right.innerHTML = `<span class="m-sub">${u.role === "admin" ? "管理员" : "普通成员"}</span>`;
-              }
-              box.appendChild(el);
-            });
-          })
-          .catch((err) => say("mem-msg", err.message, "err"));
+        try {
+          const res = await fetch(API + "/users", { credentials: "same-origin" });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "读不到成员列表");
+          const box = $("#mem-list");
+          box.innerHTML = "";
+          (d.users || []).forEach((u) => box.appendChild(memberRow(u)));
+          if (okMsg) say("mem-msg", okMsg, "ok");
+        } catch (err) {
+          say("mem-msg", err.message, "err");
+        }
       }
 
       /* ============ 保存 ============ */

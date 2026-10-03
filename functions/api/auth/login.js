@@ -32,7 +32,7 @@ export async function onRequestPost({ request, env }) {
   if (!username || !password) return fail("用户名和密码都要填");
 
   const row = await env.DB.prepare(
-    "SELECT id, username, salt, pass_hash, role, avatar_key, signature FROM users WHERE username = ?"
+    "SELECT id, username, salt, pass_hash, role, avatar_key, signature, banned FROM users WHERE username = ?"
   )
     .bind(username)
     .first();
@@ -41,6 +41,9 @@ export async function onRequestPost({ request, env }) {
   if (!row || row.pass_hash !== (await hashPassword(password, row.salt))) {
     return fail("用户名或密码不对", 401);
   }
+
+  // 密码对了但被封禁:明确告诉他为什么进不来,不然会以为是密码错了
+  if (row.banned) return fail("这个账号已被封禁，联系服主处理", 403);
 
   const now = Date.now();
   const token = randomHex(32);
