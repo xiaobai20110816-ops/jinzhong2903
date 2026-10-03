@@ -935,7 +935,6 @@
       function memberRow(u) {
         const el = document.createElement("div");
         el.className = "row member" + (u.banned ? " is-banned" : "");
-        const isOwner = u.role === "owner";
         const face = u.avatar
           ? `<img src="${esc(img(u.avatar))}" alt="">`
           : esc(String(u.name || "?").slice(0, 1));
@@ -952,14 +951,19 @@
             <div class="m-meta">注册于 ${esc(fmtDate(u.created_at))} · 已发 ${Number(u.posts) || 0} 条</div>
           </div>
           <div class="m-right"></div>`;
-        // 只有服主能看到操作按钮,而且服主账号本身不给任何按钮
-        if (!isOwner && me && me.role === "owner") {
+        // 只有服主能看到操作按钮;自己那一行只留「改名 / 重置密码」
+        // (不能给自己换角色、不能封自己、不能删自己),
+        // 别人的行全部放开,包括早期遗留的另一个服主账号。
+        if (me && me.role === "owner") {
           const right = $(".m-right", el);
-          right.appendChild(roleSelect(u));
+          const self = me.id === u.id;
+          if (!self) right.appendChild(roleSelect(u));
           right.appendChild(nameBtn(u));
           right.appendChild(pwdBtn(u));
-          right.appendChild(banBtn(u));
-          right.appendChild(delBtn(u));
+          if (!self) {
+            right.appendChild(banBtn(u));
+            right.appendChild(delBtn(u));
+          }
         }
         return el;
       }

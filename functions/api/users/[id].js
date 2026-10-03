@@ -8,7 +8,8 @@
    - 会话一起清掉,那台设备立刻掉线
    - 用户名释放出来,可以再被注册
    - 但 TA 发过的留言保留,只把 user_id 置空,变成和以前一样的「老帖」
-   服主账号动不了,自己也不能删自己(防止把唯一的管理权删没了)。
+   自己那一行不允许改角色、不允许封自己、也不允许删自己(防止把唯一的管理权弄没了),
+   但别的账号(包括早期遗留的另一个服主账号)服主都能改、能删、能改名。
    ============================================================ */
 
 import {
@@ -102,13 +103,19 @@ export async function onRequestPut({ request, env, params }) {
 
   const row = await loadUser(env.DB, id);
   if (!row) return fail("找不到这个成员", 404);
-  if (row.role === ROLE_OWNER) return fail("服主账号不能被改");
 
   let payload;
   try {
     payload = await request.json();
   } catch (e) {
     return fail("提交的内容读不出来，请刷新页面重试");
+  }
+
+  // 自己这一行只允许改名和换密码:自己把自己的管理权摘了、或把自己封了,
+  // 会把站点锁死没人能救,所以这两样直接挡掉。别人的账号(哪怕是另一个服主)不限制。
+  if (id === me.id) {
+    if (payload.role !== undefined) return fail("不能改自己的角色");
+    if (payload.banned !== undefined) return fail("不能封禁自己");
   }
 
   // 一次可能改好几样,攒成一条 UPDATE,避免改一半
@@ -192,7 +199,6 @@ export async function onRequestDelete({ request, env, params }) {
 
   const row = await loadUser(env.DB, id);
   if (!row) return fail("找不到这个成员", 404);
-  if (row.role === ROLE_OWNER) return fail("服主账号不能删");
 
   await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(id).run();
   await env.DB.prepare("UPDATE posts SET user_id = NULL WHERE user_id = ?").bind(id).run();
