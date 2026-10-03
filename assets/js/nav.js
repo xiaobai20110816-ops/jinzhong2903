@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "students.html", label: "学生风采" },
   { href: "dormitory.html", label: "宿舍风采" },
   { href: "moments.html", label: "高光时刻" },
+  { href: "story.html", label: "103 纪事" },
   { href: "announcements.html", label: "班级公告" },
 ];
 
