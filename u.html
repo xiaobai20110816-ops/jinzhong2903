@@ -137,6 +137,11 @@
     /* 留言卡片 */
     .pf-list { display: grid; gap: 16px; }
     .pf-post { padding: 20px 22px; border-radius: 18px; }
+    /* 从通知点进来时给目标那条留言描一圈金 */
+    .pf-post.is-focused {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px var(--gold-soft), 0 0 30px var(--gold-line);
+    }
     .pf-post-head { display: flex; align-items: center; gap: 12px; }
     .pf-post-who { display: flex; flex-direction: column; min-width: 0; }
     .pf-post-name {
@@ -630,7 +635,7 @@
         const author = p.author || { name: p.name };
         const foot = region || replies ? `<div class="pf-post-foot">${region}${replies}</div>` : "";
 
-        return `<article class="glass pf-post">
+        return `<article class="glass pf-post" id="p${p.id}">
           <div class="pf-post-head">
             ${avatar(author, "pf-mini")}
             <div class="pf-post-who">
@@ -677,6 +682,17 @@
           const box = $("#pf-wall");
           if (box) box.innerHTML = `<p class="glass pf-empty">暂时读不到留言</p>`;
         }
+      }
+
+      // 从通知点进来:?p=<某条留言的 id> —— 滚到那条留言上并描金闪一下
+      function focusWall() {
+        const p = parseInt(new URLSearchParams(location.search).get("p") || "0", 10) || 0;
+        if (!p) return;
+        const el = document.getElementById("p" + p);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("is-focused");
+        setTimeout(() => el.classList.remove("is-focused"), 3000);
       }
 
       function setWallMsg(text, ok) {
@@ -741,7 +757,7 @@
           state.likes = Number(data.likes) || 0;
           renderProfile(data);
           loadPosts();
-          loadWall();
+          loadWall().then(focusWall);
         } catch (err) {
           const msg = (err && err.message) || "";
           if (/找不到这个人/.test(msg)) {

@@ -455,6 +455,7 @@
       let cards = [];           // 全部卡片(含克隆出来的)
       let centers = [];         // 每张卡在"内容坐标"里的中心位置(布局值,不受缩放影响)
       let scales = [];          // 上一帧写过的缩放值,避免无意义的样式写入
+      let railW = 0;            // 滑轨可视宽度:量一次存着,别在每帧里去读 clientWidth
 
       let phase = "hold";       // hold:停着不动 | turn:正在转到下一张
       let hover = false;        // 鼠标停在滑轨上
@@ -492,6 +493,7 @@
 
       function measure() {
         centers = cards.map((c) => c.offsetLeft + c.offsetWidth / 2);
+        railW = rail.clientWidth;
       }
 
       // 把 scrollLeft 收进 [unit, 2*unit)。画面每 unit 重复一次,所以这一步视觉上等于没动
@@ -503,7 +505,7 @@
 
       // 离画面正中最近的是第几张
       function nearest() {
-        const mid = rail.scrollLeft + rail.clientWidth / 2;
+        const mid = rail.scrollLeft + railW / 2;
         let best = 0, bd = Infinity;
         for (let i = 0; i < centers.length; i++) {
           const d = Math.abs(centers[i] - mid);
@@ -513,8 +515,10 @@
       }
 
       // 越靠中间越大:带宽只有 1.6 个步长,所以相邻那张已经明显小一圈、第三张就缩到底
-      function applyScale() {
-        const mid = rail.scrollLeft + rail.clientWidth / 2;
+      // x:刚写进 scrollLeft 的值。传了就直接用,不再回头读 scrollLeft ——
+      // 写完立刻读会强制浏览器当场重排一次,每帧一次是这个动画最贵的开销
+      function applyScale(x) {
+        const mid = (x === undefined ? rail.scrollLeft : x) + railW / 2;
         const band = Math.max(stride * 1.6, 300);
         for (let i = 0; i < cards.length; i++) {
           const t = Math.max(0, 1 - Math.abs(centers[i] - mid) / band);
@@ -544,8 +548,9 @@
       function frame(now) {
         raf = 0;
         const p = Math.min(1, (now - t0) / TURN);
-        rail.scrollLeft = from + (to - from) * ease(p);
-        applyScale();
+        const x = from + (to - from) * ease(p);
+        rail.scrollLeft = x;
+        applyScale(x);
         if (p < 1) { raf = requestAnimationFrame(frame); return; }
         phase = "hold";
         normalize();
@@ -571,7 +576,7 @@
       function settle() {
         if (phase === "turn" || reduceMotion) return;
         const i = nearest();
-        const off = centers[i] - (rail.scrollLeft + rail.clientWidth / 2);
+        const off = centers[i] - (rail.scrollLeft + railW / 2);
         if (Math.abs(off) > 1.5) { turnTo(i); return; }
         if (!armed) schedule(nextHold);
       }

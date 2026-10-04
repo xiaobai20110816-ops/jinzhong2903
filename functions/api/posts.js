@@ -62,6 +62,60 @@ export async function onRequestGet({ request, env }) {
   // 先认人:真名能不能看见、class 帖能不能看见,都取决于看的人是谁
   const me = await currentUser(request, env);
 
+  // ---- 定位:某条帖子 / 回复在第几页 ----
+  // 点通知深链进来时要直接翻到那一条,前端先问一句「它在第几页」再加载。
+  // 只回页码和根帖 id,不重复吐内容。
+  const findId = parseInt(url.searchParams.get("find") || "0", 10) || 0;
+  if (findId) {
+    const row = await env.DB.prepare("SELECT id, parent_id, wall_id FROM posts WHERE id = ?")
+      .bind(findId)
+      .first();
+    if (!row) return json({ ok: true, kind: "none", page: 1, root_id: 0 });
+
+    // 回复是一层平铺,parent_id 直接就是根帖;留言墙的墙主记在 wall_id
+    const rootId = row.parent_id || row.id;
+    const root = await env.DB.prepare(
+      "SELECT id, pinned, created_at FROM posts WHERE id = ?"
+    )
+      .bind(rootId)
+      .first();
+    if (!root) return json({ ok: true, kind: "none", page: 1, root_id: 0 });
+
+    // 留言墙:顺序是「新 → 旧」,数前面有几条就知道在第几页
+    if (row.wall_id) {
+      const before = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM posts
+          WHERE wall_id = ? AND parent_id IS NULL
+            AND (created_at > ? OR (created_at = ? AND id > ?))`
+      )
+        .bind(row.wall_id, root.created_at, root.created_at, rootId)
+        .first();
+      return json({
+        ok: true,
+        kind: "wall",
+        wall_id: row.wall_id,
+        page: Math.floor(((before && before.n) || 0) / PAGE_SIZE) + 1,
+        root_id: rootId,
+      });
+    }
+
+    // 主留言板:排序是「置顶 → 新 → id」,可见性口径和下面 GET 保持一致
+    const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
+    const before = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM posts
+        WHERE parent_id IS NULL AND wall_id IS NULL ${visOnly}
+          AND (pinned > ? OR (pinned = ? AND (created_at > ? OR (created_at = ? AND id > ?))))`
+    )
+      .bind(root.pinned || 0, root.pinned || 0, root.created_at, root.created_at, rootId)
+      .first();
+    return json({
+      ok: true,
+      kind: "board",
+      page: Math.floor(((before && before.n) || 0) / PAGE_SIZE) + 1,
+      root_id: rootId,
+    });
+  }
+
   // ---- 个人主页留言墙:扁平一层,不挂回复树 ----
   if (wallId) {
     const totalRow = await env.DB.prepare(
@@ -221,11 +275,12 @@ export async function onRequestPost({ request, env }) {
       .bind(me.name, body, JSON.stringify(images), me.id, regionWall, wallId, nowWall)
       .run();
 
-    // 在别人主页留言 → 通知主页的主人
+    // 在别人主页留言 → 通知主页的主人(postId 记这条留言自己的 id,点通知好定位)
     await notify(env.DB, {
       userId: wallId,
       actorId: me.id,
       type: "wall",
+      postId: resWall.meta.last_row_id,
       wallId: wallId,
       excerpt: body || "[图片]",
     });
@@ -299,13 +354,15 @@ export async function onRequestPost({ request, env }) {
     )
     .run();
 
-  // 回复了谁 → 通知谁(自己回自己不记)
+  // 回复了谁 → 通知谁(自己回自己不记)。
+  // postId 是根帖、replyId 是这条回复自己 —— 点通知能直接翻到那条回复上
   if (replyTarget) {
     await notify(env.DB, {
       userId: replyTarget.user_id,
       actorId: me.id,
       type: "reply",
       postId: parentId,
+      replyId: res.meta.last_row_id,
       excerpt: body || "[图片]",
     });
   }

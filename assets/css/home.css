@@ -515,14 +515,12 @@ body.poster .site-header:not(.is-scrolled) {
   padding: 8px;
   border-radius: 22px;
   background: var(--glass-surface);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
-  backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: var(--glass-rim);
-  /* 缩放值由 JS 每帧写进 --s:越靠轨道中心越大、越靠两端越小。
-     所以这里不能给 transform 加 transition,否则每帧都会跟不上。
-     也不加 will-change:十几二十张带 backdrop-filter 的卡常驻合成层反而更卡,
-     只在 0.76 秒的转动期间才有样式变化,浏览器自己会处理好。 */
+  /* 这里刻意不挂 backdrop-filter:转动的那 0.76 秒里 JS 每帧都在改 --s(缩放),
+     十几二十张卡每帧都要重算一次背景模糊,正是滑轨"帧数很低"的根因。
+     滑轨背后是柔光渐变(没有高频细节),少了模糊肉眼几乎看不出,
+     但每帧省下十几次模糊重算,转动立刻变顺。 */
   position: relative;
   z-index: var(--z, 1);         /* 中间那张放大后会压住邻居,靠这个排先后 */
   transform: scale(var(--s, 1));

@@ -116,7 +116,7 @@
   border: 1px solid var(--glass-brd);
   box-shadow: var(--glass-rim);
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
-  animation: page-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: card-fade 0.5s ease-out both;
 }
 .students-soon .soon-en {
   font-family: var(--font-latin);

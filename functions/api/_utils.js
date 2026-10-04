@@ -71,7 +71,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-04.5";
+const SCHEMA_VERSION = "2026-10-05.1";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -240,12 +240,15 @@ export function ensureSchema(db) {
              type TEXT NOT NULL,
              post_id INTEGER,
              wall_id INTEGER,
+             reply_id INTEGER,
              excerpt TEXT,
              read INTEGER NOT NULL DEFAULT 0,
              created_at INTEGER NOT NULL
            )`
         )
         .run();
+      // 老库升级:记下「被回复/被留言的那条自己的 id」,点通知才能直接跳到那一条
+      await addColumn(db, "notifications", "reply_id", "INTEGER");
       // 只查「我的、未读的、最新的」,这三列一起建索引最省
       await db
         .prepare(
@@ -581,8 +584,8 @@ export async function notify(db, opts) {
   try {
     await db
       .prepare(
-        `INSERT INTO notifications (user_id, actor_id, type, post_id, wall_id, excerpt, read, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
+        `INSERT INTO notifications (user_id, actor_id, type, post_id, wall_id, reply_id, excerpt, read, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
       )
       .bind(
         userId,
@@ -590,6 +593,7 @@ export async function notify(db, opts) {
         String(opts.type || ""),
         parseInt(opts.postId, 10) || null,
         parseInt(opts.wallId, 10) || null,
+        parseInt(opts.replyId, 10) || null,
         String(opts.excerpt || "").slice(0, 120),
         Date.now()
       )

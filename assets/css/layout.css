@@ -51,57 +51,65 @@
   backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--nav-brd);
   box-shadow: var(--glass-rim);
-  /* 0.6s:和页面底色一起慢速淡变,切主题时不会"导航先变、背景后变" */
-  transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+  /* 0.6s:和页面底色一起慢速淡变,切主题时不会"导航先变、背景后变"。
+     后两项是收成小圆时的淡出/上移,只走合成属性 */
+  transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease,
+    opacity 0.24s ease, transform 0.24s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 /* 滚起来之后:胶囊变成实底 + 更重的投影。
-   宽度/内边距/左移由 JS 逐帧写 inline,这里只管"看得见"的部分 */
+   底色/描边/投影收得快一点(0.28s),淡出与位移保持上面那 0.24s 不变 */
 .site-header.nav-scrolled .nav {
   background: var(--glass-sheen), var(--nav-solid);
   border-color: var(--line);
   box-shadow: var(--glass-rim), 0 14px 38px rgba(0, 0, 0, 0.18);
-  /* 收起时干脆一点(0.28s),松开时仍走上面的 0.6s,和主题淡变保持一致 */
-  transition-duration: 0.28s;
+  transition-duration: 0.28s, 0.28s, 0.28s;
 }
 
-/* 收成小圆圈:整条导航只剩左边一个 Logo。
+/* 收成小圆圈:整条胶囊淡出上移,左边的小圆淡入放大。
+   两个都只动 opacity / transform(合成属性),不碰宽高与内边距,
+   所以整个收放过程一次排版都不用做 —— 这是它现在不卡的关键。
    点一下就地展开(JS 摘掉这个类),点空白处或滚回顶部再收回去 */
 .site-header.nav-collapsed .nav {
-  justify-content: center;   /* 只剩 Logo,让它落在圆圈正中 */
-  gap: 0;
+  opacity: 0;
+  transform: translateY(-10px) scale(0.97);
+  pointer-events: none;
   cursor: pointer;
 }
-.site-header.nav-collapsed .nav-logo { gap: 0; }
-.site-header.nav-collapsed .nav-links { margin-left: 0; }
-.site-header.nav-collapsed .nav-links,
-.site-header.nav-collapsed .nav-tools,
-.site-header.nav-collapsed .nav-logo > span {
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-/* 圈起来之后给一点「这里能点」的反馈 */
-.site-header.nav-collapsed .nav:hover .nav-logo img {
-  transform: scale(1.12) rotate(-4deg);
-  box-shadow: 0 0 26px var(--gold-line);
-}
-/* 展开时让内容等胶囊先张开一半再回来,免得菜单在窄胶囊里被压扁;
-   收起时不等(下面这条只作用于"非收起"态),马上淡出 */
-.site-header:not(.nav-collapsed) .nav-links,
-.site-header:not(.nav-collapsed) .nav-tools,
-.site-header:not(.nav-collapsed) .nav-logo > span {
-  transition-delay: 0.1s;
-}
 
-/* 弹簧跑动的那几百毫秒里先摘掉毛玻璃:
-   胶囊每一帧都在改宽高,带着 backdrop-filter 就要不停重算背景模糊,是掉帧的大头。
-   --nav-solid 本身已经 86% 不透明,这几百毫秒看不出差别 */
-.site-header.nav-anim .nav {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+/* 左边的小圆:滚下去之后只剩它。绝对定位对齐胶囊的左边缘 */
+.nav-orb {
+  position: absolute;
+  top: 50%;
+  left: max(20px, calc((100% - var(--maxw)) / 2));
+  width: 56px;
+  height: 56px;
+  margin-top: -28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--glass-sheen), var(--nav-solid);
+  border: 1px solid var(--line);
+  box-shadow: var(--glass-rim), 0 14px 34px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+  /* 回弹手感:展开时轻微过冲一点点,收起时不拖泥带水 */
+  transition: opacity 0.2s ease, transform 0.32s cubic-bezier(0.34, 1.5, 0.64, 1),
+    background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
+.site-header.nav-collapsed .nav-orb { opacity: 1; transform: scale(1); pointer-events: auto; }
+.nav-orb img {
+  width: 34px;
+  height: 34px;
+  display: block;
+  border-radius: 9px;
+  box-shadow: 0 0 16px rgba(240, 185, 11, 0.28);
+  transition: transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.nav-orb:hover img { transform: scale(1.1) rotate(-4deg); }
 
 .nav-logo {
   flex: none;
@@ -338,9 +346,12 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   backdrop-filter: blur(26px) saturate(180%);
   border-bottom: 1px solid var(--glass-brd);
   box-shadow: var(--glass-rim);
-  animation: page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; /* 柔和落地 */
+  /* 入场只淡入,不做位移:横幅整条都带 backdrop-filter,
+     一 translate 就要每帧重算一次背景模糊,进场那半秒会明显掉帧 */
+  animation: hero-fade 0.45s ease-out both;
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
+@keyframes hero-fade { from { opacity: 0 } to { opacity: 1 } }
 
 /* 网格地层:两条渐变轴铺出细网格,顶部最实、往下淡出,像一张摊开的坐标纸 */
 .page-hero::before {

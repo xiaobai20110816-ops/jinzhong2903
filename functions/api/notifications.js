@@ -20,7 +20,7 @@ export async function onRequestGet({ request, env }) {
   if (!me) return json({ ok: true, unread: 0, items: [] });
 
   const { results } = await env.DB.prepare(
-    `SELECT n.id, n.type, n.post_id, n.wall_id, n.excerpt, n.read, n.created_at,
+    `SELECT n.id, n.type, n.post_id, n.wall_id, n.reply_id, n.excerpt, n.read, n.created_at,
             u.id AS actor_id, u.username AS actor_name,
             u.avatar_key AS actor_avatar, u.role AS actor_role,
             u.real_name AS actor_real_name, u.verified AS actor_verified
@@ -41,6 +41,7 @@ export async function onRequestGet({ request, env }) {
       type: r.type,
       post_id: r.post_id || 0,
       wall_id: r.wall_id || 0,
+      reply_id: r.reply_id || 0,
       excerpt: r.excerpt || "",
       read: r.read ? 1 : 0,
       created_at: r.created_at,

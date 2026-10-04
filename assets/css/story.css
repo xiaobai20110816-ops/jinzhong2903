@@ -253,8 +253,16 @@
   backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--glass-brd);
   box-shadow: var(--glass-rim);
-  animation: page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* 入场只淡入(不做位移):卡片带 backdrop-filter,一 translate 每帧都要重算背景模糊,
+     列表一次铺十几张时必掉帧 */
+  animation: card-fade 0.45s ease-out both;
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+}
+
+/* 从通知点进来时给目标那条描一圈金,好一眼找到 */
+.story-card.is-focused {
+  border-color: var(--gold);
+  box-shadow: var(--glass-rim), 0 0 0 3px var(--gold-soft), 0 0 30px var(--gold-line);
 }
 
 /* 置顶的帖子:金色描边 + 右上角一枚小章 */

@@ -96,15 +96,23 @@ function esc(s) {
 const ROLE_LABEL = { owner: "服主", admin: "管理员" };
 
 /* ============================================================
-   名字 + 实名蓝钩:全站统一按这一套渲染
+   名字 + 认证勾:全站统一按这一套渲染
    真名能不能看见是后端按权限决定的 —— 有 real_name 就是能看,
    verified=1 且带 real_name 才在名字后面缀一个蓝色小钩。
+   服主(role === "owner")不挂蓝钩,换成金色的认证徽章 —— 一眼认得出服主。
    ============================================================ */
 
 const BLUE_CHECK =
   '<svg class="nick-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
   '<circle cx="12" cy="12" r="11" fill="#2f8bff"></circle>' +
   '<path d="M6.8 12.5l3.4 3.4L17.2 9" fill="none" stroke="#fff" stroke-width="2.4" ' +
+  'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+// 金色认证徽章:16 个角的锯齿圆盘(外 11.6 / 内 9.4)+ 白色对勾,仿推特的金色认证
+const GOLD_CHECK =
+  '<svg class="nick-check nick-owner" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+  '<path d="M23.6 12l-2.2 2.5.5 3.3-3.1 1.2-1.2 3.1-3.3-.5L12 23.6l-2.5-2.2-3.3.5-1.2-3.1-3.1-1.2.5-3.3L.2 12l2.2-2.5-.5-3.3 3.1-1.2 1.2-3.1 3.3.5L12 .4l2.5 2.2 3.3-.5 1.2 3.1 3.1 1.2-.5 3.3L23.6 12Z" fill="#e8b325"></path>' +
+  '<path d="M7.4 12.4l3.1 3.1 6.1-6.3" fill="none" stroke="#fffdf5" stroke-width="2.5" ' +
   'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
 const C103Person = {
@@ -117,12 +125,23 @@ const C103Person = {
   verified(person) {
     return !!(person && person.verified && person.real_name);
   },
-  /* 名字 HTML(已转义)+ 蓝钩 */
+  /* 是不是服主 */
+  isOwner(person) {
+    return !!(person && person.role === "owner");
+  },
+  /* 名字 HTML(已转义)+ 认证勾:服主金勾,其余实名同学蓝勾 */
   html(person, fallback) {
     const nm = esc(C103Person.name(person, fallback));
+    if (C103Person.isOwner(person)) return nm + GOLD_CHECK;
     return nm + (C103Person.verified(person) ? BLUE_CHECK : "");
   },
+  /* 只要那个勾(给「回复 @某某」这种已经单独写了名字的地方用) */
+  badge(person) {
+    if (C103Person.isOwner(person)) return GOLD_CHECK;
+    return C103Person.verified(person) ? BLUE_CHECK : "";
+  },
   check: BLUE_CHECK,
+  ownerCheck: GOLD_CHECK,
 };
 
 window.C103Person = C103Person;
@@ -760,14 +779,15 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-3";
+const SPLASH_VERSION = "2026-10-05-4";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "这一版主要在修流畅度：导航收放和页头动画都比之前顺了。";
+const SPLASH_LEAD = "这一版重点在「顺」和「找得到」：动画不再掉帧，服主有了金勾，点通知能直接跳到那条回复。";
 const SPLASH_NOTES = [
-  "修掉卡顿：滚动时导航不再每帧重算一遍动画，收/放的过程中临时摘掉毛玻璃，页头也不再常驻重绘",
-  "（上一版）往下滚动，导航会收成左边一个小圆圈，点一下就地展开",
-  "（上一版）全站子页面换了页头：细网格地层 + 四角描金括号 + 脉冲眉标 + 标题柔光",
+  "动画提速：导航收成小圆、页头入场、留言卡片都改成只动透明度和位移，不再每帧重排版、重算背景模糊",
+  "宿舍滑轨的卡片去掉了逐帧重算的毛玻璃，转动比之前顺很多",
+  "服主名字后面挂上金色认证徽章（推特那种金勾），全站统一",
+  "点铃铛里的「回复了你」，会直接翻到那一页、滚到那条回复并描金高亮",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -873,70 +893,35 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ---- 灵动岛:滚下去之后,整条导航收成左边的一个小圆圈 ----
-  //   几何(宽度/内边距/左移)交给弹簧插值,视觉(底色/投影/遮罩/内容显隐)交给 CSS 过渡,
-  //   两者解耦 —— 背景不会跟着弹簧的尾巴慢半拍。收敛后立刻停机,不跑常驻动画循环。
+  //   收/放完全不碰几何:胶囊淡出上移、小圆淡入放大,只动 opacity 与 transform(合成属性)。
+  //   上一版用 JS 弹簧逐帧写 max-width/height/padding,每一帧都要重排版,
+  //   带 backdrop-filter 还要顺带重算背景模糊 —— 那才是掉到十几帧的根因。
+  //   现在只在"状态真的变了"时切一个类名,剩下的交给 CSS 过渡。
   //   首页第一屏是视频,导航有另一套深色逻辑,这里刻意用 nav-scrolled 这个类名避开。
-  //   收成圆圈后只剩 Logo,点一下就地展开(再点一次或点空白处收回),滚回顶部自动展开。
   (function () {
     const nav = header.querySelector(".nav");
     if (!nav) return;
 
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // 小圆:独立元素,绝对定位贴在导航左边缘,展开时隐身
+    const orb = document.createElement("button");
+    orb.type = "button";
+    orb.className = "nav-orb";
+    orb.setAttribute("aria-label", "展开导航");
+    orb.innerHTML = '<img src="assets/images/logo.svg" alt="103班 Logo">';
+    header.appendChild(orb);
+
     const poster = document.body.classList.contains("poster")
       ? document.getElementById("poster")
       : null;
     const THRESHOLD = 64;        // 普通页面:滚过 64px 就收起
-    const W_FULL = 1120;         // 展开宽度(与 --maxw 一致)
-    const W_CIRCLE = 56;         // 收成的小圆直径
-    const PAD_L_FULL = 16, PAD_R_FULL = 10, PAD_CIRCLE = 8;
-    const H_FULL = 58, H_CIRCLE = 56;
-    const STIFF = 170;           // 弹簧刚度
-    const DAMP = 26;             // 阻尼
 
-    let x = 0, v = 0, target = 0, raf = 0, lastT = 0;
-    let scrolled = false, opened = false, cw = 0, posterH = 0;
-    let lastTarget = -1;   // -1 = 还没跑过,保证首次一定算一遍
-
+    let scrolled = false, opened = false, posterH = 0;
+    let lastScrolled = null, lastCollapsed = null;
     const isSmall = () => matchMedia("(max-width: 900px)").matches;
 
-    // 导航可用宽度 = 外壳内容盒宽(圆圈的终点要贴着左边)
-    // 首页首屏高度也在这里量一次:以前每帧读 poster.offsetHeight 会强制刷新布局
+    // 首屏高度只在这里量一次,不在滚动回调里读(读 offsetHeight 会强制刷新布局)
     function measure() {
-      const cs = getComputedStyle(header);
-      cw = header.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       posterH = poster ? poster.offsetHeight : 0;
-    }
-
-    function paint(p) {
-      if (isSmall()) {
-        nav.style.cssText = "";
-        return;
-      }
-      const w = W_FULL + (W_CIRCLE - W_FULL) * p;
-      const wReal = Math.min(w, cw);                 // 窗口比展开宽度还窄时,盒子本来就是满宽
-      nav.style.maxWidth = Math.round(w) + "px";
-      nav.style.height = Math.round(H_FULL + (H_CIRCLE - H_FULL) * p) + "px";
-      nav.style.paddingLeft = Math.round(PAD_L_FULL + (PAD_CIRCLE - PAD_L_FULL) * p) + "px";
-      nav.style.paddingRight = Math.round(PAD_R_FULL + (PAD_CIRCLE - PAD_R_FULL) * p) + "px";
-      // 从"居中"滑到"贴左":p=1 时左边缘正好落在 0
-      nav.style.transform = "translateX(" + (-(cw - wReal) / 2 * p).toFixed(1) + "px)";
-    }
-
-    function step(now) {
-      raf = 0;
-      if (!lastT) lastT = now;
-      const dt = Math.min(0.05, (now - lastT) / 1000); // 限步长,切标签页回来时不会炸开
-      lastT = now;
-      // 半隐式欧拉:先更新速度,再用新速度更新位置(顺序不能反)
-      v += (-STIFF * (x - target) - DAMP * v) * dt;
-      x += v * dt;
-      paint(x < 0 ? 0 : x > 1 ? 1 : x);
-      if (Math.abs(target - x) > 0.0008 || Math.abs(v) > 0.0008) {
-        raf = requestAnimationFrame(step);
-      } else {
-        x = target; v = 0; lastT = 0; paint(x);
-        header.classList.remove("nav-anim");   // 停帧了就把毛玻璃还回去
-      }
     }
 
     function apply() {
@@ -944,33 +929,30 @@ document.addEventListener("DOMContentLoaded", () => {
       scrolled = posterH ? y > posterH - 80 : y > THRESHOLD;
       if (!scrolled) opened = false;                 // 回到顶部就复位,下次滚下来照常收
       const collapsed = scrolled && !opened && !isSmall();
-      target = collapsed ? 1 : 0;
-      // 类名分两层:nav-scrolled 只管"实底 + 遮罩"(手机也一样),nav-collapsed 只管"收成圆圈"
-      header.classList.toggle("nav-scrolled", scrolled);
-      header.classList.toggle("nav-collapsed", collapsed);
-      const tip = collapsed ? "展开导航" : "";
-      if (nav.title !== tip) nav.title = tip;
-      if (reduce) { x = target; v = 0; paint(x); return; }
-      // 目标没变就别再起一帧 —— 以前每次滚动都白跑一遍弹簧,会一直触发布局
-      const moved = target !== lastTarget;
-      lastTarget = target;
-      if (!moved || raf) return;
-      // 收/放的过程里先摘掉毛玻璃:胶囊每帧都在改尺寸,带 backdrop-filter 会不停重算背景模糊
-      header.classList.add("nav-anim");
-      lastT = 0;
-      raf = requestAnimationFrame(step);
+
+      // 值没变就不碰 DOM:滚动时这个函数每帧都会跑,白写一次属性都是浪费
+      if (scrolled !== lastScrolled) {
+        lastScrolled = scrolled;
+        header.classList.toggle("nav-scrolled", scrolled);
+      }
+      if (collapsed !== lastCollapsed) {
+        lastCollapsed = collapsed;
+        header.classList.toggle("nav-collapsed", collapsed);
+        nav.title = collapsed ? "展开导航" : "";
+      }
     }
 
-    // 收起状态下点圆圈 = 就地展开(展开后点页面空白处收回)
-    nav.addEventListener("click", (e) => {
+    // 收起状态下点圆圈(或胶囊) = 就地展开;展开后点页面空白处收回
+    const expand = (e) => {
       if (!header.classList.contains("nav-collapsed")) return;
-      e.preventDefault();
+      if (e) e.preventDefault();
       opened = true;
       apply();
-    });
-    // 展开着的时候点空白处,收回去
+    };
+    nav.addEventListener("click", expand);
+    orb.addEventListener("click", (e) => { e.stopPropagation(); expand(e); });
     document.addEventListener("click", (e) => {
-      if (!opened || nav.contains(e.target)) return;
+      if (!opened || nav.contains(e.target) || orb.contains(e.target)) return;
       opened = false;
       apply();
     });
@@ -981,7 +963,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ticking = true;
       requestAnimationFrame(() => { ticking = false; apply(); });
     }, { passive: true });
-    addEventListener("resize", () => { measure(); paint(x); apply(); }, { passive: true });
+    addEventListener("resize", () => { measure(); apply(); }, { passive: true });
     measure();
     apply();
   })();
@@ -1032,11 +1014,14 @@ document.addEventListener("DOMContentLoaded", () => {
     return x.getMonth() + 1 + " 月 " + x.getDate() + " 日";
   }
 
-  // 点通知跳哪儿:回复去留言板,留言/点赞去我的主页
+  // 点通知跳哪儿:回复直接深链到那条回复,留言深链到那条留言,点赞回我的主页
   function notifLink(n) {
-    if (n.type === "wall") return "u.html?id=" + (n.wall_id || 0);
+    if (n.type === "wall") {
+      return "u.html?id=" + (n.wall_id || 0) + (n.post_id ? "&p=" + n.post_id : "");
+    }
     if (n.type === "like") return "u.html?id=" + ((C103Auth.user && C103Auth.user.id) || "");
-    return "story.html";
+    const p = n.post_id ? "?p=" + n.post_id + (n.reply_id ? "&r=" + n.reply_id : "") : "";
+    return "story.html" + p;
   }
 
   function renderNotif(items) {

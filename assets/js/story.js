@@ -185,7 +185,7 @@
       replies = `<div class="story-replies">${inner}${more}</div>`;
     }
 
-    return `<article class="story-card${p.pinned ? " is-pinned" : ""}" data-id="${p.id}">
+    return `<article class="story-card${p.pinned ? " is-pinned" : ""}" data-id="${p.id}" id="p${p.id}">
       ${p.pinned ? '<span class="story-pin">置顶</span>' : ""}
       ${headHTML(p)}
       ${bodyHTML(p)}
@@ -200,7 +200,7 @@
     const to = p.reply_to_name
       ? `<p class="story-to">回复 <b>@${esc(p.reply_to_name)}${p.reply_to_verified ? window.C103Person.check : ""}</b></p>`
       : "";
-    return `<article class="story-card story-sub" data-id="${p.id}">
+    return `<article class="story-card story-sub" data-id="${p.id}" id="r${p.id}">
       ${headHTML(p)}
       ${to}
       ${bodyHTML(p)}
@@ -414,6 +414,35 @@
       }
       if (els.pager) els.pager.hidden = true;
     }
+  }
+
+  /* ---------- 通知深链:?p=根帖 & r=回复 ----------
+     点铃铛里的「回复了你」进来时会带上这两个参数。
+     先问后端这条在第几页,翻过去之后再滚到它身上、描金闪一下。 */
+  async function focusDeepLink() {
+    if (CFG.compact) return false;              // 首页那块紧凑版不参与
+    const q = new URLSearchParams(location.search);
+    const p = parseInt(q.get("p") || "0", 10) || 0;
+    const r = parseInt(q.get("r") || "0", 10) || 0;
+    if (!p && !r) return false;
+
+    let page = 1;
+    let rootId = p || r;
+    try {
+      const d = await api(API + "/posts?find=" + (r || p));
+      page = d.page || 1;
+      rootId = d.root_id || rootId;
+    } catch (err) {
+      /* 定位不上就老老实实从第一页看起 */
+    }
+
+    await goto(page);
+    const target = document.getElementById(r ? "r" + r : "p" + rootId);
+    if (!target) return true;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.add("is-focused");
+    setTimeout(() => target.classList.remove("is-focused"), 3000);
+    return true;
   }
 
   /* ---------- 顶部发帖框:选图 ---------- */
@@ -670,7 +699,10 @@
           renderComposer();
         });
       }
-      goto(1);
+      // 带 ?p= / ?r= 就是从通知点进来的,直接翻到那一条;否则从第一页看起
+      focusDeepLink().then((hit) => {
+        if (!hit) goto(1);
+      });
     });
   });
 })();
