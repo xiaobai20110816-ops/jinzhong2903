@@ -42,70 +42,80 @@ function canUpload(me) {
 export async function onRequestPost({ request, env }) {
   if (!env.STORY_KV) return notReady("图片存储");
   if (!env.DB) return notReady("数据库");
-  await ensureSchema(env.DB);
 
-  const me = await currentUser(request, env);
-  if (!canUpload(me))
-    return fail("实名认证通过的同学、管理员、服主才能上传照片", 401);
-
-  let form;
+  // 把整段包起来:任何一处抛异常,都给前端一个能读懂的错误,
+  // 而不是裸的 HTTP 500(不然上传失败完全不知道为啥)
   try {
-    form = await request.formData();
-  } catch (e) {
-    return fail("表单没读上来,重新试一次");
-  }
+    await ensureSchema(env.DB);
 
-  const title = String(form.get("title") || "").trim().slice(0, 40);
-  const fullFile = form.get("full");
-  const thumbFile = form.get("thumb");
+    const me = await currentUser(request, env);
+    if (!canUpload(me))
+      return fail("实名认证通过的同学、管理员、服主才能上传照片", 401);
 
-  if (!fullFile || !(fullFile instanceof File) || fullFile.size === 0)
-    return fail("没拿到原图");
-  if (!thumbFile || !(thumbFile instanceof File) || thumbFile.size === 0)
-    return fail("没拿到缩略图");
-  if (!title) return fail("给这张图起个名字吧");
-
-  const fullType = (fullFile.type || "").split(";")[0].trim().toLowerCase();
-  const thumbType = (thumbFile.type || "").split(";")[0].trim().toLowerCase();
-  const fullExt = TYPES[fullType];
-  const thumbExt = TYPES[thumbType];
-  if (!fullExt) return fail("原图只收 JPG / PNG / WebP");
-  if (!thumbExt) return fail("缩略图只收 JPG / PNG / WebP");
-
-  // 单张超 24MB 存不进 KV(单值上限 25MiB),直接说清楚
-  if (fullFile.size > MAX_FULL) return fail("单张超过 24MB 存不下了（KV 单值上限），拆分或以后接 B2", 413);
-  if (thumbFile.size > MAX_THUMB) return fail("缩略图太大", 413);
-
-  // 普通实名成员算额度;管理员 / 服主跳过
-  if (!isStaff(me)) {
-    const usedRow = await env.DB.prepare(
-      "SELECT COALESCE(SUM(full_size), 0) AS used FROM gallery WHERE uploaded_by = ?"
-    )
-      .bind(me.id)
-      .first()
-      .catch(() => null);
-    const used = Number((usedRow && usedRow.used) || 0);
-    if (used + fullFile.size > MEMBER_QUOTA) {
-      const left = Math.max(0, MEMBER_QUOTA - used);
-      return fail("你的 30MB 额度不够了（还差 " + fmtMB(fullFile.size - left) + "），先删几张旧的再传", 413);
+    let form;
+    try {
+      form = await request.formData();
+    } catch (e) {
+      return fail("表单没读上来,重新试一次");
     }
+
+    const title = String(form.get("title") || "").trim().slice(0, 40);
+    const fullFile = form.get("full");
+    const thumbFile = form.get("thumb");
+
+    // 用 instanceof Blob 判断:Blob 是各运行时的标准全局,比 instanceof File 稳得多
+    // (个别环境里 File 可能不是直接暴露的全局,拿到就会 ReferenceError → 500)
+    if (!(fullFile instanceof Blob) || fullFile.size === 0)
+      return fail("没拿到原图");
+    if (!(thumbFile instanceof Blob) || thumbFile.size === 0)
+      return fail("没拿到缩略图");
+    if (!title) return fail("给这张图起个名字吧");
+
+    const fullType = (fullFile.type || "").split(";")[0].trim().toLowerCase();
+    const thumbType = (thumbFile.type || "").split(";")[0].trim().toLowerCase();
+    const fullExt = TYPES[fullType];
+    const thumbExt = TYPES[thumbType];
+    if (!fullExt) return fail("原图只收 JPG / PNG / WebP");
+    if (!thumbExt) return fail("缩略图只收 JPG / PNG / WebP");
+
+    // 单张超 24MB 存不进 KV(单值上限 25MiB),直接说清楚
+    if (fullFile.size > MAX_FULL) return fail("单张超过 24MB 存不下了（KV 单值上限），拆分或以后接 B2", 413);
+    if (thumbFile.size > MAX_THUMB) return fail("缩略图太大", 413);
+
+    // 普通实名成员算额度;管理员 / 服主跳过
+    if (!isStaff(me)) {
+      const usedRow = await env.DB.prepare(
+        "SELECT COALESCE(SUM(full_size), 0) AS used FROM gallery WHERE uploaded_by = ?"
+      )
+        .bind(me.id)
+        .first()
+        .catch(() => null);
+      const used = Number((usedRow && usedRow.used) || 0);
+      if (used + fullFile.size > MEMBER_QUOTA) {
+        const left = Math.max(0, MEMBER_QUOTA - used);
+        return fail("你的 30MB 额度不够了（还差 " + fmtMB(fullFile.size - left) + "），先删几张旧的再传", 413);
+      }
+    }
+
+    const hex = randomHex(16);
+    const fullKey = hex + ".full." + fullExt;
+    const thumbKey = hex + ".thumb." + thumbExt;
+
+    // 原图和缩略图分开存,读的时候按 key 后半段区分,不用整张下载就能判断
+    await env.STORY_KV.put(KV_PREFIX + fullKey, fullFile, { metadata: { ct: fullType } });
+    await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbFile, { metadata: { ct: thumbType } });
+
+    await env.DB.prepare(
+      "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, full_size, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+      .bind(title, fullKey, thumbKey, me.id, fullFile.size, Date.now())
+      .run();
+
+    return json({ ok: true, full: fullKey, thumb: thumbKey, title });
+  } catch (e) {
+    // 把真实原因带出去,前端会原样显示,便于判断到底是表结构/存储/还是别的
+    return fail("上传出错：" + (e && e.message ? e.message : String(e)), 500);
   }
-
-  const hex = randomHex(16);
-  const fullKey = hex + ".full." + fullExt;
-  const thumbKey = hex + ".thumb." + thumbExt;
-
-  // 原图和缩略图分开存,读的时候按 key 后半段区分,不用整张下载就能判断
-  await env.STORY_KV.put(KV_PREFIX + fullKey, fullFile, { metadata: { ct: fullType } });
-  await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbFile, { metadata: { ct: thumbType } });
-
-  await env.DB.prepare(
-    "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, full_size, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  )
-    .bind(title, fullKey, thumbKey, me.id, fullFile.size, Date.now())
-    .run();
-
-  return json({ ok: true, full: fullKey, thumb: thumbKey, title });
 }
 
 export async function onRequestGet({ request, env }) {
