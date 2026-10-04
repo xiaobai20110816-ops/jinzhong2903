@@ -112,9 +112,26 @@
 .gal-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 9px;
 }
+/* 卡片里的下载画质下拉:小一号,和保存/删除同一行,窄屏自动折行 */
+.gal-sel {
+  flex: none;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--glass-brd);
+  border-radius: 999px;
+  background: var(--chip);
+  color: inherit;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  cursor: pointer;
+  outline: none;
+}
+.gal-sel:focus { border-color: var(--gold-line); }
+.gal-sel option { background: #0e1422; color: #eef2f8; }
 .gal-del {
   flex: none;
   padding: 6px 10px;
@@ -194,13 +211,15 @@
   font-weight: 600;
 }
 
-/* 下载原图按钮:小金药丸,触屏上 hover 不到也能点 */
+/* 保存按钮:小金药丸,触屏上 hover 不到也能点(现在是 <button>,补上按钮的默认样式重置) */
 .gal-dl {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 6px 12px;
+  border: none;
+  font-family: inherit;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -208,8 +227,10 @@
   background: linear-gradient(135deg, var(--gold), var(--gold-2));
   border-radius: 999px;
   text-decoration: none;
+  cursor: pointer;
   transition: filter 0.2s;
 }
+.gal-dl:disabled { opacity: 0.6; cursor: progress; }
 .gal-dl:hover { filter: brightness(1.08); }
 
 /* 手机:网格缩成两列,按钮小一号 */
@@ -236,6 +257,8 @@
   display: inline-flex;
   align-items: center;
   padding: 7px 14px;
+  border: none;
+  font-family: inherit;
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -243,10 +266,12 @@
   background: linear-gradient(135deg, var(--gold), var(--gold-2));
   border-radius: 999px;
   text-decoration: none;
+  cursor: pointer;
   transition: filter 0.2s;
 }
+.lb-dl:disabled { opacity: 0.6; cursor: progress; }
 .lb-dl:hover { filter: brightness(1.08); }
 
 @media (max-width: 520px) {
-  .lb-bar { flex-direction: column; gap: 10px; }
+  .lb-bar { flex-direction: column; flex-wrap: wrap; gap: 10px; }
 }
