@@ -1008,6 +1008,7 @@
             if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
             data[key] = d.value;
             C.data = Object.assign({}, C.data, { [key]: d.value });
+            C.cacheNow(); // 顺手更新本地缓存,别的页面翻过去就是新内容
             say(msgId, "已保存，页面刷新就能看到", "ok");
             refreshPanels(key);
           } catch (err) {

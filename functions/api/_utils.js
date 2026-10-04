@@ -67,6 +67,12 @@ export const IMAGE_KEY_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
    这样用户就不用去控制台手写 SQL 了 */
 let schemaReady = null;
 
+/* 表结构版本号:以后改了下面的建表 / 补列语句,就把这个号往上抬一位。
+   每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
+   不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
+const SCHEMA_KEY = "schema_version";
+const SCHEMA_VERSION = "2026-10-04.1";
+
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
 async function addColumn(db, table, col, type) {
@@ -86,6 +92,15 @@ async function addColumn(db, table, col, type) {
 export function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
+      // 先问一句「表建好了吗」。settings 表还不存在时这里会抛错,
+      // 正好当成「第一次来」处理,继续往下走完整的建表流程
+      const mark = await db
+        .prepare("SELECT value FROM settings WHERE key = ?")
+        .bind(SCHEMA_KEY)
+        .first()
+        .catch(() => null);
+      if (mark && mark.value === SCHEMA_VERSION) return;
+
       await db
         .prepare(
           `CREATE TABLE IF NOT EXISTS posts (
@@ -117,6 +132,14 @@ export function ensureSchema(db) {
       await addColumn(db, "posts", "wall_id", "INTEGER");      // 挂在谁的「个人主页留言墙」下(主留言板为 NULL)
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_parent ON posts(parent_id, created_at)`)
+        .run();
+      // 这两个是给高频查询用的,没有它们每次都得全表扫:
+      // 「某人发过的主帖」(按 user_id) 和「某人主页的留言墙」(按 wall_id)
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at DESC)`)
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_wall ON posts(wall_id, created_at DESC)`)
         .run();
 
       // ---- 账号 ----
@@ -165,6 +188,8 @@ export function ensureSchema(db) {
         )
         .run();
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`).run();
+      // 登录时顺手清过期会话,按 expires_at 找,别扫全表
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expires_at)`).run();
 
       // ---- 站点开关:一行一个开关,靠主键唯一性做「只能成功一次」的事 ----
       await db
@@ -175,6 +200,12 @@ export function ensureSchema(db) {
              updated_at INTEGER NOT NULL
            )`
         )
+        .run();
+
+      // 全建好了,记下版本号:下一个 isolate 只查这一行就能直接收工
+      await db
+        .prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+        .bind(SCHEMA_KEY, SCHEMA_VERSION, Date.now())
         .run();
     })().catch((err) => {
       schemaReady = null; // 失败就下次重来,不要把错误缓存住

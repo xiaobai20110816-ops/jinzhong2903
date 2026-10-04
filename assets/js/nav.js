@@ -159,6 +159,27 @@ const C103Image = {
 
 window.C103Image = C103Image;
 
+/* 「记住我」:上次问到的账号资料留在 sessionStorage 里(只有 id / 名字 / 头像
+   这些用来画界面的东西,不含任何 token)。同一标签页里刷新时先拿它把界面
+   画出来,再去问服务器核对 —— 不会白一下,也不会因为一次网络抖动就变回未登录 */
+const AUTH_CACHE_KEY = "class103-me";
+
+function readAuthCache() {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(AUTH_CACHE_KEY) || "null");
+    return v && v.user ? v.user : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeAuthCache(user) {
+  try {
+    if (user) sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({ user: user }));
+    else sessionStorage.removeItem(AUTH_CACHE_KEY);
+  } catch (e) { /* 隐私模式写不进去,忽略 */ }
+}
+
 const C103Auth = {
   user: null,
   ready: null,
@@ -176,18 +197,44 @@ const C103Auth = {
     renderAccount();
   },
 
+  /* 问服务器「我是谁」。网络抖动、冷启动慢的时候重试两回,
+     免得一次没连上就被当成未登录 */
+  async _askMe(tries) {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      try {
+        const d = await apiFetch(API + "/auth/me");
+        return d.user || null; // 服务器明确回了 null,才是真的没登录
+      } catch (err) {
+        lastErr = err;
+        if (i < tries - 1) await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
+    }
+    throw lastErr;
+  },
+
   refresh() {
-    this.ready = apiFetch(API + "/auth/me")
-      .then((d) => {
-        this.user = d.user || null;
+    // 先把缓存里那个人摆上去:刷新页面时头像和名字立刻就在
+    const cached = readAuthCache();
+    if (cached) {
+      this.user = cached;
+      this._emit();
+    }
+
+    this.ready = this._askMe(3)
+      .then((user) => {
+        this.user = user;
+        writeAuthCache(user);
         this._emit();
-        return this.user;
+        return user;
       })
       .catch(() => {
-        // 后端没接上 / 断网时不能让整页卡住:当作未登录
-        this.user = null;
-        this._emit();
-        return null;
+        // 三次都没问通:留着缓存里的人,别让登录状态凭空消失
+        if (!cached) {
+          this.user = null;
+          this._emit();
+        }
+        return this.user;
       });
     return this.ready;
   },
@@ -199,6 +246,7 @@ const C103Auth = {
       body: JSON.stringify({ username: username, password: password }),
     });
     this.user = d.user;
+    writeAuthCache(this.user);
     this._emit();
     return this.user;
   },
@@ -210,6 +258,7 @@ const C103Auth = {
       body: JSON.stringify({ username: username, password: password, cid: deviceId() }),
     });
     this.user = d.user;
+    writeAuthCache(this.user);
     this._emit();
     return this.user;
   },
@@ -221,6 +270,7 @@ const C103Auth = {
       /* 后端不认也得把本地状态清掉 */
     }
     this.user = null;
+    writeAuthCache(null);
     this._emit();
     return null;
   },
@@ -232,6 +282,7 @@ const C103Auth = {
       body: JSON.stringify(fields),
     });
     this.user = d.user;
+    writeAuthCache(this.user);
     this._emit();
     return this.user;
   },
@@ -244,6 +295,11 @@ window.C103Auth = C103Auth;
    拉一次缓存在内存里,所有页面共用;后端没接上就返回 null,
    页面各自保留一份写死的兜底样子,永远不会空白。
    ============================================================ */
+/* 站点内容缓存:半分钟内翻来覆去换页面时直接复用上一份,
+   不再每次进页面都重新要一遍 —— 全班一起看的时候请求量能省掉一大截 */
+const CONTENT_CACHE_KEY = "class103-content";
+const CONTENT_TTL_MS = 30000;
+
 const C103Content = {
   data: null,
   ready: null,
@@ -261,20 +317,42 @@ const C103Content = {
   },
 
   load() {
-    if (!this.ready) {
-      this.ready = apiFetch(API + "/content")
-        .then((d) => {
-          this.data = d.content || null;
-          this._emit(this.data);
-          return this.data;
-        })
-        .catch(() => {
-          this.data = null;
-          this._emit(null);
-          return null;
-        });
-    }
+    if (this.ready) return this.ready;
+
+    // 刚拉过就用缓存顶上,这一次请求直接省掉
+    try {
+      const c = JSON.parse(sessionStorage.getItem(CONTENT_CACHE_KEY) || "null");
+      if (c && c.data && Date.now() - c.at < CONTENT_TTL_MS) {
+        this.data = c.data;
+        this._emit(this.data);
+        this.ready = Promise.resolve(this.data);
+        return this.ready;
+      }
+    } catch (e) { /* 缓存坏了就当没有 */ }
+
+    this.ready = apiFetch(API + "/content")
+      .then((d) => {
+        this.data = d.content || null;
+        this.cacheNow();
+        this._emit(this.data);
+        return this.data;
+      })
+      .catch(() => {
+        this.data = null;
+        this._emit(null);
+        return null;
+      });
     return this.ready;
+  },
+
+  /* 后台改完内容顺手调一下:把最新的一份写进缓存,
+     别的页面翻过去立刻就是新的,不用等半分钟 */
+  cacheNow() {
+    try {
+      if (this.data) {
+        sessionStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ at: Date.now(), data: this.data }));
+      }
+    } catch (e) { /* 隐私模式写不进去,忽略 */ }
   },
 
   get(key) {
