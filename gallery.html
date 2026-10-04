@@ -197,8 +197,16 @@
         return new File([blob], "thumb.jpg", { type: blob.type || "image/jpeg" });
       }
 
-      function bindUpload() {
-        if (upBox.__bound) return;
+      // 选完文件立刻给个反馈,别让人以为卡了
+      gFiles.addEventListener("change", () => {
+        const n = (gFiles.files || []).length;
+        gHint.textContent = n ? "已选 " + n + " 张，填好名字点「上传」。自动生成缩略图、原图保留。" : "";
+      });
+
+      // 上传按钮:无条件绑定(权限由服务端管,没权限的请求会被 401 挡下)。
+      // 之前只在 load() 成功且 canUpload 为真时才绑,一旦那步没走到,
+      // 点「上传」就完全没反应 —— 这正是「选了图点了却无响应」的根因。
+      if (!upBox.__bound) {
         upBox.__bound = true;
         gSend.addEventListener("click", async () => {
           const files = Array.from(gFiles.files || []).filter((f) => f.size > 0);
@@ -224,7 +232,7 @@
               const res = await fetch("api/gallery", { method: "POST", body: form });
               const d = await res.json().catch(() => null);
               if (!d || !d.ok) {
-                throw new Error((d && d.error) || "第 " + n + " 张上传失败");
+                throw new Error((d && d.error) || "第 " + n + " 张上传失败，未登录或没实名？");
               }
             }
             gHint.textContent = "全部传完，正在刷新图库…";
@@ -233,8 +241,9 @@
             load(0); // 传完重拉,额度也跟着刷新
           } catch (e) {
             gMsg.textContent = e.message || "上传中断，检查网络再试";
+          } finally {
+            gSend.disabled = false;
           }
-          gSend.disabled = false;
         });
       }
 
@@ -253,7 +262,7 @@
             upBox.hidden = true;
             return;
           }
-          bindUpload();
+          // 上传按钮已在页面脚本顶层无条件绑定,这里只负责显示/隐藏上传框
           // 额度文案
           if (d.quota && d.quota.unlimited) {
             gHint.textContent = "管理员 / 服主，不限额度。";

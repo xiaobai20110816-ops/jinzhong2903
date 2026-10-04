@@ -4,6 +4,9 @@
    ============================================================ */
 
 /* ====- 上传区 ---- */
+/* hidden 属性默认是 display:none,但下面 .g-up 的 display:flex 会把它盖掉,
+   导致「没权限的人也能看到上传框」。补一条强制隐藏,让权限开关真正生效 */
+.g-up[hidden] { display: none; }
 .g-up {
   display: flex;
   align-items: center;

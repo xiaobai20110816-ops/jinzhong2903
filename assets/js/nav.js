@@ -833,13 +833,13 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-15";
+const SPLASH_VERSION = "2026-10-05-16";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "修好大图上传卡死：20MB 的照片也能秒级处理。";
+const SPLASH_LEAD = "修好图库上传「点了没反应」的毛病。";
 const SPLASH_NOTES = [
-  "之前传 20MB 左右的大照片，浏览器会卡到没反应——现在解码时直接缩小，不再卡",
-  "上传时能看到「正在处理第几张 / 正在上传」的进度提示",
+  "图库上传按钮重做：选完照片立刻显示已选几张，点上传就有进度提示，不再静悄悄没反应",
+  "上传框是否显示改由服务端权限决定，没实名/没登录的自动藏起来，不再误显示",
   "实名 30MB 额度、自己删自己的图、管理员/服主无限额度，规则不变",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
