@@ -524,8 +524,25 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 
 @media (max-width: 820px) {
   .nav-toggle { display: flex; }
-  /* 手机上横向空间够,品牌文字重新显示(滚动时仍会折起来) */
+  /* 手机上品牌文字重新显示(滚动时仍会折起来) */
   .nav-logo > span { display: block; }
+
+  /* 手机导航条窄,而 logo 和右侧工具组原本都是 flex:none、一点都不肯缩,
+     两边加起来一旦超过胶囊宽度,最右边的汉堡就被挤出圆角外面(用户报的 bug)。
+     这里让品牌文字先让位:可收缩、放不下就打省略号,工具组固定贴右,
+     汉堡就永远留在胶囊里面了 */
+  .nav-logo { flex: 1 1 auto; min-width: 0; }
+  .nav-logo img { flex: none; }
+  .nav-logo > span { min-width: 0; max-width: 100%; overflow: hidden; }
+  .nav-logo b,
+  .nav-logo small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nav-tools { flex: none; margin-left: auto; gap: 8px; }
+
   .nav-links { overflow: visible; }
 
   /* 手机的「管理后台」被 nav.js 挪进了下拉菜单,跟着菜单样式走 */
@@ -584,6 +601,15 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   .nav-account { padding: 0 11px; }
   .nav-account.is-in { padding-left: 5px; }
   .nav-account .acc-text { display: none; }
+}
+
+/* 小屏手机(多数竖屏机型):按钮再收一档,给品牌文字多留一点位置 */
+@media (max-width: 460px) {
+  .nav-tools { gap: 6px; }
+  .theme-toggle,
+  .nav-bell { width: 36px; height: 36px; }
+  .nav-account { padding: 0 9px; }
+  .nav-toggle { padding: 9px 10px; }
 }
 
 /* ============================================================
