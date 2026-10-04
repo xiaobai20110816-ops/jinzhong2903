@@ -74,7 +74,7 @@
     <img id="lightbox-img" alt="">
     <div class="lb-bar">
       <span id="lightbox-caption" class="lightbox-caption"></span>
-      <a id="lightbox-dl" class="lb-dl" download>下载原图</a>
+      <a id="lightbox-dl" class="lb-dl" download>保存原图</a>
     </div>
   </div>
 
@@ -165,8 +165,8 @@
               <figcaption>
                 <span class="gal-title">${esc(it.title)}</span>
                 <span class="gal-actions">
-                  <a class="gal-dl" href="${esc(full(it.full))}" download="${esc(it.title)}.jpg" title="下载原图">下载原图</a>
-                  ${showDel ? '<button type="button" class="gal-del" data-id="' + it.id + '" title="删除">删</button>' : ""}
+                  <a class="gal-dl" href="${esc(full(it.full))}" download="${esc(it.title)}.jpg" title="保存原图">保存原图</a>
+                  ${showDel ? '<button type="button" class="gal-del" data-id="' + it.id + '" title="删除">删除</button>' : ""}
                 </span>
               </figcaption>
             </figure>`;

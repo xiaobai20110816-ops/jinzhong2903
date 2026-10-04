@@ -108,12 +108,12 @@
 #g-prog-bar { position: relative; display: block; width: 0; height: 6px; border-radius: 999px; background: linear-gradient(90deg, var(--gold), var(--gold-2)); }
 .g-prog span { font-size: 0.76rem; color: var(--muted); white-space: nowrap; }
 
-/* 卡片底部操作条:标题 + 下载/删除 */
+/* 卡片底部操作条:名字单独一行,保存/删除跟在下面一行 */
 .gal-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin-top: 9px;
 }
 .gal-del {
   flex: none;
@@ -174,27 +174,18 @@
 .gal-item:hover img { transform: scale(1.05); }
 
 .gal-item figcaption {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 34px 14px 12px;
+  /* 独立底栏:放在图片正下方,不再绝对定位压在图上(压在图上会被纹理挡住看不清) */
+  position: static;
+  display: block;
+  padding: 10px 8px 4px;
   font-size: 0.84rem;
   color: var(--text);
-  border-radius: 0 0 12px 12px;
-  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.85));
-  /* 一直显示:名字和下载/删除按钮不再靠 hover 才出来 */
+  background: none;
   opacity: 1;
-  transition: opacity 0.25s, color 0.6s ease;
+  transition: color 0.6s ease;
 }
 
 .gal-title {
-  flex: 1 1 auto;
-  min-width: 0;
   display: block;
   overflow: hidden;
   white-space: nowrap;
@@ -221,19 +212,15 @@
 }
 .gal-dl:hover { filter: brightness(1.08); }
 
-/* 手机:网格缩成两列,大图卡片上常显标题与下载按钮(没有 hover) */
+/* 手机:网格缩成两列,按钮小一号 */
 @media (max-width: 720px) {
   .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .gal-item figcaption {
-    opacity: 1;
-    background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.9));
-  }
+  .gal-item figcaption { padding: 9px 6px 2px; }
   .gal-dl { padding: 5px 10px; font-size: 0.74rem; }
 }
 
 @media (max-width: 420px) {
   .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .gal-title { max-width: 90px; }
 }
 
 /* ---- 灯箱下载栏:大图下方一排,标题 + 下载原图 ---- */
