@@ -667,6 +667,19 @@ ul { list-style: none; }
   box-shadow: 0 0 0 2px var(--bg0);
 }
 
+/* 导航栏「私信」旁边的小红点:有未读私信时亮起,配色跟铃铛红点一致 */
+.nav-dm-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 5px;
+  border-radius: 50%;
+  vertical-align: 0.35em;
+  background: #ff5252;
+  box-shadow: 0 0 6px rgba(255, 82, 82, 0.7);
+}
+.nav-dm-dot[hidden] { display: none; }
+
 .notif-panel {
   position: fixed;
   top: 74px;

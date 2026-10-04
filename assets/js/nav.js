@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "story.html", label: "103 纪事" },
   { href: "rank.html", label: "活跃榜" },
   { href: "announcements.html", label: "班级公告" },
+  { href: "messages.html", label: "私信" },
 ];
 
 // 主题存在 localStorage:dark(默认) / light
@@ -809,14 +810,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-10";
+const SPLASH_VERSION = "2026-10-05-11";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "现在可以给自己起昵称、给个人主页换壁纸了。";
+const SPLASH_LEAD = "私信功能上线了，可以给同学发悄悄话了。";
 const SPLASH_NOTES = [
-  "个人中心可以改昵称，昵称会作为全站显示的主名",
-  "个人中心可以上传个人主页壁纸，换成自己喜欢的样子",
-  "通过实名的同学，个人主页昵称下面会显示一行真名小字",
+  "导航栏新增「私信」，可以和同学一对一聊天，有未读会亮小红点",
+  "个人主页新增「发私信」按钮",
+  "服主可在个人主页查看该同学的私聊记录",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -887,9 +888,11 @@ document.addEventListener("DOMContentLoaded", () => {
         <span><b>103 · 音乐领军班</b><small>Musical Vanguards</small></span>
       </a>
       <nav id="nav-links" class="nav-links">
-        ${NAV_ITEMS.map(
-          (n) => `<a href="${n.href}" data-nav ${n.href === current ? 'class="active"' : ""}>${n.label}</a>`
-        ).join("")}
+        ${NAV_ITEMS.map((n) => {
+          // 「私信」那项自带一个未读小红点,别的项不用
+          const dot = n.href === "messages.html" ? '<span class="nav-dm-dot" id="nav-dm-dot" hidden></span>' : "";
+          return `<a href="${n.href}" data-nav ${n.href === current ? 'class="active"' : ""}>${n.label}${dot}</a>`;
+        }).join("")}
       </nav>
       <div class="nav-tools">
         <button id="nav-bell" class="nav-bell" type="button" aria-label="消息通知" hidden>
@@ -1021,6 +1024,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---- 消息通知:导航栏的小铃铛 + 下拉面板 ----
   const bell = document.getElementById("nav-bell");
   const dot = document.getElementById("bell-dot");
+  const dmDot = document.getElementById("nav-dm-dot");
   const panel = document.createElement("div");
   panel.id = "notif-panel";
   panel.className = "notif-panel";
@@ -1086,16 +1090,23 @@ document.addEventListener("DOMContentLoaded", () => {
     } else dot.hidden = true;
   }
 
+  // 「私信」旁边的小红点:只做一个纯红点,不写数字,低调一点
+  function setDmDot(n) {
+    if (dmDot) dmDot.hidden = !(n > 0);
+  }
+
   async function loadNotif() {
     if (!C103Auth.user) {
       if (bell) bell.hidden = true;
       setDot(0);
+      setDmDot(0);
       return;
     }
     if (bell) bell.hidden = false;
     try {
       const d = await apiFetch(API + "/notifications");
       setDot(d.unread || 0);
+      setDmDot(d.dmUnread || 0);
       renderNotif(d.items || []);
     } catch (e) {
       /* 通知拉不到不影响任何事 */

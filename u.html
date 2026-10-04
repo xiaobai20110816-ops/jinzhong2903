@@ -279,6 +279,110 @@
     }
     .pf-gate a { color: var(--gold); border-bottom: 1px solid var(--gold-line); }
 
+    /* 发私信按钮:和点赞按钮同款,但没登录 / 看自己时不显示 */
+    .pf-dm {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 18px;
+      margin-left: 12px;
+      padding: 9px 20px;
+      border-radius: 999px;
+      border: 1px solid var(--gold-line);
+      background: var(--gold-soft);
+      color: var(--gold);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.92rem;
+      letter-spacing: 1px;
+      transition: transform 0.2s ease, background-color 0.4s ease, color 0.4s ease;
+    }
+    .pf-dm:hover { transform: translateY(-2px); background: var(--gold); color: #0b0f1a; }
+    .pf-dm[hidden] { display: none; }
+
+    /* 服主专属:私聊记录折叠板块 */
+    .pf-dm-toggle {
+      padding: 9px 20px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--muted);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.86rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.25s ease, border-color 0.25s ease, background-color 0.4s ease;
+    }
+    .pf-dm-toggle:hover { color: var(--gold); border-color: var(--gold-line); }
+    .pf-dm-panel { margin-top: 16px; }
+    .pf-dm-chats { display: grid; gap: 8px; }
+    .pf-dm-chat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--muted);
+      text-align: left;
+      font-family: var(--font-body);
+      cursor: pointer;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
+    }
+    .pf-dm-chat:hover { border-color: var(--gold-line); background: var(--gold-soft); }
+    .pf-dm-nm {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: none;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.86rem;
+      color: var(--text);
+    }
+    .pf-dm-last {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pf-dm-n { flex: none; font-size: 0.72rem; color: var(--gold); }
+    .pf-dm-thread {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    .pf-dm-line { display: flex; flex-direction: column; gap: 2px; max-width: 78%; }
+    .pf-dm-line.mine { align-self: flex-end; align-items: flex-end; }
+    .pf-dm-line.them { align-self: flex-start; align-items: flex-start; }
+    .pf-dm-bubble {
+      padding: 8px 12px;
+      border-radius: 13px;
+      font-size: 0.86rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      background: var(--glass-surface);
+      border: 1px solid var(--line);
+    }
+    .pf-dm-line.mine .pf-dm-bubble { background: var(--gold-soft); border-color: var(--gold-line); }
+    .pf-dm-time { font-size: 0.62rem; color: var(--faint); }
+
     /* 轻提示 */
     .pf-toast {
       position: fixed;
@@ -622,6 +726,10 @@
         const plainName = esc(window.C103Person.name(u, u.name));
         // 是不是「我自己」:接口回的 me 就是当前登录者 id,最权威(不等前端登录状态猜)
         state.mine = Number(data.me) === uid;
+        // 发私信:不是自己才给(登录与否在 renderDmButton 里再判,登录状态可能还没回来)
+        const dmBtn = state.mine
+          ? ""
+          : `<a class="pf-dm" id="pf-dm" href="messages.html?to=${uid}" hidden>发私信</a>`;
 
         // 成就板块:接口给了才渲染(拿不到就整块不出现,不留空壳)
         const achs = Array.isArray(data.achievements) ? data.achievements : [];
@@ -649,6 +757,7 @@
               <button class="pf-like" id="pf-like" type="button" aria-pressed="false">
                 <span class="heart">❤</span><span id="pf-like-n">${Number(state.likes) || 0}</span>
               </button>
+              ${dmBtn}
             </div>
           </article>
 
@@ -663,6 +772,9 @@
             <div class="pf-head"><span class="en">Posts</span><h2>TA 的留言</h2></div>
             <div id="pf-posts" class="pf-list"><p class="glass pf-empty">读取中…</p></div>
           </section>
+
+          <!-- 服主专属的私聊记录板块由脚本按登录身份决定要不要填进来 -->
+          <div id="pf-owner-dm"></div>
 
           <section class="pf-block">
             <div class="pf-head"><span class="en">Wall</span><h2>留言墙</h2></div>
@@ -700,6 +812,113 @@
         const logged = !!state.user;
         if (form) form.hidden = !logged;
         if (gate) gate.hidden = logged;
+        // 这两块也跟登录身份挂钩,顺手一起更新
+        renderDmButton();
+        maybeRenderOwnerDm();
+      }
+
+      // 「发私信」按钮:登录了、且不是看自己的主页才露出来
+      function renderDmButton() {
+        const b = $("#pf-dm");
+        if (b) b.hidden = !state.user;
+      }
+
+      // ---------- 服主专属:私聊记录 ----------
+      // 只有服主、且不是看自己的页面时才渲染;否则整块留空(不留空壳)
+      const OWNER_PEERS = new Map(); // pid → 对端用户对象,渲染对话时用来显示名字
+      let ownerLoaded = false;
+
+      function maybeRenderOwnerDm() {
+        const box = $("#pf-owner-dm");
+        if (!box) return;
+        const login = window.C103Auth && window.C103Auth.user;
+        if (!login || login.role !== "owner" || state.mine) {
+          box.innerHTML = "";
+          return;
+        }
+        if (box.dataset.done === "1") return; // 已经渲染过,别重复插
+        box.dataset.done = "1";
+        box.innerHTML = `
+          <section class="pf-block">
+            <div class="pf-head"><span class="en">Private</span><h2>私聊记录（仅服主可见）</h2></div>
+            <button class="pf-dm-toggle" type="button" id="pf-dm-toggle">展开查看私聊记录</button>
+            <div class="pf-dm-panel" id="pf-dm-panel" hidden></div>
+          </section>`;
+        on($("#pf-dm-toggle"), "click", toggleOwnerDm);
+      }
+
+      async function toggleOwnerDm() {
+        const panel = $("#pf-dm-panel");
+        const btn = $("#pf-dm-toggle");
+        if (!panel || !btn) return;
+        if (!panel.hidden) {
+          panel.hidden = true;
+          btn.textContent = "展开查看私聊记录";
+          return;
+        }
+        panel.hidden = false;
+        btn.textContent = "收起";
+        if (ownerLoaded) return;
+        ownerLoaded = true;
+        await loadOwnerChats();
+      }
+
+      async function loadOwnerChats() {
+        const panel = $("#pf-dm-panel");
+        if (!panel) return;
+        panel.innerHTML = `<p class="glass pf-empty">读取中…</p>`;
+        try {
+          const d = await api(API + "/messages/" + uid + "/all");
+          const chats = d.chats || [];
+          if (!chats.length) {
+            panel.innerHTML = `<p class="glass pf-empty">TA 还没有任何私聊记录</p>`;
+            return;
+          }
+          OWNER_PEERS.clear();
+          panel.innerHTML = `
+            <div class="pf-dm-chats">${chats.map(dmChatRow).join("")}</div>
+            <div class="pf-dm-thread" id="pf-dm-thread" hidden></div>`;
+          panel.querySelectorAll(".pf-dm-chat").forEach((b) => {
+            on(b, "click", () => loadOwnerThread(parseInt(b.dataset.pid, 10) || 0));
+          });
+        } catch (err) {
+          panel.innerHTML = `<p class="glass pf-empty">${esc(err.message)}</p>`;
+        }
+      }
+
+      function dmChatRow(c) {
+        const p = c.peer || {};
+        const last = c.last || {};
+        OWNER_PEERS.set(p.id, p);
+        return `<button class="pf-dm-chat" type="button" data-pid="${p.id}">
+          <span class="pf-dm-nm">${window.C103Person.html(p)}</span>
+          <span class="pf-dm-last">${esc(String(last.body || "").replace(/\n/g, " "))}</span>
+          <span class="pf-dm-n">${Number(c.count) || 0} 条</span>
+        </button>`;
+      }
+
+      async function loadOwnerThread(pid) {
+        const box = $("#pf-dm-thread");
+        if (!box || !pid) return;
+        box.hidden = false;
+        box.innerHTML = `<p class="glass pf-empty">读取对话中…</p>`;
+        try {
+          const d = await api(API + "/messages/" + uid + "/all?peer=" + pid);
+          const items = d.items || [];
+          box.innerHTML = items.length
+            ? items
+                .map(
+                  (m) => `<div class="pf-dm-line ${m.mine ? "mine" : "them"}">
+                    <span class="pf-dm-bubble">${esc(m.body)}</span>
+                    <span class="pf-dm-time">${esc(fmtRel(m.created_at))}</span>
+                  </div>`
+                )
+                .join("")
+            : `<p class="glass pf-empty">这段对话还没有消息</p>`;
+          box.scrollTop = box.scrollHeight;
+        } catch (err) {
+          box.innerHTML = `<p class="glass pf-empty">${esc(err.message)}</p>`;
+        }
       }
 
       // ---------- 我的照片:别人只展示,自己可传可删 ----------

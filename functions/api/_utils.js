@@ -79,7 +79,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-05.5";
+const SCHEMA_VERSION = "2026-10-05.6";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -304,6 +304,28 @@ export function ensureSchema(db) {
         .prepare(
           `CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC)`
         )
+        .run();
+
+      // ---- 私信:一对一的悄悄话,谁和谁都能聊 ----
+      // read 的语义是「收件人还没看过」:1 = 已读。
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS messages (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             from_id INTEGER NOT NULL,
+             to_id   INTEGER NOT NULL,
+             body    TEXT NOT NULL,
+             read    INTEGER NOT NULL DEFAULT 0,
+             created_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+      // 取「某人某段的对话」按 pair 找;取「我的收件箱」按 to_id + read 找
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages(from_id, to_id, created_at)`)
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_msg_inbox ON messages(to_id, read, created_at DESC)`)
         .run();
 
       // 顺手做一次性的脏数据修复(settings 表已经建好,标记写在里面)

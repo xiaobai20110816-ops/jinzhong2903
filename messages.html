@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 私信">
+  <title>私信 · 103班 音乐领军班</title>
+  <meta name="view-transition" content="same-origin">
+  <meta name="theme-color" content="#070b14">
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <style>
+    /* 私信页:左右两栏玻璃卡,窄屏塌成单列 */
+    .dm-tip {
+      max-width: 900px;
+      margin: 0 auto 16px;
+      text-align: center;
+      font-size: 0.74rem;
+      letter-spacing: 0.05em;
+      color: var(--faint);
+      transition: color 0.6s ease;
+    }
+
+    .dm-app {
+      display: grid;
+      grid-template-columns: 306px 1fr;
+      gap: 16px;
+      height: min(70vh, 620px);
+      min-height: 440px;
+    }
+
+    /* ---- 左栏:会话列表 ---- */
+    .dm-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      border-radius: 20px;
+      overflow-y: auto;
+    }
+    .dm-item {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      width: 100%;
+      padding: 10px 11px;
+      border: none;
+      border-radius: 14px;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      font-family: var(--font-body);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background-color 0.25s ease;
+    }
+    .dm-item:hover { background: var(--chip); }
+    .dm-item.active { background: var(--gold-soft); }
+    .dm-face {
+      flex: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 1rem;
+      color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+    }
+    .dm-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .dm-item-top { display: flex; align-items: center; gap: 6px; }
+    .dm-item-name {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dm-item-time { flex: none; margin-left: auto; font-size: 0.66rem; color: var(--faint); }
+    .dm-item-last {
+      font-size: 0.78rem;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dm-unread {
+      flex: none;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: #ff5252;
+      color: #fff;
+      font-style: normal;
+      font-size: 0.64rem;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+    }
+
+    /* ---- 右栏:对话窗 ---- */
+    .dm-chat { display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; }
+    .dm-chat-head {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .dm-back {
+      display: none;
+      align-items: center;
+      flex: none;
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--muted);
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+    }
+    .dm-chat-name {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.98rem;
+      color: var(--text);
+    }
+    .dm-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 18px;
+      overflow-y: auto;
+    }
+    .dm-earlier {
+      align-self: center;
+      padding: 5px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--muted);
+      font-size: 0.74rem;
+      cursor: pointer;
+      transition: color 0.25s ease, border-color 0.25s ease;
+    }
+    .dm-earlier:hover { color: var(--gold); border-color: var(--gold-line); }
+    .dm-msg { display: flex; flex-direction: column; gap: 3px; max-width: 76%; }
+    .dm-msg.them { align-self: flex-start; align-items: flex-start; }
+    .dm-msg.mine { align-self: flex-end; align-items: flex-end; }
+    .dm-bubble {
+      padding: 9px 13px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      background: var(--chip);
+      border: 1px solid var(--line);
+      transition: color 0.6s ease;
+    }
+    .dm-msg.mine .dm-bubble {
+      color: #0b0f1a;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      border-color: transparent;
+    }
+    .dm-time { font-size: 0.62rem; color: var(--faint); }
+    .dm-composer {
+      flex: none;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+    }
+    .dm-input {
+      flex: 1;
+      min-height: 44px;
+      max-height: 150px;
+      resize: none;
+      padding: 11px 13px;
+      border-radius: 14px;
+      border: 1px solid var(--glass-brd);
+      background: var(--chip);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      outline: none;
+      transition: border-color 0.3s ease, background-color 0.4s ease, color 0.6s ease;
+    }
+    .dm-input:focus { border-color: var(--gold-line); }
+    .dm-send {
+      flex: none;
+      padding: 11px 22px;
+      border: none;
+      border-radius: 999px;
+      font-family: var(--font-display);
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #0b0f1a;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.3s ease;
+    }
+    .dm-send:hover { transform: translateY(-1px); }
+    .dm-send:disabled { opacity: 0.55; cursor: default; }
+
+    /* 空状态 / 未登录提示卡 */
+    .dm-empty { padding: 28px 18px; text-align: center; font-size: 0.84rem; line-height: 1.8; color: var(--muted); }
+    .dm-chat-empty { margin: auto; padding: 30px; text-align: center; font-size: 0.86rem; color: var(--faint); }
+    .dm-notice {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 42px 30px;
+      border-radius: 22px;
+      text-align: center;
+    }
+    .dm-notice b {
+      display: block;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      color: var(--gold);
+    }
+    .dm-notice p { margin-top: 12px; font-size: 0.9rem; line-height: 1.9; color: var(--muted); }
+    .dm-link { color: var(--gold); border-bottom: 1px solid var(--gold-line); }
+
+    /* 轻提示 */
+    .dm-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 84px;
+      transform: translate(-50%, 12px);
+      z-index: 500;
+      padding: 11px 22px;
+      border-radius: 999px;
+      background: var(--glass-surface);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      backdrop-filter: blur(26px) saturate(180%);
+      border: 1px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+      color: var(--text);
+      font-size: 0.84rem;
+      letter-spacing: 1px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .dm-toast.in { opacity: 1; transform: translate(-50%, 0); }
+
+    /* 窄屏:单列,默认只看会话列表,点了会话再切到对话窗 */
+    @media (max-width: 720px) {
+      .dm-app { grid-template-columns: 1fr; height: auto; min-height: 0; }
+      .dm-list { display: flex; height: min(72vh, 560px); }
+      .dm-chat { display: none; height: min(72vh, 560px); }
+      .dm-app.show-chat .dm-list { display: none; }
+      .dm-app.show-chat .dm-chat { display: flex; }
+      .dm-back { display: inline-flex; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Messages</div>
+    <h1><span class="gold-text">私信</span></h1>
+    <p>和同学说说心里话</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <p class="dm-tip">温馨提示：本站服主可查看私聊记录。</p>
+      <!-- 会话列表与对话窗都由下面的脚本渲染 -->
+      <div id="dm-root">
+        <p class="glass dm-empty">正在读取…</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // 私信页:左侧会话列表 + 右侧对话窗,全部走 /api/messages 系列接口
+    // ?to=<uid> 可以直接打开和某人的对话(个人主页的「发私信」按钮会这么跳)
+    (function () {
+      "use strict";
+
+      const API = "api"; // 相对路径:官网根目录、子目录都能用
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      const $ = (sel) => document.querySelector(sel);
+      const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
+      const img = window.C103Img || ((v) => v);
+
+      const root = $("#dm-root");
+      const POLL_MS = 10000; // 进入会话后每 10 秒拉一次新消息
+
+      const state = {
+        chats: [],
+        peer: null,
+        items: [],
+        hasMore: false,
+        sending: false,
+        loadingEarlier: false,
+        poll: 0,
+      };
+
+      // ---------- 小工具 ----------
+      const pad = (n) => String(n).padStart(2, "0");
+
+      function fmtRel(ms) {
+        const t = Number(ms) || 0;
+        const diff = Date.now() - t;
+        if (diff < 60000) return "刚刚";
+        if (diff < 3600000) return Math.floor(diff / 60000) + " 分钟前";
+        if (diff < 86400000) return Math.floor(diff / 3600000) + " 小时前";
+        const d = new Date(t);
+        return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+      }
+
+      async function api(url, options) {
+        const res = await fetch(url, options);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || "网络不太顺，稍后再试");
+        return data;
+      }
+
+      let toastTimer = 0;
+      function toast(text) {
+        let t = $("#dm-toast");
+        if (!t) {
+          t = document.createElement("div");
+          t.id = "dm-toast";
+          t.className = "dm-toast";
+          document.body.appendChild(t);
+        }
+        t.textContent = text;
+        t.classList.add("in");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("in"), 2200);
+      }
+
+      // 头像:有图用图,没有就用名字首字兜底
+      function face(p, cls) {
+        const c = cls || "dm-face";
+        if (p && p.avatar) return `<img class="${c}" src="${esc(img(p.avatar))}" alt="">`;
+        const ch = p ? String(window.C103Person.name(p)).slice(0, 1) : "?";
+        return `<span class="${c}">${esc(ch)}</span>`;
+      }
+
+      // ---------- 未登录 ----------
+      function renderLogin() {
+        stopPoll();
+        state.peer = null;
+        state.items = [];
+        root.innerHTML = `<div class="glass dm-notice">
+          <b>登录后才能私聊</b>
+          <p>登录之后就能和同学一对一聊天啦。</p>
+          <p><a class="dm-link" href="account.html">去个人中心登录</a></p>
+        </div>`;
+      }
+
+      // ---------- 已登录:搭出两栏骨架 ----------
+      function renderApp() {
+        root.innerHTML = `
+          <div class="dm-app" id="dm-app">
+            <aside class="glass dm-list" id="dm-list"><p class="dm-empty">正在读取会话…</p></aside>
+            <section class="glass dm-chat" id="dm-chat">
+              <div class="dm-chat-empty">从左边选一位同学开始聊天</div>
+            </section>
+          </div>`;
+        on($("#dm-list"), "click", onListClick);
+        initApp();
+      }
+
+      async function initApp() {
+        await loadChats();
+        // URL 带 ?to=<uid> 就直接打开这段对话
+        const to = parseInt(new URLSearchParams(location.search).get("to") || "0", 10) || 0;
+        if (to) openChat(to);
+      }
+
+      function onListClick(e) {
+        const item = e.target.closest(".dm-item");
+        if (!item) return;
+        const uid = parseInt(item.dataset.uid, 10) || 0;
+        if (uid) openChat(uid);
+      }
+
+      // ---------- 会话列表 ----------
+      async function loadChats() {
+        try {
+          const d = await api(API + "/messages");
+          state.chats = d.chats || [];
+          paintChats();
+        } catch (err) {
+          const box = $("#dm-list");
+          if (box) box.innerHTML = `<p class="dm-empty">${esc(err.message)}</p>`;
+        }
+      }
+
+      function paintChats() {
+        const box = $("#dm-list");
+        if (!box) return;
+        const list = state.chats || [];
+        if (!list.length) {
+          box.innerHTML = `<p class="dm-empty">还没有任何会话。<br>去同学的个人主页点「发私信」开始吧。</p>`;
+          return;
+        }
+        const activeId = state.peer ? state.peer.id : 0;
+        box.innerHTML = list
+          .map((c) => {
+            const p = c.peer || {};
+            const last = c.last || {};
+            // 换行在列表里折成空格,只留一行摘要
+            const preview = (last.mine ? "我：" : "") + String(last.body || "").replace(/\n/g, " ");
+            return `<button class="dm-item${p.id === activeId ? " active" : ""}" type="button" data-uid="${p.id}">
+              ${face(p)}
+              <span class="dm-item-main">
+                <span class="dm-item-top">
+                  <span class="dm-item-name">${window.C103Person.html(p)}</span>
+                  <span class="dm-item-time">${esc(fmtRel(last.created_at))}</span>
+                </span>
+                <span class="dm-item-last">${esc(preview)}</span>
+              </span>
+              ${c.unread > 0 ? `<i class="dm-unread">${c.unread > 99 ? "99+" : c.unread}</i>` : ""}
+            </button>`;
+          })
+          .join("");
+      }
+
+      // ---------- 打开一段对话 ----------
+      async function openChat(uid) {
+        if (!uid) return;
+        const app = $("#dm-app");
+        if (state.peer && state.peer.id === uid) {
+          // 已经是这个会话,不用重复拉
+          if (app) app.classList.add("show-chat");
+          return;
+        }
+        stopPoll();
+        const chat = $("#dm-chat");
+        if (chat) chat.innerHTML = `<div class="dm-chat-empty">正在读取对话…</div>`;
+        if (app) app.classList.add("show-chat");
+        try {
+          const d = await api(API + "/messages/with/" + uid);
+          state.peer = d.peer;
+          state.items = Array.isArray(d.items) ? d.items : [];
+          state.hasMore = !!d.hasMore;
+          paintChats(); // 刷出选中态
+          renderChat();
+          scrollBottom();
+          startPoll();
+          loadChats(); // 切会话时把列表刷一次(顺带更新未读)
+        } catch (err) {
+          if (chat) chat.innerHTML = `<div class="dm-chat-empty">${esc(err.message)}</div>`;
+          toast(err.message);
+        }
+      }
+
+      function renderChat() {
+        const chat = $("#dm-chat");
+        if (!chat || !state.peer) return;
+        chat.innerHTML = `
+          <div class="dm-chat-head">
+            <button class="dm-back" type="button" id="dm-back">‹ 返回</button>
+            <span class="dm-chat-name">${window.C103Person.html(state.peer)}</span>
+          </div>
+          <div class="dm-body" id="dm-body">${bodyHtml()}</div>
+          <div class="dm-composer">
+            <textarea class="dm-input" id="dm-input" rows="2" maxlength="500" placeholder="说点什么…"></textarea>
+            <button class="dm-send" type="button" id="dm-send">发送</button>
+          </div>`;
+        on($("#dm-back"), "click", showList);
+        on($("#dm-send"), "click", send);
+        on($("#dm-input"), "keydown", onInputKey);
+        on(chat.querySelector(".dm-earlier"), "click", loadEarlier);
+      }
+
+      function bodyHtml() {
+        const items = state.items || [];
+        const earlier = state.hasMore ? `<button class="dm-earlier" type="button">看更早的</button>` : "";
+        if (!items.length) return earlier + `<div class="dm-chat-empty">还没有消息，打个招呼吧。</div>`;
+        return (
+          earlier +
+          items
+            .map(
+              (m) => `<div class="dm-msg ${m.mine ? "mine" : "them"}">
+                <span class="dm-bubble">${esc(m.body)}</span>
+                <span class="dm-time">${esc(fmtRel(m.created_at))}</span>
+              </div>`
+            )
+            .join("")
+        );
+      }
+
+      function renderBody() {
+        const body = $("#dm-body");
+        if (!body) return;
+        body.innerHTML = bodyHtml();
+        on(body.querySelector(".dm-earlier"), "click", loadEarlier);
+      }
+
+      function scrollBottom() {
+        const body = $("#dm-body");
+        if (body) body.scrollTop = body.scrollHeight;
+      }
+
+      function showList() {
+        const app = $("#dm-app");
+        if (app) app.classList.remove("show-chat");
+      }
+
+      // ---------- 看更早的 ----------
+      async function loadEarlier() {
+        if (state.loadingEarlier || !state.hasMore || !state.peer || !state.items.length) return;
+        state.loadingEarlier = true;
+        const body = $("#dm-body");
+        const prevH = body ? body.scrollHeight : 0;
+        const prevTop = body ? body.scrollTop : 0;
+        try {
+          const d = await api(API + "/messages/with/" + state.peer.id + "?before=" + state.items[0].id);
+          state.items = (d.items || []).concat(state.items);
+          state.hasMore = !!d.hasMore;
+          renderBody();
+          // 补在头顶会把内容顶下去,这里把视口拉回原来的位置
+          if (body) body.scrollTop = body.scrollHeight - prevH + prevTop;
+        } catch (err) {
+          toast(err.message);
+        } finally {
+          state.loadingEarlier = false;
+        }
+      }
+
+      // ---------- 发送 ----------
+      function onInputKey(e) {
+        if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+        e.preventDefault();
+        send();
+      }
+
+      async function send() {
+        if (state.sending || !state.peer) return;
+        const ta = $("#dm-input");
+        if (!ta) return;
+        const body = ta.value.trim();
+        if (!body) { toast("写点什么再发吧"); return; }
+
+        state.sending = true;
+        const btn = $("#dm-send");
+        if (btn) btn.disabled = true;
+        try {
+          const d = await api(API + "/messages/with/" + state.peer.id, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ body: body }),
+          });
+          state.items.push(d.message);
+          ta.value = "";
+          renderBody();
+          scrollBottom();
+          loadChats(); // 让这条对话冒到列表最上面
+        } catch (err) {
+          toast(err.message);
+        } finally {
+          state.sending = false;
+          if (btn) btn.disabled = false;
+          ta.focus();
+        }
+      }
+
+      // ---------- 轮询新消息 ----------
+      function startPoll() {
+        stopPoll();
+        state.poll = setInterval(pollNew, POLL_MS);
+      }
+
+      function stopPoll() {
+        if (state.poll) { clearInterval(state.poll); state.poll = 0; }
+      }
+
+      async function pollNew() {
+        // 切到后台标签页就不发请求(和全站「后台停帧」的约定一致)
+        if (document.visibilityState !== "visible") return;
+        if (!state.peer) return;
+        try {
+          const d = await api(API + "/messages/with/" + state.peer.id);
+          const items = Array.isArray(d.items) ? d.items : [];
+          const maxId = state.items.length ? state.items[state.items.length - 1].id : 0;
+          const fresh = items.filter((m) => m.id > maxId);
+          if (fresh.length) {
+            state.items = state.items.concat(fresh);
+            renderBody();
+            scrollBottom();
+          }
+        } catch (e) {
+          /* 轮询失败不打扰用户,下一次再试 */
+        }
+      }
+
+      // 回到前台立刻补一次
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") pollNew();
+      });
+
+      // ---------- 启动 ----------
+      // 用 mode 记住当前渲染的是「应用」还是「登录提示」,避免重复重绘打断输入
+      let seenFirst = false;
+      let mode = "";
+
+      function renderFor(u) {
+        const first = !seenFirst;
+        seenFirst = true;
+        if (u) {
+          if (mode !== "app") { mode = "app"; renderApp(); }
+        } else if (!first) {
+          // 首次就是 null 可能只是还没问完登录状态,先留着「正在读取…」
+          if (mode !== "login") { mode = "login"; renderLogin(); }
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        if (!window.C103Auth || !window.C103Person) {
+          // nav.js 没加载出来:不能白屏,给一句人话
+          root.innerHTML = `<div class="glass dm-notice"><b>私信页暂时打不开</b><p>页面脚本没加载完整，刷新一下再试。</p></div>`;
+          return;
+        }
+        renderFor(window.C103Auth.user);
+        window.C103Auth.onChange(renderFor);
+      });
+    })();
+  </script>
+</body>
+</html>

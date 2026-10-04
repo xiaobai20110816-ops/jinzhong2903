@@ -17,7 +17,7 @@ export async function onRequestGet({ request, env }) {
 
   const me = await currentUser(request, env);
   // 没登录就是「没有通知」,不报错,免得前端还要专门处理
-  if (!me) return json({ ok: true, unread: 0, items: [] });
+  if (!me) return json({ ok: true, unread: 0, dmUnread: 0, items: [] });
 
   const { results } = await env.DB.prepare(
     `SELECT n.id, n.type, n.post_id, n.wall_id, n.reply_id, n.excerpt, n.read, n.created_at,
@@ -67,7 +67,14 @@ export async function onRequestGet({ request, env }) {
     };
   });
 
-  return json({ ok: true, unread: unread, items: items });
+  // 未读私信数:导航栏「私信」旁边的小红点用,和通知未读分开各算各的
+  const dmRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM messages WHERE to_id = ? AND read = 0"
+  )
+    .bind(me.id)
+    .first();
+
+  return json({ ok: true, unread: unread, dmUnread: dmRow ? Number(dmRow.n) || 0 : 0, items: items });
 }
 
 export async function onRequestPost({ request, env }) {
