@@ -833,8 +833,8 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-16";
-const SPLASH_DATE = "2026.10.05";
+const SPLASH_VERSION = "2026-10-04-16";
+const SPLASH_DATE = "2026.10.04";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
 const SPLASH_LEAD = "修好图库上传「点了没反应」的毛病。";
 const SPLASH_NOTES = [
