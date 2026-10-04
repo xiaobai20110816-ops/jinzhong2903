@@ -39,6 +39,17 @@
 
   <section class="section">
     <div class="container">
+      <!-- 上传区:实名认证过的同学 / 管理员 / 服主可见 -->
+      <div id="g-upload" class="g-up" hidden>
+        <input type="text" id="g-title" maxlength="40" placeholder="给照片起个名字（如：体育节合影）">
+        <label class="g-pick">
+          <input type="file" id="g-files" accept="image/*" multiple>选择照片
+        </label>
+        <button type="button" id="g-send" class="g-btn">上传</button>
+        <span id="g-hint" class="g-hint"></span>
+        <span id="g-msg" class="g-hint g-err"></span>
+      </div>
+
       <!-- 图库网格:缩略图 + 名字 + 下载原图按钮,脚本从 /api/gallery 拉 -->
       <div id="gallery-grid" class="gallery-grid">
         <p class="glass gallery-empty">正在读取图库…</p>
@@ -58,8 +69,8 @@
 
   <script src="assets/js/nav.js"></script>
   <script>
-    // 班级图库:从 /api/gallery 拉列表,缩略图铺成网格,点开看大图
-    // 原图存在 KV,每张 5MB 左右;“下载原图”按钮直接指向原图,不会先压小
+    // 班级图库:从 /api/gallery 拉列表,缩略图铺成网格,点开看大图、下载原图。
+    // 上传:实名认证过的同学(30MB 额度)、管理员、服主;自己的图能删,管理员/服主能删所有。
     document.addEventListener("DOMContentLoaded", () => {
       const esc = (s) =>
         String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -69,11 +80,29 @@
       const full = (k) => "api/gallery/img/" + encodeURIComponent(k);
 
       const grid = document.getElementById("gallery-grid");
+      const upBox = document.getElementById("g-upload");
+      const gTitle = document.getElementById("g-title");
+      const gFiles = document.getElementById("g-files");
+      const gSend = document.getElementById("g-send");
+      const gHint = document.getElementById("g-hint");
+      const gMsg = document.getElementById("g-msg");
       const lightbox = document.getElementById("lightbox");
       const lbImg = document.getElementById("lightbox-img");
       const lbCaption = document.getElementById("lightbox-caption");
       const lbDl = document.getElementById("lightbox-dl");
       const lbClose = document.getElementById("lightbox-close");
+
+      const A = window.C103Auth || null; // 登录态
+
+      function fmtMB(b) {
+        const mb = b / (1024 * 1024);
+        return mb >= 10 ? Math.round(mb) + "MB" : mb.toFixed(1) + "MB";
+      }
+
+      // 能不能传:实名 / 管理员 / 服主
+      function canUpload(me) {
+        return !!me && (me.role === "owner" || me.role === "admin" || me.verified === 1);
+      }
 
       function closeLightbox() {
         lightbox.classList.remove("show");
@@ -96,35 +125,108 @@
         lbCaption.textContent = item.title;
         lbDl.href = full(item.full);
         lbDl.setAttribute("download", item.title + ".jpg");
+        // 灯箱里也给删除:自己的图能删,管理员/服主能删所有
         lightbox.classList.add("show");
         lightbox.setAttribute("aria-hidden", "false");
+        bindLightboxDelete(item, true);
       }
 
-      function render(items) {
+      // 渲染网格。me 是当前登录的人,quota 是额度信息
+      function render(items, me, quota) {
         if (!items || !items.length) {
-          grid.innerHTML = '<p class="glass gallery-empty">图库还是空的，等发布后这里会一张张亮起来。</p>';
+          grid.innerHTML = '<p class="glass gallery-empty">图库还是空的，实名认证后就可以传照片啦。</p>';
           return;
         }
+        // 能不能删别人的图:管理员 / 服主
+        const canDelAll = me && (me.role === "owner" || me.role === "admin");
         grid.innerHTML = items
           .map(
-            (it) => `
-          <figure class="gal-item">
-            <img src="${esc(thumb(it.thumb))}" alt="${esc(it.title)}" loading="lazy">
-            <figcaption>
-              <span class="gal-title">${esc(it.title)}</span>
-              <a class="gal-dl" href="${esc(full(it.full))}" download="${esc(it.title)}.jpg" title="下载原图">下载原图</a>
-            </figcaption>
-          </figure>`
+            (it) => {
+              const own = !!me && it.by_id === me.id;
+              const showDel = canDelAll || own;
+              return `
+            <figure class="gal-item" data-id="${it.id}">
+              <img src="${esc(thumb(it.thumb))}" alt="${esc(it.title)}" loading="lazy">
+              <figcaption>
+                <span class="gal-title">${esc(it.title)}</span>
+                <span class="gal-actions">
+                  <a class="gal-dl" href="${esc(full(it.full))}" download="${esc(it.title)}.jpg" title="下载原图">下载原图</a>
+                  ${showDel ? '<button type="button" class="gal-del" data-id="' + it.id + '" title="删除">删</button>' : ""}
+                </span>
+              </figcaption>
+            </figure>`;
+            }
           )
           .join("");
 
-        // 点卡片看大图;下载按钮单独点不触发看大图
+        // 点卡片看大图;下载/删除按钮单独点不触发看大图
         grid.querySelectorAll(".gal-item").forEach((item) => {
-          const idx = Array.prototype.indexOf.call(grid.children, item);
           item.addEventListener("click", (e) => {
-            if (e.target.closest(".gal-dl")) return; // 点了下载
+            if (e.target.closest(".gal-dl") || e.target.closest(".gal-del")) return;
+            const idx = Array.prototype.indexOf.call(grid.children, item);
             openLightbox(items[idx]);
           });
+          const delBtn = item.querySelector(".gal-del");
+          if (delBtn) {
+            delBtn.addEventListener("click", () => doDelete(parseInt(delBtn.dataset.id, 10)));
+          }
+        });
+      }
+
+      // 删除一张图
+      async function doDelete(id) {
+        if (!confirm("确定删除这张照片吗？原图会一起删掉。")) return;
+        try {
+          const res = await fetch("api/gallery/" + id, { method: "DELETE" });
+          const d = await res.json().catch(() => null);
+          if (d && d.ok) {
+            load(0);
+          } else {
+            alert((d && d.error) || "删除失败，重试一下");
+          }
+        } catch (e) {
+          alert("删除失败，检查网络再试");
+        }
+      }
+
+      const bindLightboxDelete = (item, shown) => { /* 灯箱删除由网格按钮负责,这里留占位 */ };
+
+      // 上传:原图原样 + 前端压一张缩略图,multipart 一起交给后端
+      async function compressThumb(file) {
+        const blob = await window.C103Image.compress(file, { maxEdge: 1200, targetBytes: 400 * 1024 });
+        return new File([blob], "thumb.jpg", { type: blob.type || "image/jpeg" });
+      }
+
+      function bindUpload() {
+        if (upBox.__bound) return;
+        upBox.__bound = true;
+        gSend.addEventListener("click", async () => {
+          const files = Array.from(gFiles.files || []).filter((f) => f.size > 0);
+          if (!files.length) { gMsg.textContent = "先选几张照片"; return; }
+          const t = gTitle.value.trim();
+          if (!t) { gMsg.textContent = "先给照片起个名字"; return; }
+
+          gSend.disabled = true;
+          gMsg.textContent = "";
+          try {
+            for (const file of files) {
+              const form = new FormData();
+              form.append("title", t);
+              form.append("full", file, file.name);
+              form.append("thumb", await compressThumb(file));
+              const res = await fetch("api/gallery", { method: "POST", body: form });
+              const d = await res.json().catch(() => null);
+              if (!d || !d.ok) {
+                throw new Error((d && d.error) || "第 " + (files.indexOf(file) + 1) + " 张上传失败");
+              }
+            }
+            gMsg.textContent = "";
+            gFiles.value = "";
+            load(0); // 传完重拉,额度也跟着刷新
+          } catch (e) {
+            gMsg.textContent = e.message || "上传中断，检查网络再试";
+          }
+          gSend.disabled = false;
         });
       }
 
@@ -134,9 +236,26 @@
           if (!res.ok) throw new Error("http " + res.status);
           const d = await res.json().catch(() => null);
           if (!d || !d.ok) throw new Error("bad payload");
-          render(d.items || []);
+          render(d.items || [], d.me, d.quota);
+
+          // 上传区:实名 / 管理员 / 服主才有
+          const meCan = canUpload(d.me);
+          upBox.hidden = false;
+          if (!meCan) {
+            upBox.hidden = true;
+            return;
+          }
+          bindUpload();
+          // 额度文案
+          if (d.quota && d.quota.unlimited) {
+            gHint.textContent = "管理员 / 服主，不限额度。";
+          } else if (d.quota) {
+            const left = Math.max(0, d.quota.limit - d.quota.used);
+            gHint.textContent = "实名额度 " + fmtMB(d.quota.used) + " / " + fmtMB(d.quota.limit) + "，还剩 " + fmtMB(left) + "";
+          } else {
+            gHint.textContent = "";
+          }
         } catch (e) {
-          // nav.js 没加载出来时会给兜底;这里稍微重试,免得偶发网络抖一下白屏
           if (retries > 0) return setTimeout(() => load(retries - 1), 600);
           grid.innerHTML =
             '<p class="glass gallery-empty">图库没读上来，检查一下网络再刷新。</p>';

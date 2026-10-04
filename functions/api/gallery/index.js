@@ -3,8 +3,11 @@
    POST /api/gallery        上传一张图(原图 + 缩略图,multipart)
    GET  /api/gallery        图库列表(游客也能看缩略图)
 
-   原图每张 5MB 左右,前端只把缩略图压到几百 KB;两张图都存 KV,
-   D1 的 gallery 表只记元数据。下载时走 /api/gallery/img/<key>。
+   权限:
+   - 实名认证通过的同学(verified=1)每人 30MB 额度,算原图总大小
+   - 服主 / 管理员不限额度
+   - 原图基本原样存 KV;缩略图由前端压小,不占额度
+   下载走 /api/gallery/img/<key>,删除走 /api/gallery/:id。
    ============================================================ */
 
 import {
@@ -23,12 +26,18 @@ const TYPES = {
   "image/webp": "webp",
 };
 
-// 图库的图片格式:原图 allow JPEG 体积大,缩略图两边都存 KV。体积上限分开设
-// 原图:预留 8MB(5MB 的照片 + 一点余量);缩略图:500KB(front end 已压到 400KB 内)
-const MAX_FULL = 8 * 1024 * 1024;
+// 实名同学的额度:30MB,按所有原图字节数累计(缩略图不算)
+const MEMBER_QUOTA = 30 * 1024 * 1024;
+// KV 单值上限是 25 MiB,传大图得留点余量,超出就是存不进去
+const MAX_FULL = 24 * 1024 * 1024;
 const MAX_THUMB = 512 * 1024;
 
 const KV_PREFIX = "gal:"; // 图库的 KV key 前缀,跟帖图 "img:" 分开
+
+/* 谁能传:服主 / 管理员 / 实名认证通过的同学 */
+function canUpload(me) {
+  return !!me && (isStaff(me) || me.verified === 1);
+}
 
 export async function onRequestPost({ request, env }) {
   if (!env.STORY_KV) return notReady("图片存储");
@@ -36,7 +45,8 @@ export async function onRequestPost({ request, env }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!isStaff(me)) return fail("这是服主 / 管理员才能做的", 401);
+  if (!canUpload(me))
+    return fail("实名认证通过的同学、管理员、服主才能上传照片", 401);
 
   let form;
   try {
@@ -62,7 +72,24 @@ export async function onRequestPost({ request, env }) {
   if (!fullExt) return fail("原图只收 JPG / PNG / WebP");
   if (!thumbExt) return fail("缩略图只收 JPG / PNG / WebP");
 
-  if (fullFile.size > MAX_FULL) return fail("原图超过 8MB,请压到 5MB 左右再传", 413);
+  // 单张超 24MB 存不进 KV(单值上限 25MiB),直接说清楚
+  if (fullFile.size > MAX_FULL) return fail("单张超过 24MB 存不下了（KV 单值上限），拆分或以后接 B2", 413);
+  if (thumbFile.size > MAX_THUMB) return fail("缩略图太大", 413);
+
+  // 普通实名成员算额度;管理员 / 服主跳过
+  if (!isStaff(me)) {
+    const usedRow = await env.DB.prepare(
+      "SELECT COALESCE(SUM(full_size), 0) AS used FROM gallery WHERE uploaded_by = ?"
+    )
+      .bind(me.id)
+      .first()
+      .catch(() => null);
+    const used = Number((usedRow && usedRow.used) || 0);
+    if (used + fullFile.size > MEMBER_QUOTA) {
+      const left = Math.max(0, MEMBER_QUOTA - used);
+      return fail("你的 30MB 额度不够了（还差 " + fmtMB(fullFile.size - left) + "），先删几张旧的再传", 413);
+    }
+  }
 
   const hex = randomHex(16);
   const fullKey = hex + ".full." + fullExt;
@@ -73,9 +100,9 @@ export async function onRequestPost({ request, env }) {
   await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbFile, { metadata: { ct: thumbType } });
 
   await env.DB.prepare(
-    "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, full_size, created_at) VALUES (?, ?, ?, ?, ?, ?)"
   )
-    .bind(title, fullKey, thumbKey, me.id, Date.now())
+    .bind(title, fullKey, thumbKey, me.id, fullFile.size, Date.now())
     .run();
 
   return json({ ok: true, full: fullKey, thumb: thumbKey, title });
@@ -86,8 +113,8 @@ export async function onRequestGet({ request, env }) {
   await ensureSchema(env.DB);
 
   const { results } = await env.DB.prepare(
-    `SELECT g.id, g.title, g.full_key, g.thumb_key, g.created_at,
-            u.username AS by_name
+    `SELECT g.id, g.title, g.full_key, g.thumb_key, g.full_size, g.created_at,
+            g.uploaded_by, u.username AS by_name
        FROM gallery g
        LEFT JOIN users u ON u.id = g.uploaded_by
       ORDER BY g.created_at DESC, g.id DESC`
@@ -99,9 +126,42 @@ export async function onRequestGet({ request, env }) {
     title: r.title,
     full: r.full_key,
     thumb: r.thumb_key,
+    full_size: Number(r.full_size) || 0,
     by: r.by_name || "",
+    by_id: r.uploaded_by || 0,
     created_at: r.created_at,
   }));
 
-  return json({ ok: true, items });
+  // 顺手带上「我」的额度信息:前端拿来显示还剩多少,以及哪些图我能删
+  const me = await currentUser(request, env).catch(() => null);
+  let quota = null;
+  if (me && canUpload(me)) {
+    if (isStaff(me)) {
+      quota = { limit: -1, used: 0, unlimited: true };
+    } else {
+      const usedRow = await env.DB.prepare(
+        "SELECT COALESCE(SUM(full_size), 0) AS used FROM gallery WHERE uploaded_by = ?"
+      )
+        .bind(me.id)
+        .first()
+        .catch(() => null);
+      quota = {
+        limit: MEMBER_QUOTA,
+        used: Number((usedRow && usedRow.used) || 0),
+        unlimited: false,
+      };
+    }
+  }
+
+  return json({
+    ok: true,
+    items,
+    me: me ? { id: me.id, role: me.role, verified: me.verified } : null,
+    quota,
+  });
+}
+
+function fmtMB(bytes) {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 10 ? Math.round(mb) + "MB" : mb.toFixed(1) + "MB";
 }
