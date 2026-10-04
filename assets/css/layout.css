@@ -55,9 +55,8 @@
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 
-/* 滚起来之后:胶囊变成实底 + 更重的投影,配合 JS 的收窄 = 灵动岛。
-   同时把文字收成图标 —— 品牌只留 Logo 方块、账号只留头像,
-   这样收窄后仍放得下全部菜单项,不会把「班级公告」挤出去 */
+/* 滚起来之后:胶囊变成实底 + 更重的投影。
+   宽度/内边距/左移由 JS 逐帧写 inline,这里只管"看得见"的部分 */
 .site-header.nav-scrolled .nav {
   background: var(--glass-sheen), var(--nav-solid);
   border-color: var(--line);
@@ -65,9 +64,36 @@
   /* 收起时干脆一点(0.28s),松开时仍走上面的 0.6s,和主题淡变保持一致 */
   transition-duration: 0.28s;
 }
-.site-header.nav-scrolled .nav-account { padding: 0 10px; }
-.site-header.nav-scrolled .nav-account.is-in { padding-left: 5px; }
-.site-header.nav-scrolled .nav-account .acc-text { max-width: 0; opacity: 0; }
+
+/* 收成小圆圈:整条导航只剩左边一个 Logo。
+   点一下就地展开(JS 摘掉这个类),点空白处或滚回顶部再收回去 */
+.site-header.nav-collapsed .nav {
+  justify-content: center;   /* 只剩 Logo,让它落在圆圈正中 */
+  gap: 0;
+  cursor: pointer;
+}
+.site-header.nav-collapsed .nav-logo { gap: 0; }
+.site-header.nav-collapsed .nav-links { margin-left: 0; }
+.site-header.nav-collapsed .nav-links,
+.site-header.nav-collapsed .nav-tools,
+.site-header.nav-collapsed .nav-logo > span {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* 圈起来之后给一点「这里能点」的反馈 */
+.site-header.nav-collapsed .nav:hover .nav-logo img {
+  transform: scale(1.12) rotate(-4deg);
+  box-shadow: 0 0 26px var(--gold-line);
+}
+/* 展开时让内容等胶囊先张开一半再回来,免得菜单在窄胶囊里被压扁;
+   收起时不等(下面这条只作用于"非收起"态),马上淡出 */
+.site-header:not(.nav-collapsed) .nav-links,
+.site-header:not(.nav-collapsed) .nav-tools,
+.site-header:not(.nav-collapsed) .nav-logo > span {
+  transition-delay: 0.16s;
+}
 
 .nav-logo {
   flex: none;
@@ -75,7 +101,7 @@
   align-items: center;
   gap: 10px;
 }
-/* 品牌文字:滚动收窄时折起来只留 Logo 方块(靠 max-width 过渡,不跳) */
+/* 品牌文字:收成圆圈时折起来只留 Logo 方块(靠 max-width 过渡,不跳) */
 .nav-logo > span {
   display: block;
   max-width: 240px;
@@ -83,12 +109,14 @@
   white-space: nowrap;
   transition: max-width 0.32s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.22s ease;
 }
-.site-header.nav-scrolled .nav-logo > span { max-width: 0; opacity: 0; }
+.site-header.nav-collapsed .nav-logo > span { max-width: 0; opacity: 0; }
 .nav-logo img {
   width: 38px;
   height: 38px;
   border-radius: 10px;
   box-shadow: 0 0 18px rgba(240, 185, 11, 0.28);
+  /* 收成圆圈后悬停会轻轻放大一下,告诉用户"这里可以点" */
+  transition: transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), box-shadow 0.3s ease;
 }
 .nav-logo b {
   font-family: var(--font-display);
@@ -115,6 +143,9 @@
   /* 窗口再窄也不会把按钮挤出胶囊,实在放不下就在菜单内横向滑动 */
   overflow-x: auto;
   scrollbar-width: none;
+  max-width: 100%;   /* 有个基准值,收圆圈的 0 才能被过渡出来 */
+  /* 收成圆圈时整组淡出并压成 0 宽,不和弹簧抢时间 */
+  transition: max-width 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.22s ease;
 }
 .nav-links::-webkit-scrollbar { display: none; }
 .nav-links a {
@@ -131,6 +162,17 @@
 }
 .nav-links a:hover { color: var(--nav-ink); background: var(--chip); }
 .nav-links a.active { color: var(--gold); background: var(--gold-soft); }
+
+/* 右侧控件组:通知铃铛 / 管理后台 / 账号 / 外观 / 汉堡,统一排成一行 */
+.nav-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  transition: max-width 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.22s ease;
+}
 
 /* ---- 外观按钮:玻璃圆钮,点开深色/浅色 + 主题色面板 ---- */
 .theme-toggle {
@@ -271,16 +313,19 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 .site-footer em { color: var(--gold); font-style: normal; opacity: 0.75; transition: color 0.6s ease; }
 .site-footer i { display: inline-block; margin: 0 10px; font-style: normal; opacity: 0.5; }
 
-/* ---- 各子页面共用页头(横幅) ---- */
+/* ---- 各子页面共用页头(横幅) ----
+   玻璃横幅 + 细网格地层 + 四角 HUD 括号 + 呼吸柔光,
+   只靠 CSS 就覆盖全部子页面,页面 HTML 一个字都不用动 */
 .page-hero {
-  padding: 84px 20px 64px;
+  padding: 96px 20px 70px;
   text-align: center;
   position: relative;
   overflow: hidden;
-  /* 玻璃横幅:半透明 + 背景模糊 + 顶部内高光,替掉原来的实色渐变带 */
+  isolation: isolate;   /* 让两个伪元素老老实实待在横幅内部 */
+  /* 玻璃横幅:半透明 + 背景模糊 + 顶部柔光,替掉原来的实色渐变带 */
   background-color: var(--glass-bg);
   background-image: var(--glass-sheen),
-    radial-gradient(circle at 50% -6%, var(--gold-soft), transparent 58%);
+    radial-gradient(120% 150% at 50% -24%, var(--gold-soft), transparent 62%);
   -webkit-backdrop-filter: blur(26px) saturate(180%);
   backdrop-filter: blur(26px) saturate(180%);
   border-bottom: 1px solid var(--glass-brd);
@@ -288,34 +333,142 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   animation: page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; /* 柔和落地 */
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
+
+/* 网格地层:两条渐变轴铺出细网格,顶部最实、往下淡出,像一张摊开的坐标纸 */
+.page-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: 58px 58px;
+  -webkit-mask-image: radial-gradient(128% 96% at 50% 0%, #000 0%, rgba(0, 0, 0, 0.4) 58%, transparent 80%);
+  mask-image: radial-gradient(128% 96% at 50% 0%, #000 0%, rgba(0, 0, 0, 0.4) 58%, transparent 80%);
+  animation: hero-grid 7.5s ease-in-out infinite;
+}
+@keyframes hero-grid {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.85; }
+}
+
+/* HUD 四角括号:八条细线(每角一横一竖)拼出来,纯背景层,不占元素 */
+.page-hero::after {
+  content: "";
+  position: absolute;
+  inset: 26px 30px;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--gold-line), var(--gold-line)),
+    linear-gradient(var(--gold-line), var(--gold-line)),
+    linear-gradient(var(--gold-line), var(--gold-line)),
+    linear-gradient(var(--gold-line), var(--gold-line)),
+    linear-gradient(var(--gold-line), var(--gold-line)),
+    linear-gradient(var(--gold-line), var(--gold-line)),
+    linear-gradient(var(--gold-line), var(--gold-line)),
+    linear-gradient(var(--gold-line), var(--gold-line));
+  background-size:
+    30px 1px, 1px 30px,
+    30px 1px, 1px 30px,
+    30px 1px, 1px 30px,
+    30px 1px, 1px 30px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+}
+
+/* 眉标:小药丸 + 一颗脉冲光点 */
 .page-hero .no {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 15px;
+  border-radius: 999px;
+  background: var(--chip);
+  border: 1px solid var(--gold-line);
   font-family: var(--font-latin);
   color: var(--gold);
-  letter-spacing: 0.5em;      /* 极宽字距:稀疏高级感 */
-  font-size: 0.8rem;
-  font-weight: 500;
+  letter-spacing: 0.3em;      /* 宽字距:稀疏高级感 */
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
-  transition: color 0.6s ease;
+  transition: color 0.6s ease, background-color 0.6s ease, border-color 0.6s ease;
 }
+.page-hero .no::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: hero-dot 2.1s ease-out infinite;
+}
+@keyframes hero-dot {
+  0%   { box-shadow: 0 0 0 0 var(--gold-soft); }
+  70%  { box-shadow: 0 0 0 9px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
 .page-hero h1 {
   font-family: var(--font-display);
   font-weight: 900;           /* 主标题极粗 */
   font-size: clamp(2.4rem, 7vw, 4.2rem);
   line-height: 1.1;
   letter-spacing: 0.08em;
-  margin-top: 14px;
+  margin-top: 20px;
+  /* 标题自带一层柔光,像被灯打亮 */
+  text-shadow: 0 0 46px var(--gold-line), 0 0 14px var(--gold-soft);
   view-transition-name: hero-title; /* 与首页主标题共享元素过渡 */
+  transition: text-shadow 0.6s ease;
 }
+
+/* 副标题:上面压一条中间亮的分割线,线中心再点一颗小菱形 */
 .page-hero p {
+  position: relative;
   color: var(--muted);
-  margin-top: 18px;
+  margin-top: 30px;
+  padding-top: 26px;
   font-family: var(--font-latin);
   font-weight: 300;           /* 副信息细字重,与主标题形成反差 */
   letter-spacing: 0.35em;
   text-transform: uppercase;
   font-size: 0.8rem;
-  opacity: 0.75;
+  opacity: 0.78;
   transition: color 0.6s ease;
+}
+.page-hero p::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(280px, 48vw);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-line), transparent);
+}
+.page-hero p::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--gold);
+  box-shadow: 0 0 12px var(--gold-line);
+}
+
+/* 系统开了"减少动效"就把呼吸和脉冲停掉 */
+@media (prefers-reduced-motion: reduce) {
+  .page-hero::before,
+  .page-hero .no::before { animation: none; }
 }
 
 /* 导航 Logo:子页面之间保持位置稳定 */
@@ -387,6 +540,12 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 
   .section { padding: 48px 0; }
   .section-title { font-size: 1.5rem; }
+
+  /* 手机上把页头的上下留白收一收,四角括号也跟着缩 */
+  .page-hero { padding: 86px 18px 58px; }
+  .page-hero::after { inset: 18px 20px; }
+  .page-hero h1 { margin-top: 16px; }
+  .page-hero p { margin-top: 24px; padding-top: 22px; }
 
   /* 手机导航条挤不下文字:账号入口只留图标 / 头像 */
   .nav-account { padding: 0 11px; }

@@ -760,14 +760,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-1";
+const SPLASH_VERSION = "2026-10-05-2";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "导航栏改成了悬浮胶囊，往下滚动会「收紧」，试着滑一下看看。";
+const SPLASH_LEAD = "导航栏现在会收成左边的一个小圆圈，点一下就能展开。";
 const SPLASH_NOTES = [
-  "导航栏重新排版：品牌在左、菜单靠右，当前页铺一层底色，不再挤成一排",
-  "往下滚动时胶囊收窄变实、顶部浮出一层柔和遮罩，滑回顶部再展开",
-  "（上一版）班级成就：个人主页的「笔杆子 / 人气王 / 社交达人」三个称号",
+  "往下滚动时整条导航收成左边一个小圆圈，只留 Logo；点圆圈就地展开，点空白处收回，滑回顶部自动展开",
+  "全站子页面换了页头：细网格地层 + 四角描金括号 + 脉冲眉标 + 标题柔光，副标题上多了一条点着小菱形的分割线",
+  "（上一版）导航栏重新排版：品牌在左、菜单靠右，当前页铺一层底色",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -842,24 +842,26 @@ document.addEventListener("DOMContentLoaded", () => {
           (n) => `<a href="${n.href}" data-nav ${n.href === current ? 'class="active"' : ""}>${n.label}</a>`
         ).join("")}
       </nav>
-      <button id="nav-bell" class="nav-bell" type="button" aria-label="消息通知" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M18 9a6 6 0 0 0-12 0c0 4.6-1.8 5.8-1.8 5.8h15.6S18 13.6 18 9Z"></path>
-          <path d="M10.2 18.6a2 2 0 0 0 3.6 0"></path>
-        </svg>
-        <span class="bell-dot" id="bell-dot" hidden></span>
-      </button>
-      <a class="nav-admin" id="nav-admin" href="admin.html" data-nav hidden>管理后台</a>
-      <a class="nav-account" id="nav-account" href="account.html" data-nav></a>
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="外观：深色 / 浅色与主题色" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="8.6"></circle>
-          <path d="M12 3.4v17.2a8.6 8.6 0 0 0 0-17.2Z" fill="currentColor" stroke="none" opacity=".55"></path>
-        </svg>
-      </button>
-      <button id="nav-toggle" class="nav-toggle" aria-label="打开菜单" data-nav>
-        <span></span><span></span><span></span>
-      </button>
+      <div class="nav-tools">
+        <button id="nav-bell" class="nav-bell" type="button" aria-label="消息通知" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 9a6 6 0 0 0-12 0c0 4.6-1.8 5.8-1.8 5.8h15.6S18 13.6 18 9Z"></path>
+            <path d="M10.2 18.6a2 2 0 0 0 3.6 0"></path>
+          </svg>
+          <span class="bell-dot" id="bell-dot" hidden></span>
+        </button>
+        <a class="nav-admin" id="nav-admin" href="admin.html" data-nav hidden>管理后台</a>
+        <a class="nav-account" id="nav-account" href="account.html" data-nav></a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="外观：深色 / 浅色与主题色" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.6"></circle>
+            <path d="M12 3.4v17.2a8.6 8.6 0 0 0 0-17.2Z" fill="currentColor" stroke="none" opacity=".55"></path>
+          </svg>
+        </button>
+        <button id="nav-toggle" class="nav-toggle" aria-label="打开菜单" data-nav>
+          <span></span><span></span><span></span>
+        </button>
+      </div>
     </div>`;
   document.body.prepend(header);
 
@@ -870,10 +872,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (adminLink && links) links.appendChild(adminLink);
   }
 
-  // ---- 灵动岛:滚动后胶囊收窄 + 变实底,顶部铺一层柔性遮罩 ----
-  // 几何(收窄)交给弹簧插值,视觉(底色/投影/遮罩)交给 CSS 过渡 —— 两者解耦,
-  // 背景不会跟着弹簧的尾巴慢半拍。收敛后立刻停机,不跑常驻动画循环。
-  // 首页第一屏是视频,导航有另一套深色逻辑,这里刻意用 nav-scrolled 这个类名避开。
+  // ---- 灵动岛:滚下去之后,整条导航收成左边的一个小圆圈 ----
+  //   几何(宽度/内边距/左移)交给弹簧插值,视觉(底色/投影/遮罩/内容显隐)交给 CSS 过渡,
+  //   两者解耦 —— 背景不会跟着弹簧的尾巴慢半拍。收敛后立刻停机,不跑常驻动画循环。
+  //   首页第一屏是视频,导航有另一套深色逻辑,这里刻意用 nav-scrolled 这个类名避开。
+  //   收成圆圈后只剩 Logo,点一下就地展开(再点一次或点空白处收回),滚回顶部自动展开。
   (function () {
     const nav = header.querySelector(".nav");
     if (!nav) return;
@@ -882,18 +885,38 @@ document.addEventListener("DOMContentLoaded", () => {
     const poster = document.body.classList.contains("poster")
       ? document.getElementById("poster")
       : null;
-    const THRESHOLD = 64;   // 普通页面:滚过 64px 就收起
-    const W_FULL = 1120;    // 展开宽度(与 --maxw 一致)
-    const W_TIGHT = 980;    // 收起宽度
-    const STIFF = 170;      // 弹簧刚度
-    const DAMP = 26;        // 阻尼
+    const THRESHOLD = 64;        // 普通页面:滚过 64px 就收起
+    const W_FULL = 1120;         // 展开宽度(与 --maxw 一致)
+    const W_CIRCLE = 56;         // 收成的小圆直径
+    const PAD_L_FULL = 16, PAD_R_FULL = 10, PAD_CIRCLE = 8;
+    const H_FULL = 58, H_CIRCLE = 56;
+    const STIFF = 170;           // 弹簧刚度
+    const DAMP = 26;             // 阻尼
 
     let x = 0, v = 0, target = 0, raf = 0, lastT = 0;
+    let scrolled = false, opened = false, cw = 0;
+
     const isSmall = () => matchMedia("(max-width: 900px)").matches;
 
+    // 导航可用宽度 = 外壳内容盒宽(圆圈的终点要贴着左边)
+    function measure() {
+      const cs = getComputedStyle(header);
+      cw = header.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    }
+
     function paint(p) {
-      // 窄窗不做收窄(整宽本来就小于收起宽度),交给 CSS 的整宽处理
-      nav.style.maxWidth = isSmall() ? "" : Math.round(W_FULL + (W_TIGHT - W_FULL) * p) + "px";
+      if (isSmall()) {
+        nav.style.cssText = "";
+        return;
+      }
+      const w = W_FULL + (W_CIRCLE - W_FULL) * p;
+      const wReal = Math.min(w, cw);                 // 窗口比展开宽度还窄时,盒子本来就是满宽
+      nav.style.maxWidth = Math.round(w) + "px";
+      nav.style.height = Math.round(H_FULL + (H_CIRCLE - H_FULL) * p) + "px";
+      nav.style.paddingLeft = Math.round(PAD_L_FULL + (PAD_CIRCLE - PAD_L_FULL) * p) + "px";
+      nav.style.paddingRight = Math.round(PAD_R_FULL + (PAD_CIRCLE - PAD_R_FULL) * p) + "px";
+      // 从"居中"滑到"贴左":p=1 时左边缘正好落在 0
+      nav.style.transform = "translateX(" + (-(cw - wReal) / 2 * p).toFixed(1) + "px)";
     }
 
     function step(now) {
@@ -914,12 +937,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function apply() {
       const y = window.pageYOffset || document.documentElement.scrollTop || 0;
-      const on = poster ? y > poster.offsetHeight - 80 : y > THRESHOLD;
-      target = on ? 1 : 0;
-      header.classList.toggle("nav-scrolled", on);
+      scrolled = poster ? y > poster.offsetHeight - 80 : y > THRESHOLD;
+      if (!scrolled) opened = false;                 // 回到顶部就复位,下次滚下来照常收
+      const collapsed = scrolled && !opened && !isSmall();
+      target = collapsed ? 1 : 0;
+      // 类名分两层:nav-scrolled 只管"实底 + 遮罩"(手机也一样),nav-collapsed 只管"收成圆圈"
+      header.classList.toggle("nav-scrolled", scrolled);
+      header.classList.toggle("nav-collapsed", collapsed);
+      nav.title = collapsed ? "展开导航" : "";
       if (reduce) { x = target; v = 0; paint(x); return; }
       if (!raf) { lastT = 0; raf = requestAnimationFrame(step); }
     }
+
+    // 收起状态下点圆圈 = 就地展开(展开后点页面空白处收回)
+    nav.addEventListener("click", (e) => {
+      if (!header.classList.contains("nav-collapsed")) return;
+      e.preventDefault();
+      opened = true;
+      apply();
+    });
+    // 展开着的时候点空白处,收回去
+    document.addEventListener("click", (e) => {
+      if (!opened || nav.contains(e.target)) return;
+      opened = false;
+      apply();
+    });
 
     let ticking = false;
     addEventListener("scroll", () => {
@@ -927,7 +969,8 @@ document.addEventListener("DOMContentLoaded", () => {
       ticking = true;
       requestAnimationFrame(() => { ticking = false; apply(); });
     }, { passive: true });
-    addEventListener("resize", apply, { passive: true });
+    addEventListener("resize", () => { measure(); apply(); }, { passive: true });
+    measure();
     apply();
   })();
 
