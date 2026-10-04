@@ -26,7 +26,7 @@
     if (el) el.addEventListener(ev, fn);
   };
 
-  const state = { page: 1, totalPages: 1, images: [], busy: false, user: null, openReply: 0 };
+  const state = { page: 1, totalPages: 1, images: [], busy: false, user: null, openReply: 0, visibility: "public" };
   const els = {};
   // 每个内联回复框自己的待传图片:form 元素 → [ {blob,url} ]
   const replyImages = new Map();
@@ -132,7 +132,9 @@
     const uid = p.author && p.author.id;
     const href = uid ? `u.html?id=${uid}` : "";
     const face = avatarHTML(p.author);
-    const name = `<span class="story-name">${esc(p.name)}${badgeHTML(p.author)}</span>`;
+    // 「仅本班」的帖子挂个小标签,让发的人自己看得出这条只有登录的人能看
+    const vis = p.visibility === "class" ? '<em class="vis-badge">仅本班</em>' : "";
+    const name = `<span class="story-name">${esc(p.name)}${vis}${badgeHTML(p.author)}</span>`;
     return `<div class="story-head">
       ${href ? `<a class="story-face-link" href="${href}">${face}</a>` : face}
       <div class="story-who">
@@ -208,7 +210,9 @@
 
   function renderPager(total) {
     if (!els.pager) return;
-    const show = !CFG.compact && total > 0 && state.totalPages > 1;
+    // 只要有人写过就把分页条亮出来(和隔壁一样「第 1 / 1 页」),
+    // 不再是「超过一页才出现」,这样人少时也看得出这里是分页的
+    const show = !CFG.compact && total > 0;
     els.pager.hidden = !show;
     if (els.pageInfo) els.pageInfo.textContent = `第 ${state.page} / ${state.totalPages} 页`;
     if (els.prev) els.prev.disabled = state.page <= 1;
@@ -485,7 +489,7 @@
       await api(API + "/posts", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body: body, images: keys }),
+        body: JSON.stringify({ body: body, images: keys, visibility: state.visibility }),
       });
 
       state.images.forEach((it) => URL.revokeObjectURL(it.url));
@@ -582,10 +586,20 @@
     els.meName = $("#me-name");
     els.meAvatar = $("#me-avatar");
     els.meSig = $("#me-sig");
+    els.visPick = $("#vis-pick");
 
     on(els.form, "submit", onSubmit);
     on(els.pickBtn, "click", () => els.file && els.file.click());
     on(els.file, "change", onPick);
+    // 可见性切换:全部可见 / 仅本班可见(登录的人才能发,所以不担心游客乱选)
+    on(els.visPick, "click", (e) => {
+      const opt = e.target.closest("[data-vis]");
+      if (!opt) return;
+      state.visibility = opt.getAttribute("data-vis") === "class" ? "class" : "public";
+      els.visPick
+        .querySelectorAll("[data-vis]")
+        .forEach((b) => b.classList.toggle("active", b === opt));
+    });
     on(els.prev, "click", () => goto(state.page - 1));
     on(els.next, "click", () => goto(state.page + 1));
 

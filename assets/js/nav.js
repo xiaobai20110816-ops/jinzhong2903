@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "dormitory.html", label: "宿舍风采" },
   { href: "moments.html", label: "高光时刻" },
   { href: "story.html", label: "103 纪事" },
+  { href: "rank.html", label: "活跃榜" },
   { href: "announcements.html", label: "班级公告" },
 ];
 
@@ -491,6 +492,13 @@ document.addEventListener("DOMContentLoaded", () => {
           (n) => `<a href="${n.href}" data-nav ${n.href === current ? 'class="active"' : ""}>${n.label}</a>`
         ).join("")}
       </nav>
+      <button id="nav-bell" class="nav-bell" type="button" aria-label="消息通知" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 9a6 6 0 0 0-12 0c0 4.6-1.8 5.8-1.8 5.8h15.6S18 13.6 18 9Z"></path>
+          <path d="M10.2 18.6a2 2 0 0 0 3.6 0"></path>
+        </svg>
+        <span class="bell-dot" id="bell-dot" hidden></span>
+      </button>
       <a class="nav-admin" id="nav-admin" href="admin.html" data-nav hidden>管理后台</a>
       <a class="nav-account" id="nav-account" href="account.html" data-nav></a>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换深色 / 浅色模式">
@@ -537,6 +545,129 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---- 账号:先按未登录渲染,再问服务器要真实状态 ----
   renderAccount();
   C103Auth.refresh();
+
+  // ---- 消息通知:导航栏的小铃铛 + 下拉面板 ----
+  const bell = document.getElementById("nav-bell");
+  const dot = document.getElementById("bell-dot");
+  const panel = document.createElement("div");
+  panel.id = "notif-panel";
+  panel.className = "notif-panel";
+  panel.hidden = true;
+  panel.innerHTML = `
+    <div class="notif-head"><b>消息</b><button type="button" class="notif-x" id="notif-close" aria-label="关闭">×</button></div>
+    <div class="notif-list" id="notif-list"></div>`;
+  document.body.appendChild(panel);
+  const notifList = panel.querySelector("#notif-list");
+
+  const NOTIF_TEXT = { reply: "回复了你", wall: "在你主页留了言", like: "赞了你的主页" };
+
+  function fmtAgo(ms) {
+    const d = Date.now() - ms;
+    if (d < 60000) return "刚刚";
+    if (d < 3600000) return Math.floor(d / 60000) + " 分钟前";
+    if (d < 86400000) return Math.floor(d / 3600000) + " 小时前";
+    if (d < 604800000) return Math.floor(d / 86400000) + " 天前";
+    const x = new Date(ms);
+    return x.getMonth() + 1 + " 月 " + x.getDate() + " 日";
+  }
+
+  // 点通知跳哪儿:回复去留言板,留言/点赞去我的主页
+  function notifLink(n) {
+    if (n.type === "wall") return "u.html?id=" + (n.wall_id || 0);
+    if (n.type === "like") return "u.html?id=" + ((C103Auth.user && C103Auth.user.id) || "");
+    return "story.html";
+  }
+
+  function renderNotif(items) {
+    if (!items.length) {
+      notifList.innerHTML = '<p class="notif-empty">还没有新消息</p>';
+      return;
+    }
+    notifList.innerHTML = items
+      .map((n) => {
+        const a = n.actor;
+        const face =
+          a && a.avatar
+            ? `<img class="notif-face" src="${API}/img/${esc(a.avatar)}" alt="">`
+            : `<span class="notif-face notif-letter">${esc(a ? a.name.slice(0, 1) : "?")}</span>`;
+        const who = a ? esc(a.name) : "有人";
+        return `<a class="notif-item${n.read ? "" : " unread"}" href="${notifLink(n)}" data-nid="${n.id}">
+          ${face}
+          <span class="notif-body">
+            <span class="notif-t"><b>${who}</b> ${NOTIF_TEXT[n.type] || "有新动静"}</span>
+            ${n.excerpt ? `<span class="notif-quote">${esc(n.excerpt)}</span>` : ""}
+            <span class="notif-time">${fmtAgo(n.created_at)}</span>
+          </span>
+        </a>`;
+      })
+      .join("");
+  }
+
+  function setDot(n) {
+    if (!dot) return;
+    if (n > 0) {
+      dot.hidden = false;
+      dot.textContent = n > 99 ? "99+" : String(n);
+    } else dot.hidden = true;
+  }
+
+  async function loadNotif() {
+    if (!C103Auth.user) {
+      if (bell) bell.hidden = true;
+      setDot(0);
+      return;
+    }
+    if (bell) bell.hidden = false;
+    try {
+      const d = await apiFetch(API + "/notifications");
+      setDot(d.unread || 0);
+      renderNotif(d.items || []);
+    } catch (e) {
+      /* 通知拉不到不影响任何事 */
+    }
+  }
+
+  function closeNotif() {
+    panel.classList.remove("in");
+    setTimeout(() => {
+      panel.hidden = true;
+    }, 220);
+  }
+
+  async function openNotif() {
+    panel.hidden = false;
+    requestAnimationFrame(() => panel.classList.add("in"));
+    // 打开就算读过了,红点立刻清掉
+    if (dot && !dot.hidden) {
+      setDot(0);
+      notifList.querySelectorAll(".notif-item.unread").forEach((el) => el.classList.remove("unread"));
+      try {
+        await apiFetch(API + "/notifications", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ all: true }),
+        });
+      } catch (e) {
+        /* 没标上也无所谓 */
+      }
+    }
+  }
+
+  if (bell) {
+    bell.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (panel.hidden) openNotif();
+      else closeNotif();
+    });
+    panel.querySelector("#notif-close").addEventListener("click", closeNotif);
+    document.addEventListener("click", (e) => {
+      if (panel.hidden) return;
+      if (panel.contains(e.target) || e.target === bell || bell.contains(e.target)) return;
+      closeNotif();
+    });
+  }
+  // 登录状态一变就重新拉一遍(没登录会自动把铃铛藏起来)
+  C103Auth.onChange(() => loadNotif());
 
   // ---- 10.3 开屏弹窗 ----
   showSplash();

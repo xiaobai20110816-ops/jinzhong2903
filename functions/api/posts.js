@@ -21,6 +21,7 @@ import {
   IMAGE_KEY_RE,
   regionOf,
   POST_COLS,
+  notify,
 } from "./_utils.js";
 
 const PAGE_SIZE = 20;
@@ -96,9 +97,11 @@ export async function onRequestGet({ request, env }) {
 
   // ---- 主留言板 / 某个人的主帖 ----
   // 分页分的是「主帖」,回复跟着主帖一起出来,不会被翻页截断
+  const me = await currentUser(request, env);
+  const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
   const where = authorId
-    ? "parent_id IS NULL AND wall_id IS NULL AND user_id = ?"
-    : "parent_id IS NULL AND wall_id IS NULL";
+    ? "parent_id IS NULL AND wall_id IS NULL AND user_id = ?" + visOnly
+    : "parent_id IS NULL AND wall_id IS NULL" + visOnly;
   const bindWhere = authorId ? [authorId] : [];
 
   const totalRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM posts WHERE ${where}`)
@@ -181,6 +184,8 @@ export async function onRequestPost({ request, env }) {
     .slice(0, MAX_IMAGES);
   const replyTo = parseInt(payload.reply_to_id, 10) || 0;
   const wallId = parseInt(payload.wall, 10) || 0;
+  // 可见性只对「主帖」有意义:回复跟随主帖,留言墙一律公开
+  const visibility = payload.visibility === "class" ? "class" : "public";
 
   if (!body && images.length === 0) return fail("写点什么，或者放张图吧");
 
@@ -204,11 +209,20 @@ export async function onRequestPost({ request, env }) {
 
     const regionWall = regionOf(request);
     const resWall = await env.DB.prepare(
-      `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, created_at)
-       VALUES (?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, NULL, 0, ?, ?)`
+      `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, created_at)
+       VALUES (?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, NULL, 0, ?, 'public', ?)`
     )
       .bind(me.name, body, JSON.stringify(images), me.id, regionWall, wallId, nowWall)
       .run();
+
+    // 在别人主页留言 → 通知主页的主人
+    await notify(env.DB, {
+      userId: wallId,
+      actorId: me.id,
+      type: "wall",
+      wallId: wallId,
+      excerpt: body || "[图片]",
+    });
 
     return json({
       ok: true,
@@ -232,12 +246,16 @@ export async function onRequestPost({ request, env }) {
 
   // 回复:不管回复的是主帖还是别人,一律挂到主帖下面,回复关系记在 reply_to_id
   let parentId = null;
+  let replyTarget = null;
   if (replyTo) {
-    const target = await env.DB.prepare("SELECT id, parent_id FROM posts WHERE id = ?")
+    const target = await env.DB.prepare(
+      "SELECT id, parent_id, user_id FROM posts WHERE id = ?"
+    )
       .bind(replyTo)
       .first();
     if (!target) return fail("要回复的那条已经不在了，刷新一下再看看");
     parentId = target.parent_id || target.id;
+    replyTarget = target;
   }
 
   const now = Date.now();
@@ -255,10 +273,11 @@ export async function onRequestPost({ request, env }) {
   // IP 属地:只算到省份;服主发的主帖自动置顶
   const region = regionOf(request);
   const pinned = me.role === "owner" && !parentId ? 1 : 0;
+  const vis = parentId ? "public" : visibility; // 回复跟随主帖,自己不单独设可见性
 
   const res = await env.DB.prepare(
-    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, created_at)
-     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?)`
+    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, created_at)
+     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?, ?)`
   )
     .bind(
       me.name,
@@ -269,9 +288,21 @@ export async function onRequestPost({ request, env }) {
       region,
       replyTo || null,
       pinned,
+      vis,
       now
     )
     .run();
+
+  // 回复了谁 → 通知谁(自己回自己不记)
+  if (replyTarget) {
+    await notify(env.DB, {
+      userId: replyTarget.user_id,
+      actorId: me.id,
+      type: "reply",
+      postId: parentId,
+      excerpt: body || "[图片]",
+    });
+  }
 
   return json({
     ok: true,
@@ -285,6 +316,7 @@ export async function onRequestPost({ request, env }) {
       reply_to_id: replyTo,
       pinned,
       wall_id: 0,
+      visibility: vis,
       author: me,
       reply_to_name: "",
       replies: [],

@@ -5,7 +5,7 @@
    一人对一人只有一条记录,靠 (from_id, to_id) 联合主键去重。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser } from "../../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, notify } from "../../_utils.js";
 
 export async function onRequestPost({ request, env, params }) {
   if (!env.DB) return notReady("数据库");
@@ -42,6 +42,8 @@ export async function onRequestPost({ request, env, params }) {
       .bind(me.id, id, Date.now())
       .run();
     liked = 1;
+    // 赞了别人 → 告诉 TA 一声(取消赞不重复通知)
+    await notify(env.DB, { userId: id, actorId: me.id, type: "like", excerpt: "" });
   }
 
   const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM profile_likes WHERE to_id = ?")

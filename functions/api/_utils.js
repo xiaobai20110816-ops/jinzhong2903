@@ -71,7 +71,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-04.2";
+const SCHEMA_VERSION = "2026-10-04.4";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -130,6 +130,7 @@ export function ensureSchema(db) {
       await addColumn(db, "posts", "reply_to_id", "INTEGER"); // B 站式回复:回复的是哪一条
       await addColumn(db, "posts", "pinned", "INTEGER DEFAULT 0");
       await addColumn(db, "posts", "wall_id", "INTEGER");      // 挂在谁的「个人主页留言墙」下(主留言板为 NULL)
+      await addColumn(db, "posts", "visibility", "TEXT DEFAULT 'public'"); // 'public' 所有人可见 / 'class' 仅本班(登录)可见
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_parent ON posts(parent_id, created_at)`)
         .run();
@@ -222,6 +223,29 @@ export function ensureSchema(db) {
              value TEXT,
              updated_at INTEGER NOT NULL
            )`
+        )
+        .run();
+
+      // ---- 互动通知:谁回复了我 / 谁在我主页留了言 / 谁赞了我 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS notifications (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             user_id INTEGER NOT NULL,
+             actor_id INTEGER,
+             type TEXT NOT NULL,
+             post_id INTEGER,
+             wall_id INTEGER,
+             excerpt TEXT,
+             read INTEGER NOT NULL DEFAULT 0,
+             created_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+      // 只查「我的、未读的、最新的」,这三列一起建索引最省
+      await db
+        .prepare(
+          `CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC)`
         )
         .run();
 
@@ -403,7 +427,7 @@ export async function loadThread(db, rootIds) {
 
 /* 列表要读的列:集中一处,加字段时不会漏掉某条 SQL */
 export const POST_COLS =
-  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, wall_id, created_at";
+  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, created_at";
 
 /* 一行数据库记录 → 前端要的样子 */
 export function toPost(row) {
@@ -417,6 +441,7 @@ export function toPost(row) {
     reply_to_id: row.reply_to_id || 0,
     pinned: row.pinned ? 1 : 0,
     wall_id: row.wall_id || 0,
+    visibility: row.visibility === "class" ? "class" : "public",
     created_at: row.created_at,
   };
 }
@@ -502,4 +527,35 @@ export async function getSetting(db, key) {
     .first()
     .catch(() => null);
   return row ? String(row.value || "") : "";
+}
+
+/* ============================================================
+   互动通知
+   谁回复了我的帖子 / 谁在我主页留言 / 谁赞了我 —— 记一行给「我」。
+   自己对自己做的事不记;通知只是锦上添花,失败一律吞掉,绝不影响主流程。
+   ============================================================ */
+
+export async function notify(db, opts) {
+  const userId = parseInt(opts.userId, 10) || 0;
+  const actorId = parseInt(opts.actorId, 10) || 0;
+  if (!userId || userId === actorId) return;
+  try {
+    await db
+      .prepare(
+        `INSERT INTO notifications (user_id, actor_id, type, post_id, wall_id, excerpt, read, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
+      )
+      .bind(
+        userId,
+        actorId,
+        String(opts.type || ""),
+        parseInt(opts.postId, 10) || null,
+        parseInt(opts.wallId, 10) || null,
+        String(opts.excerpt || "").slice(0, 120),
+        Date.now()
+      )
+      .run();
+  } catch (e) {
+    /* 记不上就算了,别让通知拖垮正经业务 */
+  }
 }

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 班级活跃榜">
+  <title>活跃榜 · 103班 音乐领军班</title>
+  <meta name="view-transition" content="same-origin">
+  <meta name="theme-color" content="#070b14">
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <style>
+    /* 顶部四个总览数字 */
+    .rk-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      max-width: 760px;
+      margin: 0 auto 34px;
+    }
+    .rk-stat {
+      text-align: center;
+      padding: 18px 10px;
+      border-radius: 16px;
+      background: var(--glass-surface);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      backdrop-filter: blur(26px) saturate(180%);
+      border: 1px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+      transition: background-color 0.6s ease, border-color 0.6s ease;
+    }
+    .rk-stat b {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 1.7rem;
+      font-weight: 900;
+      color: var(--gold);
+    }
+    .rk-stat span { font-size: 0.74rem; letter-spacing: 0.08em; color: var(--faint); }
+
+    .rk-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+      gap: 18px;
+    }
+    .rk-card {
+      padding: 20px 18px;
+      border-radius: 18px;
+      background: var(--glass-surface);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      backdrop-filter: blur(26px) saturate(180%);
+      border: 1px solid var(--glass-brd);
+      box-shadow: var(--glass-rim);
+      transition: background-color 0.6s ease, border-color 0.6s ease;
+    }
+    .rk-card h3 {
+      font-family: var(--font-display);
+      font-size: 0.98rem;
+      letter-spacing: 1.5px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .rk-card .rk-sub { font-size: 0.72rem; color: var(--faint); margin-bottom: 14px; }
+
+    .rk-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 8px 4px;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: background-color 0.25s ease;
+    }
+    .rk-row:hover { background: var(--chip); }
+    .rk-no {
+      flex: none;
+      width: 22px;
+      text-align: center;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 0.9rem;
+      color: var(--faint);
+    }
+    .rk-row.top1 .rk-no { color: #f0b90b; }
+    .rk-row.top2 .rk-no { color: #b9c2d6; }
+    .rk-row.top3 .rk-no { color: #d08a4a; }
+    .rk-face {
+      flex: none;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 0.9rem;
+      color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+    }
+    .rk-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.86rem;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rk-name em {
+      font-style: normal;
+      margin-left: 6px;
+      padding: 0 7px;
+      border-radius: 999px;
+      font-size: 0.6rem;
+      letter-spacing: 1px;
+    }
+    .rk-name em.owner { color: #0b0f1a; background: linear-gradient(120deg, var(--gold), var(--gold-2)); }
+    .rk-name em.admin { color: var(--gold); border: 1px solid var(--gold-line); }
+    .rk-n {
+      flex: none;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.86rem;
+      color: var(--gold-2);
+    }
+    .rk-hot { grid-column: 1 / -1; }
+    .rk-hot-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 11px 4px;
+      border-top: 1px solid var(--line);
+      text-decoration: none;
+    }
+    .rk-hot-row:first-of-type { border-top: none; }
+    .rk-hot-row:hover .rk-hot-body { color: var(--text); }
+    .rk-hot-body {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.86rem;
+      line-height: 1.7;
+      color: var(--muted);
+      transition: color 0.3s ease;
+    }
+    .rk-hot-meta { font-size: 0.68rem; color: var(--faint); margin-top: 3px; }
+    .rk-hot-n {
+      flex: none;
+      font-family: var(--font-display);
+      font-size: 0.8rem;
+      color: var(--gold);
+      white-space: nowrap;
+    }
+    .rk-empty { padding: 24px 0; text-align: center; font-size: 0.8rem; color: var(--faint); }
+
+    .thanks { text-align: center; margin-top: 40px; }
+    .thanks-title {
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      letter-spacing: 8px;
+      text-indent: 8px;
+      color: var(--gold);
+    }
+    .thanks-title::before,
+    .thanks-title::after {
+      content: "";
+      display: inline-block;
+      width: 42px;
+      height: 1px;
+      background: var(--gold-line);
+      vertical-align: middle;
+      margin: 0 14px;
+    }
+    .credit { margin-top: 18px; text-align: center; font-size: 0.72rem; letter-spacing: 2px; color: var(--muted); opacity: 0.42; }
+
+    @media (max-width: 620px) {
+      .rk-stats { grid-template-columns: repeat(2, 1fr); }
+      .rk-stat b { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Ranking</div>
+    <h1><span class="gold-text">班级活跃榜</span></h1>
+    <p>谁在认真写，谁的帖子最热闹</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="rk-stats" id="rk-stats"></div>
+      <div class="rk-grid" id="rk-grid">
+        <p class="rk-empty">正在统计…</p>
+      </div>
+
+      <div class="thanks">
+        <p class="thanks-title">鸣谢</p>
+        <p class="credit">小柏制作</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // 活跃榜:全部数据来自 GET /api/rank,不发任何写请求
+    document.addEventListener("DOMContentLoaded", () => {
+      const statsBox = document.getElementById("rk-stats");
+      const gridBox = document.getElementById("rk-grid");
+      if (!statsBox || !gridBox) return;
+
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      const API = "api";
+      const ROLE_LABEL = { owner: "服主", admin: "管理员" };
+
+      const face = (p, cls) =>
+        p.avatar
+          ? `<img class="${cls}" src="${API}/img/${esc(p.avatar)}" alt="" loading="lazy">`
+          : `<span class="${cls}">${esc((p.name || "?").slice(0, 1))}</span>`;
+
+      const roleTag = (p) =>
+        ROLE_LABEL[p.role] ? `<em class="${esc(p.role)}">${ROLE_LABEL[p.role]}</em>` : "";
+
+      function rows(list, unit) {
+        if (!list.length) return '<p class="rk-empty">还没有人上榜，第一个就是你。</p>';
+        return list
+          .map(
+            (p, i) => `<a class="rk-row${i < 3 ? " top" + (i + 1) : ""}" href="u.html?id=${p.id}">
+              <span class="rk-no">${i + 1}</span>
+              ${face(p, "rk-face")}
+              <span class="rk-name">${esc(p.name)}${roleTag(p)}</span>
+              <span class="rk-n">${p.n === undefined ? "" : p.n + unit}</span>
+            </a>`
+          )
+          .join("");
+      }
+
+      function hot(list) {
+        if (!list.length) return '<p class="rk-empty">还没有热闹起来的帖子。</p>';
+        return list
+          .map(
+            (h) => `<a class="rk-hot-row" href="story.html">
+              <span class="rk-hot-body">
+                ${esc(h.name)}：${esc(h.excerpt) || "（图片）"}
+                <span class="rk-hot-meta">${new Date(h.created_at).toLocaleDateString("zh-CN")}</span>
+              </span>
+              <span class="rk-hot-n">${h.replies} 条回复</span>
+            </a>`
+          )
+          .join("");
+      }
+
+      function paint(d) {
+        const t = d.totals || {};
+        statsBox.innerHTML = `
+          <div class="rk-stat"><b>${t.members || 0}</b><span>班内成员</span></div>
+          <div class="rk-stat"><b>${t.posts || 0}</b><span>主帖</span></div>
+          <div class="rk-stat"><b>${t.replies || 0}</b><span>回复</span></div>
+          <div class="rk-stat"><b>${t.likes || 0}</b><span>点赞</span></div>`;
+
+        gridBox.innerHTML = `
+          <div class="rk-card">
+            <h3>发帖榜</h3><p class="rk-sub">谁写下的主帖最多</p>
+            ${rows(d.posters || [], " 帖")}
+          </div>
+          <div class="rk-card">
+            <h3>人气榜</h3><p class="rk-sub">谁的主页被点赞最多</p>
+            ${rows(d.liked || [], " 赞")}
+          </div>
+          <div class="rk-card">
+            <h3>人缘榜</h3><p class="rk-sub">谁的主页留言最多</p>
+            ${rows(d.walled || [], " 条")}
+          </div>
+          <div class="rk-card rk-hot">
+            <h3>最热闹的帖子</h3><p class="rk-sub">回复最多的主帖，点进去接着聊</p>
+            ${hot(d.hot || [])}
+          </div>`;
+      }
+
+      fetch(API + "/rank", { credentials: "same-origin" })
+        .then((r) => r.json().then((d) => ({ ok: r.ok, d: d })))
+        .then(({ ok, d }) => {
+          if (!ok || !d.ok) throw new Error((d && d.error) || "读不到榜单");
+          paint(d);
+        })
+        .catch((err) => {
+          gridBox.innerHTML = '<p class="rk-empty">' + esc(err.message) + "</p>";
+        });
+    });
+  </script>
+</body>
+</html>
