@@ -115,12 +115,16 @@ const GOLD_CHECK =
   '<path d="M7.4 12.4l3.1 3.1 6.1-6.3" fill="none" stroke="#fffdf5" stroke-width="2.5" ' +
   'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
-// 官方认证药丸里的对勾:一枚实心圆 + 对勾,颜色跟着 .nick-cert 走,深浅主题都清楚
+// 官方认证药丸里的对勾:一枚实心圆 + 对勾,圆圈跟药丸文字色走,
+// 对勾色由 CSS 的 --cert-ink 决定(黑底药丸上要反过来用深色勾,不能一律用 --bg0)
 const CERT_SVG =
   '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
   '<circle cx="12" cy="12" r="11" fill="currentColor"></circle>' +
-  '<path d="M7 12.4l3.2 3.2L17 8.8" fill="none" stroke="var(--bg0)" stroke-width="2.6" ' +
+  '<path class="tick" d="M7 12.4l3.2 3.2L17 8.8" fill="none" stroke-width="2.6" ' +
   'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+// 官方认证的三个级别:金 / 红 / 黑。老数据只有头衔没级别,默认按金显示
+const CERT_LEVELS = ["gold", "red", "black"];
 
 const C103Person = {
   /* 该显示的名字:能看真名时用真名,否则账号名 */
@@ -136,11 +140,14 @@ const C103Person = {
   isOwner(person) {
     return !!(person && person.role === "owner");
   },
-  /* 服主官方认证的头衔药丸:没设头衔就返回空串(头衔是公开信息,谁都能看) */
+  /* 服主官方认证的头衔药丸:没设头衔就返回空串(头衔是公开信息,谁都能看)。
+     级别决定配色,金 / 红 / 黑;没写或写了不认识的值一律按金处理 */
   cert(person) {
     const t = person && person.cert_title ? String(person.cert_title).trim() : "";
     if (!t) return "";
-    return '<i class="nick-cert">' + CERT_SVG + esc(t) + "</i>";
+    const raw = person && person.cert_level ? String(person.cert_level).trim().toLowerCase() : "";
+    const lv = CERT_LEVELS.includes(raw) ? raw : "gold";
+    return '<i class="nick-cert is-' + lv + '">' + CERT_SVG + esc(t) + "</i>";
   },
   /* 名字 HTML(已转义)+ 认证勾 + 认证药丸:名字 → 金勾/蓝钩 → 药丸 */
   html(person, fallback) {
@@ -796,13 +803,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-7";
+const SPLASH_VERSION = "2026-10-05-8";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "服主能给成员打官方认证头衔了，个人主页也能上传自己的照片。";
+const SPLASH_LEAD = "官方认证头衔分出金、红、黑三个级别，后台成员页点一下就换档次。";
 const SPLASH_NOTES = [
-  "服主可以给成员打官方认证头衔（如「学校信息部」），头衔以金色小药丸跟在名字后面，全站都能看到",
-  "个人主页新增「我的照片」板块：可以上传最多 9 张自己的照片，也能随时删掉",
+  "官方认证头衔现在分三个级别：金色、红色、黑色，配色不同，头衔文字还是自己写",
+  "后台「成员权限」页签里，每行有三个色点，点一下选中级别，再点「认证」就生效",
+  "原有功能保持不变：个人主页仍可上传最多 9 张自己的照片",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

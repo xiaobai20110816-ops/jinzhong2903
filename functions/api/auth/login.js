@@ -32,7 +32,7 @@ export async function onRequestPost({ request, env }) {
   if (!username || !password) return fail("用户名和密码都要填");
 
   const row = await env.DB.prepare(
-    "SELECT id, username, salt, pass_hash, role, avatar_key, signature, banned, real_name, verified, cert_title, photos FROM users WHERE username = ?"
+    "SELECT id, username, salt, pass_hash, role, avatar_key, signature, banned, real_name, verified, cert_title, cert_level, photos FROM users WHERE username = ?"
   )
     .bind(username)
     .first();

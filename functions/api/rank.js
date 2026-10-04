@@ -20,6 +20,7 @@ function person(r, viewer) {
     verified: u.verified,
     real_name: u.real_name,
     cert_title: u.cert_title,
+    cert_level: u.cert_level,
     n: Number(r.n) || 0,
   };
 }
@@ -40,7 +41,7 @@ export async function onRequestGet({ request, env }) {
   const [posters, liked, walled, hotRows, totalsRow] = await Promise.all([
     // 发主帖最多
     all(
-      `SELECT u.id, u.username, u.avatar_key, u.role, u.real_name, u.verified, u.cert_title, COUNT(*) AS n
+      `SELECT u.id, u.username, u.avatar_key, u.role, u.real_name, u.verified, u.cert_title, u.cert_level, COUNT(*) AS n
          FROM posts p JOIN users u ON u.id = p.user_id
         WHERE p.parent_id IS NULL AND p.wall_id IS NULL AND IFNULL(u.banned, 0) = 0
         GROUP BY u.id
@@ -49,7 +50,7 @@ export async function onRequestGet({ request, env }) {
     ),
     // 被点赞最多
     all(
-      `SELECT u.id, u.username, u.avatar_key, u.role, u.real_name, u.verified, u.cert_title, COUNT(*) AS n
+      `SELECT u.id, u.username, u.avatar_key, u.role, u.real_name, u.verified, u.cert_title, u.cert_level, COUNT(*) AS n
          FROM profile_likes l JOIN users u ON u.id = l.to_id
         WHERE IFNULL(u.banned, 0) = 0
         GROUP BY u.id
@@ -58,7 +59,7 @@ export async function onRequestGet({ request, env }) {
     ),
     // 主页收到留言最多
     all(
-      `SELECT u.id, u.username, u.avatar_key, u.role, u.real_name, u.verified, u.cert_title, COUNT(*) AS n
+      `SELECT u.id, u.username, u.avatar_key, u.role, u.real_name, u.verified, u.cert_title, u.cert_level, COUNT(*) AS n
          FROM posts p JOIN users u ON u.id = p.wall_id
         WHERE p.wall_id IS NOT NULL AND IFNULL(u.banned, 0) = 0
         GROUP BY u.id
@@ -70,7 +71,7 @@ export async function onRequestGet({ request, env }) {
       `SELECT p.id, p.name, p.body, p.created_at, COUNT(r.id) AS n,
               u.id AS a_id, u.username AS a_username, u.avatar_key AS a_avatar,
               u.role AS a_role, u.real_name AS a_real_name, u.verified AS a_verified,
-              u.cert_title AS a_cert_title
+              u.cert_title AS a_cert_title, u.cert_level AS a_cert_level
          FROM posts p JOIN posts r ON r.parent_id = p.id
          LEFT JOIN users u ON u.id = p.user_id
         WHERE p.parent_id IS NULL AND p.wall_id IS NULL
@@ -106,6 +107,7 @@ export async function onRequestGet({ request, env }) {
               real_name: r.a_real_name,
               verified: r.a_verified,
               cert_title: r.a_cert_title,
+              cert_level: r.a_cert_level,
             },
             me
           )
@@ -116,6 +118,7 @@ export async function onRequestGet({ request, env }) {
         real_name: author && author.real_name ? author.real_name : "",
         verified: author && author.verified && author.real_name ? 1 : 0,
         cert_title: author ? author.cert_title : "",
+        cert_level: author ? author.cert_level : "",
         excerpt: String(r.body || "").slice(0, 80),
         replies: Number(r.n) || 0,
         created_at: r.created_at,

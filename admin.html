@@ -332,6 +332,31 @@
       transition: border-color 0.3s ease, background-color 0.4s ease, color 0.6s ease;
     }
     .member .m-cert-input:focus { border-color: var(--gold-line); background: var(--gold-soft); }
+    /* 认证级别:三个色点,点一下换档次(金 / 红 / 黑) */
+    .member .m-cert-lv { display: inline-flex; gap: 4px; }
+    .member .m-cert-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      padding: 0;
+      font-family: var(--font-body);
+      font-size: 0.7rem;
+      line-height: 1;
+      cursor: pointer;
+      color: #fff;
+      opacity: 0.45;
+      transition: opacity 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
+    }
+    .member .m-cert-dot:hover { opacity: 0.8; }
+    .member .m-cert-dot.on {
+      opacity: 1;
+      transform: scale(1.12);
+      box-shadow: 0 0 0 2px var(--bg1), 0 0 0 4px var(--gold-line);
+    }
+    .member .m-cert-dot.lv-gold { background: linear-gradient(135deg, #ffd76a, #d99b06); color: #3a2a00; }
+    .member .m-cert-dot.lv-red { background: linear-gradient(135deg, #ff7b72, #c9262f); }
+    .member .m-cert-dot.lv-black { background: linear-gradient(135deg, #3a3f4a, #0c0e13); border-color: rgba(255, 255, 255, 0.28); }
     /* 删除 / 封禁:危险操作,低调的红,别太扎眼但要点得清楚 */
     .member .m-del {
       font-family: var(--font-body);
@@ -1087,10 +1112,33 @@
         });
         return btn;
       }
-      /* 官方认证头衔:只有服主能改,留空点按钮 = 清除认证 */
+      /* 官方认证头衔:只有服主能改。级别三选一(金/红/黑),留空点按钮 = 清除认证 */
+      const CERT_LEVELS = [
+        { key: "gold", txt: "金", tip: "金色认证" },
+        { key: "red", txt: "红", tip: "红色认证" },
+        { key: "black", txt: "黑", tip: "黑色认证" },
+      ];
       function certBox(u) {
         const box = document.createElement("span");
         box.className = "m-cert";
+        // 级别选择:三个色点,点一下换档次;头衔为空时整排藏起来(没头衔就无所谓级别)
+        const lvBox = document.createElement("span");
+        lvBox.className = "m-cert-lv";
+        let level = CERT_LEVELS.some((l) => l.key === u.cert_level) ? u.cert_level : "gold";
+        const dots = CERT_LEVELS.map((l) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "m-cert-dot lv-" + l.key + (l.key === level ? " on" : "");
+          b.dataset.lv = l.key;
+          b.title = l.tip;
+          b.textContent = l.txt;
+          b.addEventListener("click", () => {
+            level = l.key;
+            dots.forEach((d) => d.classList.toggle("on", d.dataset.lv === level));
+          });
+          lvBox.appendChild(b);
+          return b;
+        });
         const input = document.createElement("input");
         input.type = "text";
         input.className = "m-cert-input";
@@ -1100,21 +1148,29 @@
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "m-btn";
-        const sync = () => { btn.textContent = input.value.trim() ? "认证" : "清除认证"; };
+        const sync = () => {
+          const filled = !!input.value.trim();
+          btn.textContent = filled ? "认证" : "清除认证";
+          lvBox.style.display = filled ? "" : "none";
+        };
         sync();
         input.addEventListener("input", sync);
         const submit = () => {
           const title = input.value.trim();
+          const label = (CERT_LEVELS.find((l) => l.key === level) || {}).txt || "金";
           runMemberOp(
             btn,
-            title ? `已给「${u.name}」加上官方认证「${title}」` : `已清除「${u.name}」的官方认证`,
-            () => patchUser(u.id, { cert_title: title })
+            title
+              ? `已给「${u.name}」加上${label}色官方认证「${title}」`
+              : `已清除「${u.name}」的官方认证`,
+            () => patchUser(u.id, { cert_title: title, cert_level: title ? level : "" })
           );
         };
         btn.addEventListener("click", submit);
         input.addEventListener("keydown", (e) => {
           if (e.key === "Enter") { e.preventDefault(); submit(); }
         });
+        box.appendChild(lvBox);
         box.appendChild(input);
         box.appendChild(btn);
         return box;
@@ -1478,14 +1534,14 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 12483,
+        total: 12607,
         files: 43,
         updated: "2026-10-05",
         parts: [
-          { name: "页面 HTML", lines: 4630 },
-          { name: "样式 CSS", lines: 3289 },
-          { name: "前端 JS", lines: 1975 },
-          { name: "后端 Functions", lines: 2584 },
+          { name: "页面 HTML", lines: 4686 },
+          { name: "样式 CSS", lines: 3322 },
+          { name: "前端 JS", lines: 1982 },
+          { name: "后端 Functions", lines: 2612 },
           { name: "配置 JSON", lines: 5 },
         ],
       };

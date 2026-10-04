@@ -226,8 +226,11 @@
   filter: drop-shadow(0 0 3px rgba(232, 179, 37, 0.5));
 }
 
-/* 服主官方认证头衔:金色小药丸,跟在名字(和认证勾)后面,全站统一 */
+/* 官方认证头衔:金色小药丸,跟在名字(和认证勾)后面,全站统一。
+   共三个级别 —— 金 / 红 / 黑,只换配色,形状完全一样。
+   基类先按金显示,老数据(只有头衔没级别)也不会掉色 */
 .nick-cert {
+  --cert-ink: #241c00; /* 药丸里那个对勾的颜色,黑底药丸需要反过来用深色 */
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -247,6 +250,40 @@
   transition: color 0.6s ease, background-color 0.6s ease, border-color 0.6s ease;
 }
 .nick-cert svg { width: 0.85em; height: 0.85em; flex: none; }
+.nick-cert svg .tick { stroke: var(--cert-ink); }
+
+/* 一级 · 金:跟着皮肤的"主金"走,四套皮肤 + 深浅模式自动适配 */
+.nick-cert.is-gold {
+  color: var(--gold);
+  background: var(--gold-soft);
+  border-color: var(--gold-line);
+}
+
+/* 二级 · 红 */
+.nick-cert.is-red {
+  color: #ff7b72;
+  background: rgba(255, 92, 82, 0.16);
+  border-color: rgba(255, 92, 82, 0.4);
+}
+
+/* 三级 · 黑:实心黑底 + 亮字,深浅两套主题都要看得出是"黑牌" */
+.nick-cert.is-black {
+  --cert-ink: #14161c;
+  color: #f2f4f8;
+  background: #14161c;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+:root[data-theme="light"] .nick-cert.is-red {
+  color: #cf222e;
+  background: rgba(207, 34, 46, 0.1);
+  border-color: rgba(207, 34, 46, 0.32);
+}
+:root[data-theme="light"] .nick-cert.is-black {
+  color: #ffffff;
+  background: #1b1e26;
+  border-color: rgba(27, 30, 38, 0.85);
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 

@@ -24,6 +24,8 @@ import {
   isStaff,
   namedUser,
   safeParse,
+  certLevel,
+  CERT_LEVELS,
   ROLE_OWNER,
   ROLE_ADMIN,
 } from "../_utils.js";
@@ -44,7 +46,7 @@ const ACHIEVEMENTS = [
 const loadUser = (db, id) =>
   db
     .prepare(
-      "SELECT id, username, role, avatar_key, signature, banned, real_name, verified, cert_title, photos, created_at FROM users WHERE id = ?"
+      "SELECT id, username, role, avatar_key, signature, banned, real_name, verified, cert_title, cert_level, photos, created_at FROM users WHERE id = ?"
     )
     .bind(id)
     .first();
@@ -241,12 +243,22 @@ export async function onRequestPut({ request, env, params }) {
     changed.push(v ? "审核通过" : "取消实名");
   }
 
-  // 官方认证头衔:只有服主能写(上面已把管理员的字段锁死成 real_name / verified)。
-  // 传空字符串就是清除认证。
+  // 官方认证头衔 + 级别:只有服主能写(上面已把管理员的字段锁死成 real_name / verified)。
+  // 头衔传空字符串就是清除认证,顺手把级别也归零,免得留下一个没有头衔的级别。
   if (payload.cert_title !== undefined) {
     const cert = String(payload.cert_title || "").trim().slice(0, MAX_CERT_TITLE);
     sets.push("cert_title = ?");
     binds.push(cert);
+    const lv = cert ? certLevel(payload.cert_level) : "";
+    sets.push("cert_level = ?");
+    binds.push(lv);
+    changed.push("官方认证");
+  } else if (payload.cert_level !== undefined) {
+    // 只改级别时也校验一下,避免写进奇怪的值
+    const lv = certLevel(payload.cert_level);
+    if (payload.cert_level && !CERT_LEVELS.includes(lv)) return fail("认证级别只能是金 / 红 / 黑");
+    sets.push("cert_level = ?");
+    binds.push(lv);
     changed.push("官方认证");
   }
 

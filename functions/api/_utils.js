@@ -63,6 +63,14 @@ export function safeParse(text) {
    防止有人往帖子里塞任意字符串当图片地址 */
 export const IMAGE_KEY_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
 
+/* 官方认证的三个级别:金 / 红 / 黑,只影响药丸配色。
+   空串 = 没级别(头衔也空就是没认证,头衔有值但级别空则按金处理) */
+export const CERT_LEVELS = ["gold", "red", "black"];
+export function certLevel(value) {
+  const v = String(value == null ? "" : value).trim().toLowerCase();
+  return CERT_LEVELS.includes(v) ? v : "";
+}
+
 /* 建表:第一次请求时自动建好,同一个 isolate 内只跑一次。
    这样用户就不用去控制台手写 SQL 了 */
 let schemaReady = null;
@@ -71,7 +79,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-05.2";
+const SCHEMA_VERSION = "2026-10-05.3";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -169,6 +177,8 @@ export function ensureSchema(db) {
       await addColumn(db, "users", "verified", "INTEGER DEFAULT 0");
       // 官方认证头衔:只有服主能写,空串 = 没认证;内容公开给所有人看
       await addColumn(db, "users", "cert_title", "TEXT");
+      // 官方认证级别:gold / red / black 三档,只决定药丸配色
+      await addColumn(db, "users", "cert_level", "TEXT");
       // 个人主页相册:存图片 key 的 JSON 数组(最多 9 张)
       await addColumn(db, "users", "photos", "TEXT");
 
@@ -322,6 +332,7 @@ export function publicUser(row) {
     real_name: String(row.real_name == null ? "" : row.real_name).trim(),
     // 官方认证头衔:公开信息,自己当然也看得到
     cert_title: String(row.cert_title == null ? "" : row.cert_title).trim(),
+    cert_level: certLevel(row.cert_level),
     // 个人主页相册:自己看自己时一并带上,方便直接渲染
     photos: safeParse(row.photos),
   };
@@ -350,6 +361,7 @@ export function namedUser(row, viewer) {
     verified: row.verified ? 1 : 0,
     // 认证头衔是公开信息,不跟真名一样做权限过滤
     cert_title: String(row.cert_title == null ? "" : row.cert_title).trim(),
+    cert_level: certLevel(row.cert_level),
   };
   const rn = String(row.real_name == null ? "" : row.real_name).trim();
   if (rn) {
@@ -368,7 +380,7 @@ export async function currentUser(request, env) {
 
   const row = await env.DB.prepare(
     `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, u.banned,
-            u.real_name, u.verified, u.cert_title, u.photos, s.expires_at
+            u.real_name, u.verified, u.cert_title, u.cert_level, u.photos, s.expires_at
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ?`
   )
