@@ -41,7 +41,7 @@ async function loadAuthors(db, rows, viewer) {
   const holes = uids.map(() => "?").join(",");
   const { results } = await db
     .prepare(
-      `SELECT id, username, role, avatar_key, real_name, verified FROM users WHERE id IN (${holes})`
+      `SELECT id, username, role, avatar_key, real_name, verified, cert_title FROM users WHERE id IN (${holes})`
     )
     .bind(...uids)
     .all();

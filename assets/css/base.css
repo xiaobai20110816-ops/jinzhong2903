@@ -226,6 +226,28 @@
   filter: drop-shadow(0 0 3px rgba(232, 179, 37, 0.5));
 }
 
+/* 服主官方认证头衔:金色小药丸,跟在名字(和认证勾)后面,全站统一 */
+.nick-cert {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: -0.1em;
+  white-space: nowrap;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.68em;
+  letter-spacing: 0.5px;
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+  transition: color 0.6s ease, background-color 0.6s ease, border-color 0.6s ease;
+}
+.nick-cert svg { width: 0.85em; height: 0.85em; flex: none; }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }

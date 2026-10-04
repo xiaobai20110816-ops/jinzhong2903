@@ -362,6 +362,71 @@
     .pf-ach-num { flex: none; font-size: 0.74rem; letter-spacing: 1px; color: var(--faint); transition: color 0.6s ease; }
     .pf-ach.got .pf-ach-num { color: var(--gold); }
 
+    /* 我的照片:九宫格,每格裁成正方形;删除按钮浮在右上角 */
+    .pf-photos {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .pf-photo {
+      position: relative;
+      margin: 0;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--glass-brd);
+      transition: border-color 0.6s ease;
+    }
+    .pf-photo img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+    }
+    .pf-photo-x {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid var(--glass-brd);
+      background: var(--glass-surface);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      backdrop-filter: blur(20px) saturate(160%);
+      box-shadow: var(--glass-rim);
+      color: var(--text);
+      font-size: 0.92rem;
+      line-height: 1;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: color 0.4s ease, border-color 0.4s ease;
+    }
+    .pf-photo-x:hover { color: var(--gold); border-color: var(--gold-line); }
+    .pf-photo-add {
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      border: 1px dashed var(--glass-brd);
+      background: var(--chip);
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.4s ease, border-color 0.4s ease, background-color 0.6s ease;
+    }
+    .pf-photo-add:hover { color: var(--gold); border-color: var(--gold-line); }
+    .pf-photo-tip {
+      grid-column: 1 / -1;
+      font-size: 0.8rem;
+      color: var(--faint);
+      transition: color 0.6s ease;
+    }
+
     /* 窄屏:单列,头像和名字上下排开,不再挤在一起 */
     @media (max-width: 620px) {
       .pf-card { flex-direction: column; text-align: center; padding: 26px 20px; gap: 18px; }
@@ -415,8 +480,9 @@
       // URL 上的 ?id=
       const uid = parseInt(new URLSearchParams(location.search).get("id") || "0", 10) || 0;
 
-      const state = { user: null, liked: 0, likes: 0, busy: false };
+      const state = { user: null, liked: 0, likes: 0, busy: false, mine: false, photos: [] };
       let wall = []; // 留言墙列表(最新的排最前)
+      const MAX_PHOTOS = 9; // 个人相册最多 9 张,和后端一致
 
       // ---------- 小工具 ----------
       const pad = (n) => String(n).padStart(2, "0");
@@ -522,6 +588,8 @@
         const hasSig = !!u.signature;
         const sig = hasSig ? esc(u.signature) : "这个人很神秘，什么都没写";
         const name = window.C103Person.html(u);
+        // 是不是「我自己」:接口回的 me 就是当前登录者 id,最权威(不等前端登录状态猜)
+        state.mine = Number(data.me) === uid;
 
         // 成就板块:接口给了才渲染(拿不到就整块不出现,不留空壳)
         const achs = Array.isArray(data.achievements) ? data.achievements : [];
@@ -553,6 +621,11 @@
 
           ${achBlock}
 
+          <section class="pf-block" id="pf-photos-block">
+            <div class="pf-head"><span class="en">Photos</span><h2>${state.mine ? "我的照片" : "TA 的照片"}</h2></div>
+            <div id="pf-photos" class="pf-photos"></div>
+          </section>
+
           <section class="pf-block">
             <div class="pf-head"><span class="en">Posts</span><h2>TA 的留言</h2></div>
             <div id="pf-posts" class="pf-list"><p class="glass pf-empty">读取中…</p></div>
@@ -575,6 +648,7 @@
         on($("#pf-form"), "submit", onWallSubmit);
         paintLike();
         renderWallGate();
+        renderPhotos(u);
       }
 
       function paintLike() {
@@ -593,6 +667,98 @@
         const logged = !!state.user;
         if (form) form.hidden = !logged;
         if (gate) gate.hidden = logged;
+      }
+
+      // ---------- 我的照片:别人只展示,自己可传可删 ----------
+      function renderPhotos(u) {
+        const box = $("#pf-photos");
+        const block = $("#pf-photos-block");
+        if (!box || !block) return;
+        const mine = state.mine;
+        state.photos = (Array.isArray(u.photos) ? u.photos : []).map(String);
+
+        // 看别人的主页且 TA 没有照片:整块不出现,不留空壳
+        if (!mine && !state.photos.length) {
+          block.hidden = true;
+          return;
+        }
+        block.hidden = false;
+
+        const tiles = state.photos
+          .map(
+            (k) => `<figure class="pf-photo">
+              <img src="${esc(img(k))}" alt="个人照片" loading="lazy">
+              ${
+                mine
+                  ? `<button class="pf-photo-x" type="button" data-del="${esc(k)}" aria-label="删除这张照片">×</button>`
+                  : ""
+              }
+            </figure>`
+          )
+          .join("");
+        const add =
+          mine && state.photos.length < MAX_PHOTOS
+            ? `<button class="pf-photo-add" type="button" id="pf-photo-add">＋ 上传照片</button>`
+            : "";
+        const tip = mine && !state.photos.length ? `<p class="pf-photo-tip">还没有照片，点上面的方块传一张吧</p>` : "";
+        box.innerHTML = tiles + add + tip;
+
+        on($("#pf-photo-add"), "click", pickPhoto);
+        box.querySelectorAll(".pf-photo-x").forEach((b) => {
+          on(b, "click", () => removePhoto(b.dataset.del));
+        });
+      }
+
+      // 选图 → 压缩 → 传 /api/upload → 把新 key 追加进去
+      function pickPhoto() {
+        if (!state.mine) return;
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.addEventListener("change", async () => {
+          const f = input.files && input.files[0];
+          if (!f) return;
+          try {
+            toast("正在压缩照片…");
+            const blob = await window.C103Image.compress(f, { maxEdge: 1600 });
+            const res = await fetch(API + "/upload", {
+              method: "POST",
+              headers: { "content-type": blob.type || "image/jpeg" },
+              credentials: "same-origin",
+              body: blob,
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok || !d.ok) throw new Error(d.error || "照片上传失败了");
+            state.photos.push(d.key);
+            await savePhotos();
+            toast("照片传好了");
+          } catch (err) {
+            toast((err && err.message) || "照片上传失败了");
+          }
+        });
+        input.click();
+      }
+
+      // 整份列表提交给后端(最多 9 张的校验在服务端)
+      async function savePhotos() {
+        const d = await api(API + "/users/" + uid + "/photos", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ photos: state.photos }),
+        });
+        state.photos = Array.isArray(d.photos) ? d.photos.map(String) : state.photos;
+        renderPhotos({ photos: state.photos });
+      }
+
+      async function removePhoto(key) {
+        if (!state.mine || !key) return;
+        state.photos = state.photos.filter((k) => k !== key);
+        try {
+          await savePhotos();
+          toast("已删除这张照片");
+        } catch (err) {
+          toast((err && err.message) || "删不掉，待会儿再试");
+        }
       }
 
       // ---------- 点赞 ----------

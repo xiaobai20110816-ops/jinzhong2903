@@ -17,7 +17,7 @@ export async function onRequestGet({ request, env }) {
   const me = await currentUser(request, env);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, username, role, avatar_key, signature, real_name, verified
+    `SELECT id, username, role, avatar_key, signature, real_name, verified, cert_title
        FROM users
       WHERE IFNULL(verified, 0) = 1 AND IFNULL(banned, 0) = 0
       ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, id ASC`

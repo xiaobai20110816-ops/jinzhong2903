@@ -23,7 +23,8 @@ export async function onRequestGet({ request, env }) {
     `SELECT n.id, n.type, n.post_id, n.wall_id, n.reply_id, n.excerpt, n.read, n.created_at,
             u.id AS actor_id, u.username AS actor_name,
             u.avatar_key AS actor_avatar, u.role AS actor_role,
-            u.real_name AS actor_real_name, u.verified AS actor_verified
+            u.real_name AS actor_real_name, u.verified AS actor_verified,
+            u.cert_title AS actor_cert_title
        FROM notifications n
        LEFT JOIN users u ON u.id = n.actor_id
       WHERE n.user_id = ?
@@ -55,6 +56,7 @@ export async function onRequestGet({ request, env }) {
               role: r.actor_role,
               real_name: r.actor_real_name,
               verified: r.actor_verified,
+              cert_title: r.actor_cert_title,
             },
             me
           )

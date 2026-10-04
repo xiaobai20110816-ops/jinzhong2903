@@ -115,6 +115,13 @@ const GOLD_CHECK =
   '<path d="M7.4 12.4l3.1 3.1 6.1-6.3" fill="none" stroke="#fffdf5" stroke-width="2.5" ' +
   'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
+// 官方认证药丸里的对勾:一枚实心圆 + 对勾,颜色跟着 .nick-cert 走,深浅主题都清楚
+const CERT_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+  '<circle cx="12" cy="12" r="11" fill="currentColor"></circle>' +
+  '<path d="M7 12.4l3.2 3.2L17 8.8" fill="none" stroke="var(--bg0)" stroke-width="2.6" ' +
+  'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
 const C103Person = {
   /* 该显示的名字:能看真名时用真名,否则账号名 */
   name(person, fallback) {
@@ -129,11 +136,21 @@ const C103Person = {
   isOwner(person) {
     return !!(person && person.role === "owner");
   },
-  /* 名字 HTML(已转义)+ 认证勾:服主金勾,其余实名同学蓝勾 */
+  /* 服主官方认证的头衔药丸:没设头衔就返回空串(头衔是公开信息,谁都能看) */
+  cert(person) {
+    const t = person && person.cert_title ? String(person.cert_title).trim() : "";
+    if (!t) return "";
+    return '<i class="nick-cert">' + CERT_SVG + esc(t) + "</i>";
+  },
+  /* 名字 HTML(已转义)+ 认证勾 + 认证药丸:名字 → 金勾/蓝钩 → 药丸 */
   html(person, fallback) {
     const nm = esc(C103Person.name(person, fallback));
-    if (C103Person.isOwner(person)) return nm + GOLD_CHECK;
-    return nm + (C103Person.verified(person) ? BLUE_CHECK : "");
+    const check = C103Person.isOwner(person)
+      ? GOLD_CHECK
+      : C103Person.verified(person)
+      ? BLUE_CHECK
+      : "";
+    return nm + check + C103Person.cert(person);
   },
   /* 只要那个勾(给「回复 @某某」这种已经单独写了名字的地方用) */
   badge(person) {
@@ -779,13 +796,13 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-6";
+const SPLASH_VERSION = "2026-10-05-7";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "手机上的导航条修好了：汉堡菜单不会再被挤出胶囊外面。";
+const SPLASH_LEAD = "服主能给成员打官方认证头衔了，个人主页也能上传自己的照片。";
 const SPLASH_NOTES = [
-  "修复手机端导航条：品牌文字过长时会把最右边的汉堡按钮挤出圆角，现在品牌文字会自动让位、超出打省略号，按钮永远留在胶囊里",
-  "小屏手机的按钮和间距同步收窄一点，给文字腾地方",
+  "服主可以给成员打官方认证头衔（如「学校信息部」），头衔以金色小药丸跟在名字后面，全站都能看到",
+  "个人主页新增「我的照片」板块：可以上传最多 9 张自己的照片，也能随时删掉",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

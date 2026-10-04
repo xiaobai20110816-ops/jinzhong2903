@@ -317,6 +317,21 @@
     }
     .member .m-btn:hover { color: var(--gold); border-color: var(--gold-line); }
     .member .m-btn:disabled { opacity: 0.45; cursor: default; }
+    /* 官方认证头衔输入框:只有服主看得到这一块 */
+    .member .m-cert { display: flex; align-items: center; gap: 6px; }
+    .member .m-cert-input {
+      width: 150px;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      color: var(--text);
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.3s ease, background-color 0.4s ease, color 0.6s ease;
+    }
+    .member .m-cert-input:focus { border-color: var(--gold-line); background: var(--gold-soft); }
     /* 删除 / 封禁:危险操作,低调的红,别太扎眼但要点得清楚 */
     .member .m-del {
       font-family: var(--font-body);
@@ -1072,6 +1087,38 @@
         });
         return btn;
       }
+      /* 官方认证头衔:只有服主能改,留空点按钮 = 清除认证 */
+      function certBox(u) {
+        const box = document.createElement("span");
+        box.className = "m-cert";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "m-cert-input";
+        input.maxLength = 20;
+        input.placeholder = "官方认证头衔，如：学校信息部";
+        input.value = u.cert_title || "";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "m-btn";
+        const sync = () => { btn.textContent = input.value.trim() ? "认证" : "清除认证"; };
+        sync();
+        input.addEventListener("input", sync);
+        const submit = () => {
+          const title = input.value.trim();
+          runMemberOp(
+            btn,
+            title ? `已给「${u.name}」加上官方认证「${title}」` : `已清除「${u.name}」的官方认证`,
+            () => patchUser(u.id, { cert_title: title })
+          );
+        };
+        btn.addEventListener("click", submit);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); submit(); }
+        });
+        box.appendChild(input);
+        box.appendChild(btn);
+        return box;
+      }
       /* 封禁 / 解封 */
       function banBtn(u) {
         const btn = document.createElement("button");
@@ -1124,6 +1171,7 @@
             <div class="m-line">
               <span class="m-name">${esc(u.name)}</span>
               ${roleBadge(u.role)}
+              ${window.C103Person ? window.C103Person.cert(u) : ""}
               ${banTag}
             </div>
             <div class="m-sub">${esc(u.signature || "（还没写个性签名）")}</div>
@@ -1139,6 +1187,8 @@
           if (!self) right.appendChild(roleSelect(u));
           right.appendChild(nameBtn(u));
           right.appendChild(pwdBtn(u));
+          // 官方认证头衔:服主对每一行都能改(含自己),管理员整块看不到
+          right.appendChild(certBox(u));
           if (!self) {
             right.appendChild(banBtn(u));
             right.appendChild(delBtn(u));
@@ -1428,14 +1478,14 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 12176,
-        files: 42,
+        total: 12483,
+        files: 43,
         updated: "2026-10-05",
         parts: [
-          { name: "页面 HTML", lines: 4423 },
-          { name: "样式 CSS", lines: 3268 },
-          { name: "前端 JS", lines: 1959 },
-          { name: "后端 Functions", lines: 2521 },
+          { name: "页面 HTML", lines: 4630 },
+          { name: "样式 CSS", lines: 3289 },
+          { name: "前端 JS", lines: 1975 },
+          { name: "后端 Functions", lines: 2584 },
           { name: "配置 JSON", lines: 5 },
         ],
       };

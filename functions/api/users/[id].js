@@ -23,6 +23,7 @@ import {
   USERNAME_RE,
   isStaff,
   namedUser,
+  safeParse,
   ROLE_OWNER,
   ROLE_ADMIN,
 } from "../_utils.js";
@@ -30,6 +31,7 @@ import {
 const MIN_PASSWORD = 6;
 const MAX_PASSWORD = 64;
 const MAX_REAL_NAME = 24;
+const MAX_CERT_TITLE = 20;
 
 /* ---- 班级成就:三项指标达到阈值就自动解锁称号,展示在个人名片上 ----
    指标全部现算,不建表也不存状态 —— 数据本来就是现成的,存一份反而要对账 */
@@ -42,7 +44,7 @@ const ACHIEVEMENTS = [
 const loadUser = (db, id) =>
   db
     .prepare(
-      "SELECT id, username, role, avatar_key, signature, banned, real_name, verified, created_at FROM users WHERE id = ?"
+      "SELECT id, username, role, avatar_key, signature, banned, real_name, verified, cert_title, photos, created_at FROM users WHERE id = ?"
     )
     .bind(id)
     .first();
@@ -127,6 +129,8 @@ export async function onRequestGet({ request, env, params }) {
       ...shown,
       signature: row.signature || "",
       banned: row.banned ? 1 : 0,
+      // 相册对所有人公开,谁来主页都看得到
+      photos: safeParse(row.photos),
       created_at: row.created_at,
     },
   });
@@ -235,6 +239,15 @@ export async function onRequestPut({ request, env, params }) {
     sets.push("verified = ?");
     binds.push(v);
     changed.push(v ? "审核通过" : "取消实名");
+  }
+
+  // 官方认证头衔:只有服主能写(上面已把管理员的字段锁死成 real_name / verified)。
+  // 传空字符串就是清除认证。
+  if (payload.cert_title !== undefined) {
+    const cert = String(payload.cert_title || "").trim().slice(0, MAX_CERT_TITLE);
+    sets.push("cert_title = ?");
+    binds.push(cert);
+    changed.push("官方认证");
   }
 
   if (!sets.length) return fail("没有要改的内容");
