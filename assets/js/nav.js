@@ -203,7 +203,15 @@ const C103Auth = {
     let lastErr;
     for (let i = 0; i < tries; i++) {
       try {
-        const d = await apiFetch(API + "/auth/me");
+        // 顺手带上当前路径和设备 id:后端借这次请求记一笔页面浏览,
+        // 统计不用额外再发一个请求
+        const d = await apiFetch(
+          API +
+            "/auth/me?p=" +
+            encodeURIComponent(location.pathname) +
+            "&v=" +
+            encodeURIComponent(deviceId())
+        );
         return d.user || null; // 服务器明确回了 null,才是真的没登录
       } catch (err) {
         lastErr = err;

@@ -71,7 +71,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-04.1";
+const SCHEMA_VERSION = "2026-10-04.2";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -190,6 +190,29 @@ export function ensureSchema(db) {
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`).run();
       // 登录时顺手清过期会话,按 expires_at 找,别扫全表
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expires_at)`).run();
+
+      // ---- 用量统计:每天每个页面被看多少次,每天来过多少个人 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS pageviews (
+             day TEXT NOT NULL,
+             path TEXT NOT NULL,
+             hits INTEGER NOT NULL DEFAULT 0,
+             PRIMARY KEY (day, path)
+           )`
+        )
+        .run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_pv_day ON pageviews(day)`).run();
+      // 访客去重靠联合主键:同一台设备 / 同一个账号,一天只留一行
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS daily_visitors (
+             day TEXT NOT NULL,
+             who TEXT NOT NULL,
+             PRIMARY KEY (day, who)
+           )`
+        )
+        .run();
 
       // ---- 站点开关:一行一个开关,靠主键唯一性做「只能成功一次」的事 ----
       await db
@@ -396,4 +419,87 @@ export function toPost(row) {
     wall_id: row.wall_id || 0,
     created_at: row.created_at,
   };
+}
+
+/* ============================================================
+   用量统计
+   ============================================================ */
+
+/* 按「北京时间的自然日」归堆。库里存的是毫秒时间戳,
+   直接切 UTC 日期会把凌晨 0~8 点的访问算到前一天去 */
+export function dayKey(ts = Date.now(), shiftDays = 0) {
+  const t = Number(ts) + 8 * 3600 * 1000 + shiftDays * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/* 记一次页面浏览。挂在 /api/auth/me 上顺带完成,
+   所以统计本身不会给页面多添一个网络请求;
+   也可以用 waitUntil 丢到后台,不拖慢响应 */
+export function recordView(env, request, me, waitUntil) {
+  if (!env.DB) return;
+  const job = doRecordView(env, request, me).catch(() => {
+    /* 统计是附带的事,出任何错都不能影响正常请求 */
+  });
+  if (waitUntil) waitUntil(job);
+}
+
+async function doRecordView(env, request, me) {
+  const url = new URL(request.url);
+  const raw = url.searchParams.get("p");
+  if (!raw) return;
+
+  // 只留路径:去掉查询串、结尾的 .html 和斜杠,页面改名也不会把统计拆散
+  let path = String(raw).split("?")[0].split("#")[0].trim().slice(0, 60);
+  if (!path) return;
+  if (!path.startsWith("/")) path = "/" + path;
+  path = path.replace(/\.html$/, "");
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  if (!path) path = "/";
+
+  const day = dayKey();
+  const cid = (url.searchParams.get("v") || "").slice(0, 40);
+
+  const jobs = [
+    env.DB.prepare(
+      `INSERT INTO pageviews (day, path, hits) VALUES (?, ?, 1)
+       ON CONFLICT(day, path) DO UPDATE SET hits = hits + 1`
+    )
+      .bind(day, path)
+      .run()
+      .catch(() => {}),
+  ];
+
+  // 同一个人一天只算一次访客:登录了按账号算,没登录按设备随机 id 算
+  const who = me ? "u" + me.id : cid ? "c" + cid : "";
+  if (who) {
+    jobs.push(
+      env.DB.prepare("INSERT OR IGNORE INTO daily_visitors (day, who) VALUES (?, ?)")
+        .bind(day, who)
+        .run()
+        .catch(() => {})
+    );
+  }
+
+  await Promise.all(jobs);
+}
+
+/* settings 表里存一行(用量看板的 Cloudflare Token 就用它) */
+export async function putSetting(db, key, value) {
+  await db
+    .prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+    .bind(key, String(value == null ? "" : value), Date.now())
+    .run();
+}
+
+export async function delSetting(db, key) {
+  await db.prepare("DELETE FROM settings WHERE key = ?").bind(key).run();
+}
+
+export async function getSetting(db, key) {
+  const row = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(key)
+    .first()
+    .catch(() => null);
+  return row ? String(row.value || "") : "";
 }

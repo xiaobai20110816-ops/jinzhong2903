@@ -331,6 +331,98 @@
       .member .m-right { margin-left: 0; width: 100%; justify-content: flex-start; }
       .member .m-btn, .member .m-del { padding: 6px 10px; font-size: 0.74rem; }
     }
+    /* ---- 用量看板 ---- */
+    .use-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+      gap: 12px;
+    }
+    .use-card {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+    }
+    .use-card b {
+      display: block;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.7rem;
+      line-height: 1.15;
+      color: var(--text);
+      transition: color 0.6s ease;
+    }
+    .use-card span { font-size: 0.74rem; letter-spacing: 0.06em; color: var(--faint); }
+
+    .use-block { margin-top: 26px; }
+    .use-block h3 {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+    .use-block .use-sub { margin: 5px 0 12px; font-size: 0.74rem; line-height: 1.7; color: var(--faint); }
+    .use-chart { width: 100%; height: auto; display: block; margin-top: 10px; }
+    .use-axis {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+      font-size: 0.68rem;
+      color: var(--faint);
+    }
+    .use-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 9px; font-size: 0.74rem; color: var(--muted); }
+    .use-legend i {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .use-bars { display: flex; flex-direction: column; gap: 9px; }
+    .use-bar { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+    .use-bar .p {
+      flex: 1 1 110px;
+      min-width: 0;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .use-bar .t {
+      flex: none;
+      width: 120px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--chip);
+      overflow: hidden;
+    }
+    .use-bar .t i {
+      display: block;
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--gold), var(--gold-2));
+    }
+    .use-bar .n { flex: none; width: 48px; text-align: right; color: var(--faint); }
+
+    .use-note {
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      font-size: 0.78rem;
+      line-height: 1.85;
+      color: var(--muted);
+    }
+    .use-cf { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .use-cf input { flex: 1 1 240px; min-width: 0; }
+
+    @media (max-width: 560px) {
+      .use-bar .t { width: 70px; }
+      .use-card b { font-size: 1.45rem; }
+    }
   </style>
 </head>
 <body>
@@ -362,6 +454,7 @@
             <button class="adm-tab" type="button" data-panel="moments">高光时刻</button>
             <button class="adm-tab" type="button" data-panel="site">首页文案</button>
             <button class="adm-tab" type="button" data-panel="members">成员权限</button>
+            <button class="adm-tab" type="button" data-panel="usage">用量看板</button>
           </div>
 
           <!-- ========== 公告 ========== -->
@@ -474,6 +567,15 @@
             <div class="rows" id="mem-list"></div>
             <p class="msg" id="mem-msg"></p>
           </div>
+
+          <!-- ========== 用量 ========== -->
+          <div class="glass panel" id="panel-usage" hidden>
+            <div class="panel-head">
+              <h2>用量看板</h2>
+              <p>访问量、最热页面、每天新增的内容都是站点自己记的，不用配置。最下面是 Cloudflare 官方的真实请求数，想看它得先贴一个只读 API Token（只需一次，Token 存在你自己的数据库里）。</p>
+            </div>
+            <div id="usage-body"><p class="msg">正在统计…</p></div>
+          </div>
         </div>
 
       </div>
@@ -496,6 +598,7 @@
 
       let data = null;   // 内容工作副本
       let me = null;
+      let usageData = null; // 用量看板的数据,拉过一次就存着
 
       function say(id, text, kind) {
         const el = document.getElementById(id);
@@ -1028,6 +1131,209 @@
         if (saved === "moments") renderMoments();
       }
 
+      /* ============ 用量看板 ============ */
+      /* 折线图:手写 SVG,不引第三方库。颜色全走 CSS 变量,
+         深色 / 浅色主题切换时自动跟着变 */
+      function lineChart(series, labels, aria) {
+        const W = 660, H = 160, PAD = 8;
+        const all = series.reduce((a, s) => a.concat(s.values), []);
+        const max = Math.max(1, ...all);
+        const n = labels.length;
+        const X = (i) => PAD + (n <= 1 ? 0 : (i * (W - PAD * 2)) / (n - 1));
+        const Y = (v) => H - PAD - (v / max) * (H - PAD * 2);
+
+        let grid = "";
+        for (let k = 0; k <= 3; k++) {
+          const gy = PAD + (k * (H - PAD * 2)) / 3;
+          grid += `<line x1="${PAD}" y1="${gy}" x2="${W - PAD}" y2="${gy}" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+        }
+
+        let body = "";
+        for (const s of series) {
+          const pts = s.values.map((v, i) => X(i) + "," + Y(v)).join(" ");
+          if (s.fill) {
+            body += `<polygon points="${PAD},${H - PAD} ${pts} ${W - PAD},${H - PAD}" fill="${s.color}" opacity="0.14"/>`;
+          }
+          body += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+        }
+
+        return `<svg class="use-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(aria || "")}">${grid}${body}</svg>`;
+      }
+
+      /* 横轴只标首 / 中 / 末三个日期 */
+      function chartAxis(labels) {
+        const fmt = (d) => (d ? d.slice(5).replace("-", "/") : "");
+        return `<div class="use-axis"><span>${fmt(labels[0])}</span><span>${fmt(
+          labels[Math.floor(labels.length / 2)]
+        )}</span><span>${fmt(labels[labels.length - 1])}</span></div>`;
+      }
+
+      function chartLegend(items) {
+        return `<div class="use-legend">${items
+          .map((s) => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`)
+          .join("")}</div>`;
+      }
+
+      /* 单个指标的迷你折线卡 */
+      function miniCard(label, values, labels) {
+        const total = values.reduce((a, b) => a + b, 0);
+        return `<div class="use-card">
+            <b>${total}</b><span>${esc(label)}</span>
+            ${lineChart([{ values: values, color: "var(--gold)", fill: true }], labels, label)}
+          </div>`;
+      }
+
+      function renderUsage(force) {
+        const box = $("#usage-body");
+        if (!box) return;
+        if (usageData && !force) return paintUsage();
+
+        box.innerHTML = '<p class="msg">正在统计…</p>';
+        fetch(API + "/stats", { credentials: "same-origin" })
+          .then((r) => r.json().then((d) => ({ ok: r.ok, d: d })))
+          .then(({ ok, d }) => {
+            if (!ok || !d.ok) throw new Error(d.error || "读不到统计");
+            usageData = d;
+            paintUsage();
+          })
+          .catch((err) => {
+            box.innerHTML = '<p class="msg err">' + esc(err.message) + "</p>";
+          });
+      }
+
+      function paintUsage() {
+        const box = $("#usage-body");
+        const d = usageData;
+        if (!box || !d) return;
+
+        const days = d.days || [];
+        const labels = days.map((s) => s.slice(5).replace("-", "/"));
+        const sum = (a) => a.reduce((x, y) => x + y, 0);
+        const pv = d.traffic.pv, uv = d.traffic.uv;
+        const t = d.totals;
+
+        // ---- 最热页面 ----
+        const maxHits = Math.max(1, ...d.topPages.map((p) => p.hits));
+        const bars = d.topPages.length
+          ? d.topPages
+              .map(
+                (p) => `<div class="use-bar">
+              <span class="p" title="${esc(p.path)}">${esc(p.path)}</span>
+              <span class="t"><i style="width:${Math.max(3, Math.round((p.hits / maxHits) * 100))}%"></i></span>
+              <span class="n">${p.hits}</span>
+            </div>`
+              )
+              .join("")
+          : '<p class="use-sub">还没有数据，统计从这次上线之后才开始记。</p>';
+
+        // ---- Cloudflare 官方那块 ----
+        const cf = d.cloudflare || {};
+        const cfHTML = cf.ok
+          ? `<div class="use-cards">
+               <div class="use-card"><b>${cf.total}</b><span>官方请求数 · 30 天</span></div>
+             </div>
+             ${lineChart([{ values: cf.requests, color: "var(--gold)", fill: true }], labels, "Cloudflare 官方请求数")}
+             ${chartAxis(days)}`
+          : `<div class="use-note">
+               <b>还没接上官方数据。</b>${esc(cf.reason || "")}<br>
+               想要真实的全量请求数，去 Cloudflare 后台「My Profile → API Tokens」建一个
+               权限为 <b>Account · Account Analytics · Read</b> 的 Token，粘在下面保存即可。
+               Token 只存在你自己的数据库里，只有服主能看能改。
+               <div class="use-cf">
+                 <input id="cf-token" type="text" placeholder="粘贴 API Token" autocomplete="off">
+                 <button class="btn" type="button" id="cf-save">保存并读取</button>
+               </div>
+             </div>`;
+
+        box.innerHTML = `
+          <div class="use-cards">
+            <div class="use-card"><b>${sum(pv)}</b><span>浏览量 · 30 天</span></div>
+            <div class="use-card"><b>${sum(uv)}</b><span>访客数 · 30 天</span></div>
+            <div class="use-card"><b>${t.users}</b><span>账号总数</span></div>
+            <div class="use-card"><b>${t.mainPosts + t.replies + t.wallPosts}</b><span>留言总数</span></div>
+            <div class="use-card"><b>${t.images}</b><span>图片张数</span></div>
+            <div class="use-card"><b>${t.likes}</b><span>点赞总数</span></div>
+          </div>
+
+          <div class="use-block">
+            <h3>访问量趋势</h3>
+            <p class="use-sub">每天有多少次浏览、多少个人来过。同一台设备一天只算一个访客。</p>
+            ${lineChart(
+              [
+                { values: pv, color: "var(--gold)", fill: true },
+                { values: uv, color: "var(--gold-2)" },
+              ],
+              labels,
+              "近 30 天访问量趋势"
+            )}
+            ${chartAxis(days)}
+            ${chartLegend([
+              { color: "var(--gold)", label: "浏览量" },
+              { color: "var(--gold-2)", label: "访客数" },
+            ])}
+          </div>
+
+          <div class="use-block">
+            <h3>最热页面 Top</h3>
+            <p class="use-sub">近 30 天被看得最多的页面。</p>
+            <div class="use-bars">${bars}</div>
+          </div>
+
+          <div class="use-block">
+            <h3>内容与活跃</h3>
+            <p class="use-sub">近 30 天每天新增了多少。</p>
+            <div class="use-cards">
+              ${miniCard("新增主帖", d.activity.posts, labels)}
+              ${miniCard("新增回复", d.activity.replies, labels)}
+              ${miniCard("新注册", d.activity.users, labels)}
+              ${miniCard("新增点赞", d.activity.likes, labels)}
+            </div>
+          </div>
+
+          <div class="use-block">
+            <h3>存储与总量</h3>
+            <div class="use-cards">
+              <div class="use-card"><b>${t.mainPosts}</b><span>主帖</span></div>
+              <div class="use-card"><b>${t.replies}</b><span>回复</span></div>
+              <div class="use-card"><b>${t.wallPosts}</b><span>主页留言</span></div>
+              <div class="use-card"><b>${t.images}</b><span>图片（KV）</span></div>
+            </div>
+          </div>
+
+          <div class="use-block">
+            <h3>Cloudflare 官方用量</h3>
+            <p class="use-sub">真实的请求总数，包含静态资源，比站内统计更全。</p>
+            ${cfHTML}
+          </div>`;
+
+        const save = $("#cf-save");
+        if (save) save.addEventListener("click", saveCfToken);
+      }
+
+      async function saveCfToken() {
+        const input = $("#cf-token");
+        const btn = $("#cf-save");
+        const token = ((input && input.value) || "").trim();
+        if (!token) return;
+
+        btn.disabled = true;
+        btn.textContent = "读取中…";
+        try {
+          const res = await fetch(API + "/stats", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ token: token }),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
+          usageData.cloudflare = d.cloudflare;
+        } catch (err) {
+          usageData.cloudflare = { ok: false, reason: "没保存成功：" + err.message };
+        }
+        paintUsage();
+      }
+
       /* ============ 页签 ============ */
       $$(".adm-tab").forEach((tab) => {
         tab.addEventListener("click", () => {
@@ -1035,6 +1341,7 @@
           const name = tab.dataset.panel;
           $$(".panel").forEach((p) => { p.hidden = p.id !== "panel-" + name; });
           if (name === "members") renderMembers();
+          if (name === "usage") renderUsage();
         });
       });
 
