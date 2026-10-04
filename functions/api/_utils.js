@@ -79,7 +79,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-05.3";
+const SCHEMA_VERSION = "2026-10-05.4";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -95,6 +95,38 @@ async function addColumn(db, table, col, type) {
   } catch (e) {
     /* 并发的另一个请求可能刚加过,忽略 */
   }
+}
+
+/* 一次性脏数据修复(不用重复执行,做完打标记)。
+   个人主页的留言框曾经把「带认证徽章的 HTML」塞进了 placeholder,
+   引号撑破属性后,徽章源码变成了输入框内容,成员一点「留言」就把它发了出去。
+   源头已在 u.html 修好,这里把历史脏数据清掉 ——
+   只删同时满足「以 < 开头 + 含 </svg> + 含 留句话」的行,正常的留言不会中招 */
+const REPAIR_KEY = "repair_broken_wall_v1";
+const BROKEN_WALL_WHERE =
+  "body LIKE '<%' AND body LIKE '%</svg>%' AND body LIKE '%留句话%'";
+
+async function repairBrokenWall(db) {
+  const mark = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(REPAIR_KEY)
+    .first()
+    .catch(() => null);
+  if (mark) return;
+  // 先清掉挂在脏帖下面的回复,免得留下没有楼主的孤儿回复
+  await db
+    .prepare(`DELETE FROM posts WHERE parent_id IN (SELECT id FROM posts WHERE ${BROKEN_WALL_WHERE})`)
+    .run()
+    .catch(() => {});
+  await db
+    .prepare(`DELETE FROM posts WHERE ${BROKEN_WALL_WHERE}`)
+    .run()
+    .catch(() => {});
+  await db
+    .prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+    .bind(REPAIR_KEY, String(Date.now()), Date.now())
+    .run()
+    .catch(() => {});
 }
 
 export function ensureSchema(db) {
@@ -269,6 +301,9 @@ export function ensureSchema(db) {
           `CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC)`
         )
         .run();
+
+      // 顺手做一次性的脏数据修复(settings 表已经建好,标记写在里面)
+      await repairBrokenWall(db);
 
       // 全建好了,记下版本号:下一个 isolate 只查这一行就能直接收工
       await db

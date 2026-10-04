@@ -587,7 +587,10 @@
         const u = data.user || {};
         const hasSig = !!u.signature;
         const sig = hasSig ? esc(u.signature) : "这个人很神秘，什么都没写";
+        // name 是「带认证徽章 svg 的 HTML」,只能放进内容里;
+        // 放进 placeholder 这类属性必须用纯文本版(plainName),否则引号会把标签撑破
         const name = window.C103Person.html(u);
+        const plainName = esc(window.C103Person.name(u, u.name));
         // 是不是「我自己」:接口回的 me 就是当前登录者 id,最权威(不等前端登录状态猜)
         state.mine = Number(data.me) === uid;
 
@@ -635,7 +638,7 @@
             <div class="pf-head"><span class="en">Wall</span><h2>留言墙</h2></div>
             <div id="pf-wall" class="pf-wall"><p class="glass pf-empty">读取中…</p></div>
             <form id="pf-form" class="glass pf-compose" hidden>
-              <textarea id="pf-body" rows="3" maxlength="4000" placeholder="给 ${name} 留句话…"></textarea>
+              <textarea id="pf-body" rows="3" maxlength="4000" placeholder="给 ${plainName} 留句话…"></textarea>
               <div class="pf-compose-foot">
                 <p class="pf-msg" id="pf-msg"></p>
                 <button class="pf-send" type="submit">留言</button>
