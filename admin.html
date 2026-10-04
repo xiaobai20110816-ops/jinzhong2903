@@ -482,6 +482,7 @@
             <button class="adm-tab" type="button" data-panel="site">首页文案</button>
             <button class="adm-tab" type="button" data-panel="members">成员权限</button>
             <button class="adm-tab" type="button" data-panel="usage">用量看板</button>
+            <button class="adm-tab" type="button" data-panel="accounts">账号统计</button>
           </div>
 
           <!-- ========== 公告 ========== -->
@@ -596,6 +597,15 @@
               <p>访问量、最热页面、每天新增的内容都是站点自己记的，不用配置。最下面是 Cloudflare 官方的真实请求数，想看它得先贴一个只读 API Token（只需一次，Token 存在你自己的数据库里）。</p>
             </div>
             <div id="usage-body"><p class="msg">正在统计…</p></div>
+          </div>
+
+          <!-- ========== 账号统计 ========== -->
+          <div class="glass panel" id="panel-accounts" hidden>
+            <div class="panel-head">
+              <h2>账号统计</h2>
+              <p>注册与新增、实名审核进度、活跃情况、角色与状态。活跃按「登录过」算，同一个人多设备登录只算一个。</p>
+            </div>
+            <div id="acc-body"><p class="msg">正在统计…</p></div>
           </div>
         </div>
 
@@ -1358,6 +1368,22 @@
           </div>
 
           <div class="use-block">
+            <h3>代码规模</h3>
+            <p class="use-sub">网站本身的体量，更新于 ${esc(CODE_STATS.updated)}。</p>
+            <div class="use-cards">
+              <div class="use-card"><b>${CODE_STATS.total}</b><span>代码总行数</span></div>
+              <div class="use-card"><b>${CODE_STATS.files}</b><span>文件数</span></div>
+            </div>
+            <div class="use-bars">
+              ${CODE_STATS.parts
+                .map((p) =>
+                  accBar(p.name, p.lines, Math.round((p.lines / Math.max(1, CODE_STATS.total)) * 100), "var(--gold)")
+                )
+                .join("")}
+            </div>
+          </div>
+
+          <div class="use-block">
             <h3>Cloudflare 官方用量</h3>
             <p class="use-sub">真实的请求总数，包含静态资源，比站内统计更全。</p>
             ${cfHTML}
@@ -1391,6 +1417,98 @@
         paintUsage();
       }
 
+      /* ============ 代码规模 ============ */
+      /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
+         统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
+      const CODE_STATS = {
+        total: 11130,
+        files: 42,
+        updated: "2026-10-04",
+        parts: [
+          { name: "页面 HTML", lines: 4232 },
+          { name: "样式 CSS", lines: 2969 },
+          { name: "前端 JS", lines: 1589 },
+          { name: "后端 Functions", lines: 2335 },
+          { name: "配置 JSON", lines: 5 },
+        ],
+      };
+
+      /* ============ 账号统计 ============ */
+      let accData = null;
+
+      async function renderAccounts(force) {
+        const box = $("#acc-body");
+        if (!box) return;
+        if (accData && !force) return paintAccounts();
+        box.innerHTML = '<p class="msg">正在统计…</p>';
+        try {
+          const res = await fetch(API + "/stats", { credentials: "same-origin" });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "读不到统计");
+          accData = d.accounts || {};
+          paintAccounts();
+        } catch (err) {
+          box.innerHTML = '<p class="msg err">' + esc(err.message) + "</p>";
+        }
+      }
+
+      function accBar(label, count, percent, color) {
+        return `<div class="use-bar">
+          <span class="p">${esc(label)}</span>
+          <span class="t"><i style="width:${Math.max(count ? 3 : 0, percent)}%;background:${color}"></i></span>
+          <span class="n">${Number(count) || 0}</span>
+        </div>`;
+      }
+
+      function paintAccounts() {
+        const box = $("#acc-body");
+        const a = accData || {};
+        if (!box) return;
+        const n = (v) => Number(v) || 0;
+        const reviewTotal = n(a.verified) + n(a.pending) + n(a.none);
+        const pct = (v) => (reviewTotal ? Math.round((n(v) / reviewTotal) * 100) : 0);
+
+        box.innerHTML = `
+          <div class="use-block">
+            <h3>注册与新增</h3>
+            <p class="use-sub">一共有多少账号，今天和最近 7 天新来了多少。</p>
+            <div class="use-cards">
+              <div class="use-card"><b>${n(a.total)}</b><span>账号总数</span></div>
+              <div class="use-card"><b>${n(a.today)}</b><span>今日新增</span></div>
+              <div class="use-card"><b>${n(a.week)}</b><span>近 7 天新增</span></div>
+            </div>
+          </div>
+
+          <div class="use-block">
+            <h3>实名审核进度</h3>
+            <p class="use-sub">「已实名」会出现在学生风采里并带上蓝色小勾；「待审核」是真名填了、还没点通过。</p>
+            <div class="use-bars">
+              ${accBar("已实名", a.verified, pct(a.verified), "var(--gold)")}
+              ${accBar("待审核", a.pending, pct(a.pending), "var(--gold-2)")}
+              ${accBar("未提交", a.none, pct(a.none), "var(--line)")}
+            </div>
+          </div>
+
+          <div class="use-block">
+            <h3>活跃情况</h3>
+            <p class="use-sub">按「登录过」去重统计，同一个人多台设备只算一个。</p>
+            <div class="use-cards">
+              <div class="use-card"><b>${n(a.todayLogin)}</b><span>今日登录</span></div>
+              <div class="use-card"><b>${n(a.weekLogin)}</b><span>近 7 天登录</span></div>
+            </div>
+          </div>
+
+          <div class="use-block">
+            <h3>角色与状态</h3>
+            <div class="use-cards">
+              <div class="use-card"><b>${n(a.owner)}</b><span>服主</span></div>
+              <div class="use-card"><b>${n(a.admin)}</b><span>管理员</span></div>
+              <div class="use-card"><b>${n(a.member)}</b><span>普通成员</span></div>
+              <div class="use-card"><b>${n(a.banned)}</b><span>已封禁</span></div>
+            </div>
+          </div>`;
+      }
+
       /* ============ 页签 ============ */
       $$(".adm-tab").forEach((tab) => {
         tab.addEventListener("click", () => {
@@ -1400,6 +1518,7 @@
           if (name === "members") renderMembers();
           if (name === "students") renderVerify();
           if (name === "usage") renderUsage();
+          if (name === "accounts") renderAccounts();
         });
       });
 

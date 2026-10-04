@@ -136,8 +136,70 @@ export async function onRequestGet({ request, env }) {
     activity: { posts: mainPosts, replies, wall: wallPosts, users: newUsers, likes: newLikes },
     topPages: (topRows.results || []).map((r) => ({ path: r.path, hits: Number(r.n) || 0 })),
     totals,
+    accounts: await accountStats(env.DB),
     cloudflare: await cloudflareUsage(env.DB),
   });
+}
+
+/* ============================================================
+   账号统计:注册与新增 / 实名进度 / 活跃 / 角色与状态
+   全用聚合查询一次算完,不额外建表
+   ============================================================ */
+
+/* 北京时间某天的 0 点(毫秒) */
+function bjDayStart(offsetDays) {
+  const d = dayKey(Date.now(), offsetDays || 0);
+  return Date.parse(d + "T00:00:00+08:00");
+}
+
+async function accountStats(db) {
+  const todayStart = bjDayStart(0);
+  const weekStart = bjDayStart(-6); // 含今天共 7 天
+
+  const out = {
+    total: 0, today: 0, week: 0,
+    verified: 0, pending: 0, none: 0,
+    todayLogin: 0, weekLogin: 0,
+    banned: 0, owner: 0, admin: 0, member: 0,
+  };
+
+  try {
+    const u = await db
+      .prepare(
+        `SELECT COUNT(*) AS total,
+                SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS today,
+                SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS week,
+                SUM(CASE WHEN IFNULL(verified, 0) = 1 THEN 1 ELSE 0 END) AS verified,
+                SUM(CASE WHEN IFNULL(verified, 0) = 0 AND TRIM(IFNULL(real_name, '')) <> '' THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN IFNULL(verified, 0) = 0 AND TRIM(IFNULL(real_name, '')) = '' THEN 1 ELSE 0 END) AS none,
+                SUM(CASE WHEN IFNULL(banned, 0) = 1 THEN 1 ELSE 0 END) AS banned,
+                SUM(CASE WHEN role = 'owner' THEN 1 ELSE 0 END) AS owner,
+                SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS admin,
+                SUM(CASE WHEN IFNULL(role, 'member') NOT IN ('owner', 'admin') THEN 1 ELSE 0 END) AS member
+           FROM users`
+      )
+      .bind(todayStart, weekStart)
+      .first();
+    if (u) for (const k of Object.keys(out)) out[k] = Number(u[k]) || 0;
+  } catch (e) { /* 表还没建好就全 0 */ }
+
+  // 活跃:按会话的创建时间(即登录时间)去重数人,不需要额外字段
+  try {
+    const s = await db
+      .prepare(
+        `SELECT COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS today,
+                COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS week
+           FROM sessions`
+      )
+      .bind(todayStart, weekStart)
+      .first();
+    if (s) {
+      out.todayLogin = Number(s.today) || 0;
+      out.weekLogin = Number(s.week) || 0;
+    }
+  } catch (e) { /* 没有会话表就显示 0 */ }
+
+  return out;
 }
 
 /* ============================================================

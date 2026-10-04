@@ -2,7 +2,7 @@
    103班：音乐领军班 · 全站公共脚本
    1) 动态注入导航栏 + 主题开关 + 底部信息栏
    2) 账号系统:window.C103Auth(登录 / 注册 / 退出 / 改资料)
-   3) 10.3 开屏弹窗:官网正式成立(每台设备只弹一次)
+   3) 开屏公告:每次更新改 SPLASH_* 常量,版本号一变所有设备重新弹一次
    所有页面共用这一份,子页面不用各自写导航和登录逻辑。
    ============================================================ */
 
@@ -470,11 +470,26 @@ function renderAccount() {
 }
 
 /* ============================================================
-   10.3 开屏弹窗:官网正式成立
-   每台设备只弹一次(记住之后就不再打扰)
+   开屏公告:每次更新都在这里填一次
+   ------------------------------------------------------------
+   约定(每次改代码都要做):
+   1) 把本次更新的要点写进 SPLASH_NOTES
+   2) 把 SPLASH_VERSION 改成一个新值(用日期就行) —— 版本号一变,
+      所有设备(包括之前看过的)都会重新弹一次,知道有新东西
+   3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_KEY = "class103-splash-2026-10-03";
+const SPLASH_VERSION = "2026-10-04";
+const SPLASH_DATE = "2026.10.04";
+const SPLASH_TITLE = "103 纪事 · 本次更新";
+const SPLASH_LEAD = "这次补上了三件事：实名、皮肤、更清楚的后台。";
+const SPLASH_NOTES = [
+  "实名制上线 —— 通过审核后，名字后面会带一个蓝色小勾",
+  "学生风采改成账号驱动 —— 只展示通过审核的同学，点卡片直接进个人主页",
+  "四套主题皮肤 —— 导航栏「外观」里一键换：鎏金 / 极光 / 蔷薇 / 松林",
+  "管理后台新增「账号统计」，用量看板里能看代码规模",
+];
+const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
 function showSplash() {
   try {
@@ -490,14 +505,11 @@ function showSplash() {
   wrap.setAttribute("aria-modal", "true");
   wrap.innerHTML = `
     <div class="splash-card">
-      <p class="splash-no">2026.10.03</p>
-      <h2 class="splash-title">103 官网正式成立</h2>
-      <p class="splash-lead">金秋十月，属于我们的数字阵地正式上线。</p>
+      <p class="splash-no">${SPLASH_DATE}</p>
+      <h2 class="splash-title">${SPLASH_TITLE}</h2>
+      <p class="splash-lead">${SPLASH_LEAD}</p>
       <ul class="splash-list">
-        <li>自由注册登录 —— 起个名字、传头像、写个性签名</li>
-        <li>留言板升级 —— 像 B 站一样逐条回复，每条都标注 IP 属地</li>
-        <li>服主标识 —— 班委账号带金色「服主」徽章，发言自动置顶</li>
-        <li>图片上传 —— 最多 3 张，自动压缩，传得快也看得清</li>
+        ${SPLASH_NOTES.map((t) => `<li>${t}</li>`).join("")}
       </ul>
       <div class="splash-foot">
         <a class="splash-btn ghost" href="announcements.html">看公告</a>
@@ -722,7 +734,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 登录状态一变就重新拉一遍(没登录会自动把铃铛藏起来)
   C103Auth.onChange(() => loadNotif());
 
-  // ---- 10.3 开屏弹窗 ----
+  // ---- 开屏公告 ----
   showSplash();
 
   // ---- 外观面板:深色 / 浅色 + 四套主题色 ----
