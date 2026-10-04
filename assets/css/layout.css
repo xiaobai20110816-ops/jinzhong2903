@@ -21,14 +21,29 @@
   --nav-brd: var(--glass-brd);
 }
 
+/* 滚动后垫在胶囊背后的柔性遮罩:内容快贴到导航时先淡出,
+   再从胶囊底下滑过去,不会出现"文字正好卡在胶囊上沿"的割裂感 */
+.site-header::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 190px;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--bg0) 0%, var(--bg0) 42%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.28s ease-out;
+}
+.site-header.nav-scrolled::before { opacity: 1; }
+
 .nav {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   height: 58px;
-  padding: 0 10px 0 18px;
+  padding: 0 10px 0 16px;
   border-radius: 999px;
   /* 掠光 + --nav-bg:首屏会临时把 --nav-bg 换成更深的版本,这里跟着一起变 */
   background: var(--glass-sheen), var(--nav-bg);
@@ -40,11 +55,35 @@
   transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
 
+/* 滚起来之后:胶囊变成实底 + 更重的投影,配合 JS 的收窄 = 灵动岛。
+   同时把文字收成图标 —— 品牌只留 Logo 方块、账号只留头像,
+   这样收窄后仍放得下全部菜单项,不会把「班级公告」挤出去 */
+.site-header.nav-scrolled .nav {
+  background: var(--glass-sheen), var(--nav-solid);
+  border-color: var(--line);
+  box-shadow: var(--glass-rim), 0 14px 38px rgba(0, 0, 0, 0.18);
+  /* 收起时干脆一点(0.28s),松开时仍走上面的 0.6s,和主题淡变保持一致 */
+  transition-duration: 0.28s;
+}
+.site-header.nav-scrolled .nav-account { padding: 0 10px; }
+.site-header.nav-scrolled .nav-account.is-in { padding-left: 5px; }
+.site-header.nav-scrolled .nav-account .acc-text { max-width: 0; opacity: 0; }
+
 .nav-logo {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
 }
+/* 品牌文字:滚动收窄时折起来只留 Logo 方块(靠 max-width 过渡,不跳) */
+.nav-logo > span {
+  display: block;
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.32s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.22s ease;
+}
+.site-header.nav-scrolled .nav-logo > span { max-width: 0; opacity: 0; }
 .nav-logo img {
   width: 38px;
   height: 38px;
@@ -66,37 +105,32 @@
   text-transform: uppercase;
 }
 
-/* 桌面导航链接 */
+/* 桌面导航链接:整体靠右,一条药丸菜单(悬停/当前项铺底,不再用下划线) */
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  margin-left: auto;   /* 把菜单和右侧按钮一起推到右边,左边只留品牌 */
+  min-width: 0;
+  /* 窗口再窄也不会把按钮挤出胶囊,实在放不下就在菜单内横向滑动 */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.nav-links::-webkit-scrollbar { display: none; }
 .nav-links a {
   position: relative;
-  padding: 8px 15px;
+  padding: 8px 12px;
+  border-radius: 999px;
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 1.5px;
-  font-size: 0.9rem;
+  letter-spacing: 1px;
+  font-size: 0.86rem;
+  white-space: nowrap;
   color: var(--nav-ink-dim);
-  transition: color 0.6s ease;
+  transition: color 0.25s ease, background-color 0.25s ease;
 }
-.nav-links a::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 1px;
-  width: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--gold), var(--gold-2));
-  transform: translateX(-50%);
-  transition: width 0.25s;
-}
-.nav-links a:hover { color: var(--nav-ink); }
-.nav-links a:hover::after { width: 52%; }
-.nav-links a.active { color: var(--gold); }
-.nav-links a.active::after { width: 52%; }
+.nav-links a:hover { color: var(--nav-ink); background: var(--chip); }
+.nav-links a.active { color: var(--gold); background: var(--gold-soft); }
 
 /* ---- 外观按钮:玻璃圆钮,点开深色/浅色 + 主题色面板 ---- */
 .theme-toggle {
@@ -137,11 +171,17 @@
   max-width: 170px;
   -webkit-tap-highlight-color: transparent;
   transition: background-color 0.6s ease, color 0.6s ease,
-    border-color 0.6s ease, transform 0.25s ease;
+    border-color 0.6s ease, transform 0.25s ease, padding 0.28s ease;
 }
 .nav-account:hover { transform: scale(1.04); background: var(--gold-soft); color: var(--nav-ink); }
 .nav-account.is-in { color: var(--gold); padding-left: 5px; }
-.nav-account .acc-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-account .acc-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+  transition: max-width 0.28s ease, opacity 0.2s ease;
+}
 .nav-account .acc-ico { width: 17px; height: 17px; display: block; }
 .nav-account .acc-avatar {
   flex: none;
@@ -283,14 +323,24 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 
 /* ---- 响应式 ---- */
 
-/* 导航到 6 项后,窄一些的桌面窗口先收紧间距,别把「班级公告」挤到换行 */
-@media (min-width: 821px) and (max-width: 1000px) {
-  .nav-links a { padding: 8px 10px; font-size: 0.84rem; letter-spacing: 1px; }
-  .nav .nav-logo b { font-size: 0.95rem; letter-spacing: 1px; }
+/* 980~1160:菜单项先收紧,品牌文字让位,别把「班级公告」挤出胶囊 */
+@media (max-width: 1160px) {
+  .nav-logo > span { display: none; }
+}
+
+/* 更窄的桌面窗口:菜单项再压一档,账号只留头像 */
+@media (max-width: 1000px) {
+  .nav-links a { padding: 8px 9px; font-size: 0.8rem; letter-spacing: 0.5px; }
+  .nav-account { padding: 0 10px; }
+  .nav-account.is-in { padding-left: 5px; }
+  .nav-account .acc-text { display: none; }
 }
 
 @media (max-width: 820px) {
   .nav-toggle { display: flex; }
+  /* 手机上横向空间够,品牌文字重新显示(滚动时仍会折起来) */
+  .nav-logo > span { display: block; }
+  .nav-links { overflow: visible; }
 
   /* 手机的「管理后台」被 nav.js 挪进了下拉菜单,跟着菜单样式走 */
   .nav-links .nav-admin {
@@ -309,6 +359,7 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
     top: 82px;
     left: 20px;
     right: 20px;
+    margin-left: 0;
     flex-direction: column;
     align-items: stretch;
     gap: 0;
@@ -329,10 +380,10 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   .nav-links a {
     text-align: center;
     padding: 13px;
+    border-radius: 12px;
     border-bottom: 1px solid var(--line);
   }
   .nav-links a:last-child { border-bottom: none; }
-  .nav-links a::after { display: none; }
 
   .section { padding: 48px 0; }
   .section-title { font-size: 1.5rem; }

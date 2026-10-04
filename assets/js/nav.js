@@ -760,14 +760,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-04-4";
-const SPLASH_DATE = "2026.10.04";
+const SPLASH_VERSION = "2026-10-05-1";
+const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "个人主页多了一栏成就，去把三个称号拿满吧。";
+const SPLASH_LEAD = "导航栏改成了悬浮胶囊，往下滚动会「收紧」，试着滑一下看看。";
 const SPLASH_NOTES = [
-  "班级成就上线 —— 个人主页能看到「笔杆子 / 人气王 / 社交达人」三个称号",
-  "发帖满 10 条、主页被赞满 5 次、评论过 10 个人，自动解锁；没解锁的会显示还差多少",
-  "（上一版）公告编辑器的 Markdown 工具栏",
+  "导航栏重新排版：品牌在左、菜单靠右，当前页铺一层底色，不再挤成一排",
+  "往下滚动时胶囊收窄变实、顶部浮出一层柔和遮罩，滑回顶部再展开",
+  "（上一版）班级成就：个人主页的「笔杆子 / 人气王 / 社交达人」三个称号",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -869,6 +869,67 @@ document.addEventListener("DOMContentLoaded", () => {
     const links = header.querySelector("#nav-links");
     if (adminLink && links) links.appendChild(adminLink);
   }
+
+  // ---- 灵动岛:滚动后胶囊收窄 + 变实底,顶部铺一层柔性遮罩 ----
+  // 几何(收窄)交给弹簧插值,视觉(底色/投影/遮罩)交给 CSS 过渡 —— 两者解耦,
+  // 背景不会跟着弹簧的尾巴慢半拍。收敛后立刻停机,不跑常驻动画循环。
+  // 首页第一屏是视频,导航有另一套深色逻辑,这里刻意用 nav-scrolled 这个类名避开。
+  (function () {
+    const nav = header.querySelector(".nav");
+    if (!nav) return;
+
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const poster = document.body.classList.contains("poster")
+      ? document.getElementById("poster")
+      : null;
+    const THRESHOLD = 64;   // 普通页面:滚过 64px 就收起
+    const W_FULL = 1120;    // 展开宽度(与 --maxw 一致)
+    const W_TIGHT = 980;    // 收起宽度
+    const STIFF = 170;      // 弹簧刚度
+    const DAMP = 26;        // 阻尼
+
+    let x = 0, v = 0, target = 0, raf = 0, lastT = 0;
+    const isSmall = () => matchMedia("(max-width: 900px)").matches;
+
+    function paint(p) {
+      // 窄窗不做收窄(整宽本来就小于收起宽度),交给 CSS 的整宽处理
+      nav.style.maxWidth = isSmall() ? "" : Math.round(W_FULL + (W_TIGHT - W_FULL) * p) + "px";
+    }
+
+    function step(now) {
+      raf = 0;
+      if (!lastT) lastT = now;
+      const dt = Math.min(0.05, (now - lastT) / 1000); // 限步长,切标签页回来时不会炸开
+      lastT = now;
+      // 半隐式欧拉:先更新速度,再用新速度更新位置(顺序不能反)
+      v += (-STIFF * (x - target) - DAMP * v) * dt;
+      x += v * dt;
+      paint(x < 0 ? 0 : x > 1 ? 1 : x);
+      if (Math.abs(target - x) > 0.0008 || Math.abs(v) > 0.0008) {
+        raf = requestAnimationFrame(step);
+      } else {
+        x = target; v = 0; lastT = 0; paint(x);
+      }
+    }
+
+    function apply() {
+      const y = window.pageYOffset || document.documentElement.scrollTop || 0;
+      const on = poster ? y > poster.offsetHeight - 80 : y > THRESHOLD;
+      target = on ? 1 : 0;
+      header.classList.toggle("nav-scrolled", on);
+      if (reduce) { x = target; v = 0; paint(x); return; }
+      if (!raf) { lastT = 0; raf = requestAnimationFrame(step); }
+    }
+
+    let ticking = false;
+    addEventListener("scroll", () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => { ticking = false; apply(); });
+    }, { passive: true });
+    addEventListener("resize", apply, { passive: true });
+    apply();
+  })();
 
   // ---- 注入底部信息栏(固定不随滚动消失) ----
   // 文案从站点内容里取,后台改一次全站跟着变;拿不到就用这份兜底
