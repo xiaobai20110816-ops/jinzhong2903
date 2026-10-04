@@ -833,14 +833,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-04-19";
+const SPLASH_VERSION = "2026-10-04-20";
 const SPLASH_DATE = "2026.10.04";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "图库上传终于通了：修好 KV 存储写入的类型问题。";
+const SPLASH_LEAD = "图库再打磨：后台能看占用、图片名字常显、大图读取改成流式。";
 const SPLASH_NOTES = [
-  "定位到真因：上传时把图片直接交给 KV 存会报类型错误，改成先转成二进制再存，已修好",
-  "上传带真实进度条，超时给友好中文提示",
-  "实名 30MB 额度、自己删自己的图、管理员/服主无限额度，规则不变",
+  "后台「用量看板」的 KV 图片库新增「图库占用（自算）」，不配 API Token 也能看到用了多少 / 1GB",
+  "图库每张图的名字和下载按钮不再需要鼠标悬停，一直显示",
+  "读图改成流式返回，大图起速更快、更省内存",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

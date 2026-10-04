@@ -101,7 +101,10 @@ export async function onRequestGet({ request, env }) {
     .catch(() => ({ results: [] }));
 
   // 总量:各表一共多少行
-  const totals = { users: 0, mainPosts: 0, replies: 0, wallPosts: 0, likes: 0, images: 0 };
+  const totals = {
+    users: 0, mainPosts: 0, replies: 0, wallPosts: 0, likes: 0, images: 0,
+    galleryCount: 0, galleryBytes: 0,
+  };
   try {
     const u = await env.DB.prepare("SELECT COUNT(*) AS n FROM users").first();
     totals.users = (u && u.n) || 0;
@@ -120,6 +123,16 @@ export async function onRequestGet({ request, env }) {
     const l = await env.DB.prepare("SELECT COUNT(*) AS n FROM profile_likes").first();
     totals.likes = (l && l.n) || 0;
   } catch (e) { /* 表刚建好还没数据,给 0 就行 */ }
+
+  // 图库专属用量:直接数 D1 里的元数据,不依赖 Cloudflare Token。
+  // KV 官方存储字节数只有配了 API Token 才读得到,而这里任何时候都能给一个准数。
+  try {
+    const g = await env.DB.prepare(
+      "SELECT COUNT(*) AS n, COALESCE(SUM(full_size), 0) AS b FROM gallery"
+    ).first();
+    totals.galleryCount = Number((g && g.n) || 0);
+    totals.galleryBytes = Number((g && g.b) || 0);
+  } catch (e) { /* gallery 表还没建好就先给 0 */ }
 
   // 图片存在 KV 里,列一次 key 就能数出张数(上限一次 1000 个)
   if (env.STORY_KV) {
@@ -142,7 +155,7 @@ export async function onRequestGet({ request, env }) {
     totals,
     accounts: await accountStats(env.DB),
     cloudflare: cloudflare,
-    quota: quotaGroups(cloudflare, d1Bytes),
+    quota: quotaGroups(cloudflare, d1Bytes, totals.galleryBytes, totals.galleryCount),
   });
 }
 
@@ -453,7 +466,7 @@ function quotaItem(label, used, limit, fmt, hint) {
   return { label: label, used: used == null ? null : used, limit: limit, fmt: fmt, percent: pct, hint: hint || "" };
 }
 
-function quotaGroups(cf, selfBytes) {
+function quotaGroups(cf, selfBytes, galleryBytes, galleryCount) {
   const d1 = (cf && cf.d1) || {};
   const kv = (cf && cf.kv) || {};
   const cfOk = !!(cf && cf.ok);
@@ -484,14 +497,23 @@ function quotaGroups(cf, selfBytes) {
     },
     {
       name: "KV 图片库",
-      note: "免费版：读 10 万/天，写、删、列举各 1000/天，账号总存储 1 GB。",
+      note: "免费版：读 10 万/天，写、删、列举各 1000/天，账号总存储 1 GB。「图库占用」不用 Token 也能看到。",
       warn: warnOn && !kv.ok ? kv.reason : "",
       items: [
+        quotaItem(
+          "图库占用（自算）",
+          galleryBytes == null ? null : galleryBytes,
+          FREE.kvStore,
+          "bytes",
+          "按 D1 里记录的原图累计，不用 Token 也能看到" +
+            (galleryCount ? "；共 " + galleryCount + " 张" : "（还没传过图）") +
+            "。不含缩略图与帖子图片"
+        ),
         quotaItem("今日读次数", kv.ok ? kv.reads : null, FREE.kvRead, "int", kv.ok ? "" : kv.reason),
         quotaItem("今日写次数", kv.ok ? kv.writes : null, FREE.kvWrite, "int", kv.ok ? "" : kv.reason),
         quotaItem("今日删次数", kv.ok ? kv.deletes : null, FREE.kvDelete, "int", kv.ok ? "" : kv.reason),
         quotaItem("今日列举次数", kv.ok ? kv.lists : null, FREE.kvList, "int", kv.ok ? "" : kv.reason),
-        quotaItem("存储占用", kv.ok ? kv.bytes : null, FREE.kvStore, "bytes", kv.ok ? "" : kv.reason),
+        quotaItem("存储占用（官方）", kv.ok ? kv.bytes : null, FREE.kvStore, "bytes", kv.ok ? "" : kv.reason),
       ],
     },
     {

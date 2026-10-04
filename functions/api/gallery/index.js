@@ -107,9 +107,14 @@ export async function onRequestPost({ request, env }) {
     const fullBuf = await fullFile.arrayBuffer();
     const thumbBuf = await thumbFile.arrayBuffer();
 
-    // 原图和缩略图分开存,读的时候按 key 后半段区分,不用整张下载就能判断
-    await env.STORY_KV.put(KV_PREFIX + fullKey, fullBuf, { metadata: { ct: fullType } });
-    await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbBuf, { metadata: { ct: thumbType } });
+    // 原图和缩略图分开存,读的时候按 key 后半段区分,不用整张下载就能判断。
+    // 顺手把字节数写进 metadata,读图时能带上 content-length(下载能显示进度)
+    await env.STORY_KV.put(KV_PREFIX + fullKey, fullBuf, {
+      metadata: { ct: fullType, size: fullFile.size },
+    });
+    await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbBuf, {
+      metadata: { ct: thumbType, size: thumbFile.size },
+    });
 
     await env.DB.prepare(
       "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, full_size, created_at) VALUES (?, ?, ?, ?, ?, ?)"

@@ -1601,7 +1601,7 @@
             <p class="use-sub">把站内数据对照 Cloudflare 免费版的上限。额度每天按 UTC 0 点重置，「今日」用的是同一个口径；用量过 70% 转黄、过 90% 转红。</p>
             ${
               quotaOffline
-                ? '<p class="use-sub q-warn">还没接上 Cloudflare 官方数据 —— 配好页面最下面那个 API Token 后，这里就会显示实时用量（D1 存储那项不用 Token 也能看到）。</p>'
+                ? '<p class="use-sub q-warn">还没接上 Cloudflare 官方数据 —— 配好页面最下面那个 API Token 后，这里就会显示实时用量（D1 存储、图库占用这两项不用 Token 也能看到）。</p>'
                 : ""
             }
             ${quotaHTML}
@@ -1651,6 +1651,7 @@
               <div class="use-card"><b>${t.replies}</b><span>回复</span></div>
               <div class="use-card"><b>${t.wallPosts}</b><span>主页留言</span></div>
               <div class="use-card"><b>${t.images}</b><span>图片（KV）</span></div>
+              <div class="use-card"><b>${fmtBy("bytes", Number(t.galleryBytes) || 0)}</b><span>图库占用（KV）</span></div>
             </div>
           </div>
 
@@ -1708,14 +1709,14 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 16679,
+        total: 16725,
         files: 52,
         updated: "2026-10-04",
         parts: [
-          { name: "页面 HTML", lines: 6655 },
-          { name: "样式 CSS", lines: 3796 },
+          { name: "页面 HTML", lines: 6656 },
+          { name: "样式 CSS", lines: 3798 },
           { name: "前端 JS", lines: 2264 },
-          { name: "后端 Functions", lines: 3959 },
+          { name: "后端 Functions", lines: 4002 },
           { name: "配置 JSON", lines: 5 },
         ],
       };

@@ -171,19 +171,21 @@
   color: var(--text);
   border-radius: 0 0 12px 12px;
   background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.85));
-  opacity: 0;
+  /* 一直显示:名字和下载/删除按钮不再靠 hover 才出来 */
+  opacity: 1;
   transition: opacity 0.25s, color 0.6s ease;
 }
-.gal-item:hover figcaption { opacity: 1; }
 
 .gal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   font-family: var(--font-display);
   font-weight: 600;
 }
-.gal-item:hover .gal-title { display: block; }
 
 /* 下载原图按钮:小金药丸,触屏上 hover 不到也能点 */
 .gal-dl {
