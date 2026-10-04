@@ -760,14 +760,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-2";
+const SPLASH_VERSION = "2026-10-05-3";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "导航栏现在会收成左边的一个小圆圈，点一下就能展开。";
+const SPLASH_LEAD = "这一版主要在修流畅度：导航收放和页头动画都比之前顺了。";
 const SPLASH_NOTES = [
-  "往下滚动时整条导航收成左边一个小圆圈，只留 Logo；点圆圈就地展开，点空白处收回，滑回顶部自动展开",
-  "全站子页面换了页头：细网格地层 + 四角描金括号 + 脉冲眉标 + 标题柔光，副标题上多了一条点着小菱形的分割线",
-  "（上一版）导航栏重新排版：品牌在左、菜单靠右，当前页铺一层底色",
+  "修掉卡顿：滚动时导航不再每帧重算一遍动画，收/放的过程中临时摘掉毛玻璃，页头也不再常驻重绘",
+  "（上一版）往下滚动，导航会收成左边一个小圆圈，点一下就地展开",
+  "（上一版）全站子页面换了页头：细网格地层 + 四角描金括号 + 脉冲眉标 + 标题柔光",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -894,14 +894,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const DAMP = 26;             // 阻尼
 
     let x = 0, v = 0, target = 0, raf = 0, lastT = 0;
-    let scrolled = false, opened = false, cw = 0;
+    let scrolled = false, opened = false, cw = 0, posterH = 0;
+    let lastTarget = -1;   // -1 = 还没跑过,保证首次一定算一遍
 
     const isSmall = () => matchMedia("(max-width: 900px)").matches;
 
     // 导航可用宽度 = 外壳内容盒宽(圆圈的终点要贴着左边)
+    // 首页首屏高度也在这里量一次:以前每帧读 poster.offsetHeight 会强制刷新布局
     function measure() {
       const cs = getComputedStyle(header);
       cw = header.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      posterH = poster ? poster.offsetHeight : 0;
     }
 
     function paint(p) {
@@ -932,21 +935,30 @@ document.addEventListener("DOMContentLoaded", () => {
         raf = requestAnimationFrame(step);
       } else {
         x = target; v = 0; lastT = 0; paint(x);
+        header.classList.remove("nav-anim");   // 停帧了就把毛玻璃还回去
       }
     }
 
     function apply() {
       const y = window.pageYOffset || document.documentElement.scrollTop || 0;
-      scrolled = poster ? y > poster.offsetHeight - 80 : y > THRESHOLD;
+      scrolled = posterH ? y > posterH - 80 : y > THRESHOLD;
       if (!scrolled) opened = false;                 // 回到顶部就复位,下次滚下来照常收
       const collapsed = scrolled && !opened && !isSmall();
       target = collapsed ? 1 : 0;
       // 类名分两层:nav-scrolled 只管"实底 + 遮罩"(手机也一样),nav-collapsed 只管"收成圆圈"
       header.classList.toggle("nav-scrolled", scrolled);
       header.classList.toggle("nav-collapsed", collapsed);
-      nav.title = collapsed ? "展开导航" : "";
+      const tip = collapsed ? "展开导航" : "";
+      if (nav.title !== tip) nav.title = tip;
       if (reduce) { x = target; v = 0; paint(x); return; }
-      if (!raf) { lastT = 0; raf = requestAnimationFrame(step); }
+      // 目标没变就别再起一帧 —— 以前每次滚动都白跑一遍弹簧,会一直触发布局
+      const moved = target !== lastTarget;
+      lastTarget = target;
+      if (!moved || raf) return;
+      // 收/放的过程里先摘掉毛玻璃:胶囊每帧都在改尺寸,带 backdrop-filter 会不停重算背景模糊
+      header.classList.add("nav-anim");
+      lastT = 0;
+      raf = requestAnimationFrame(step);
     }
 
     // 收起状态下点圆圈 = 就地展开(展开后点页面空白处收回)
@@ -969,7 +981,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ticking = true;
       requestAnimationFrame(() => { ticking = false; apply(); });
     }, { passive: true });
-    addEventListener("resize", () => { measure(); apply(); }, { passive: true });
+    addEventListener("resize", () => { measure(); paint(x); apply(); }, { passive: true });
     measure();
     apply();
   })();
