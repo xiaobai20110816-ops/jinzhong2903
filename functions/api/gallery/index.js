@@ -101,9 +101,15 @@ export async function onRequestPost({ request, env }) {
     const fullKey = hex + ".full." + fullExt;
     const thumbKey = hex + ".thumb." + thumbExt;
 
+    // KV.put 只认字符串 / ArrayBuffer / ArrayBufferView / ReadableStream,
+    // 不能直接塞 File(Blob)。先读成 ArrayBuffer 再写,否则报
+    // "KV put() accepts only strings, ArrayBuffers, ..."(upload.js 也是这么做的)。
+    const fullBuf = await fullFile.arrayBuffer();
+    const thumbBuf = await thumbFile.arrayBuffer();
+
     // 原图和缩略图分开存,读的时候按 key 后半段区分,不用整张下载就能判断
-    await env.STORY_KV.put(KV_PREFIX + fullKey, fullFile, { metadata: { ct: fullType } });
-    await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbFile, { metadata: { ct: thumbType } });
+    await env.STORY_KV.put(KV_PREFIX + fullKey, fullBuf, { metadata: { ct: fullType } });
+    await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbBuf, { metadata: { ct: thumbType } });
 
     await env.DB.prepare(
       "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, full_size, created_at) VALUES (?, ?, ?, ?, ?, ?)"
