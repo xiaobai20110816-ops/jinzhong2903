@@ -237,7 +237,10 @@ async function decodeImage(file, maxEdge) {
 const C103Image = {
   async compress(file, opts) {
     const maxEdge = (opts && opts.maxEdge) || 1600;
-    const target = (opts && opts.targetBytes) || 1024 * 1024;
+    // targetBytes 传 0 表示「不按体积反复压，只按 maxEdge + quality 出这一张」;
+    // 不传则沿用老的 1MB 上限(头像等其它调用方不受影响)
+    const rawTarget = opts && opts.targetBytes;
+    const target = rawTarget === 0 ? Infinity : (rawTarget || 1024 * 1024);
 
     let src;
     try {
@@ -254,7 +257,7 @@ const C103Image = {
 
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-    let quality = 0.85;
+    let quality = (opts && opts.quality) || 0.85;
     let blob = null;
 
     for (let round = 0; round < 10; round++) {
@@ -833,14 +836,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-04-20";
+const SPLASH_VERSION = "2026-10-04-21";
 const SPLASH_DATE = "2026.10.04";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "图库再打磨：后台能看占用、图片名字常显、大图读取改成流式。";
+const SPLASH_LEAD = "图库上传可选画质档位，图片加边缘缓存，看得更快。";
 const SPLASH_NOTES = [
-  "后台「用量看板」的 KV 图片库新增「图库占用（自算）」，不配 API Token 也能看到用了多少 / 1GB",
-  "图库每张图的名字和下载按钮不再需要鼠标悬停，一直显示",
-  "读图改成流式返回，大图起速更快、更省内存",
+  "上传时可选画质：超大（原始不压缩）/ 大 2560 / 中 1920 / 小 1280 / 极小 960，档位越小传得越快、同学下载也越快",
+  "图片加了 Cloudflare 边缘缓存：同一张图被第二个人打开时直接从就近节点取，跨境访问更快",
+  "后台「用量看板」能看到图库占用；图片名字与下载按钮一直显示",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

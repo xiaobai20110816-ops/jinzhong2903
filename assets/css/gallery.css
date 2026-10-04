@@ -34,6 +34,22 @@
   outline: none;
 }
 .g-up input[type="text"]:focus { border-color: var(--gold-line); }
+/* 画质档位下拉 */
+.g-sel {
+  flex: none;
+  padding: 9px 12px;
+  border: 1px solid var(--glass-brd);
+  border-radius: 12px;
+  background: var(--chip);
+  color: inherit;
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  cursor: pointer;
+  outline: none;
+}
+.g-sel:focus { border-color: var(--gold-line); }
+/* 下拉里的选项在 Windows 上默认白底黑字,显式给个深色底免得浅色皮肤下看不清 */
+.g-sel option { background: #0e1422; color: #eef2f8; }
 .g-pick {
   display: inline-flex;
   align-items: center;
