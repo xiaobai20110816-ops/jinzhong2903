@@ -11,7 +11,7 @@ import {
   ensureSchema,
   currentUser,
   isStaff,
-} from "../../_utils.js";
+} from "../_utils.js";
 
 export async function onRequestDelete({ request, env, params }) {
   if (!env.STORY_KV) return notReady("图片存储");
