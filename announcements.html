@@ -70,6 +70,62 @@
     .tl-body h3 { font-size: 1.1rem; margin-bottom: 6px; }
     .tl-body p { color: var(--muted); font-size: 0.92rem; }
 
+    /* 正文里的 Markdown 元素(标题 / 列表 / 引用 / 代码 / 链接 / 分割线) */
+    .tl-body h4, .tl-body h5, .tl-body h6 {
+      font-size: 0.98rem;
+      margin: 12px 0 5px;
+      color: var(--text);
+      transition: color 0.6s ease;
+    }
+    .tl-body ul, .tl-body ol {
+      margin: 6px 0 6px 22px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      transition: color 0.6s ease;
+    }
+    .tl-body li { margin: 3px 0; }
+    .tl-body strong { color: var(--text); transition: color 0.6s ease; }
+    .tl-body blockquote {
+      margin: 9px 0;
+      padding: 7px 14px;
+      border-left: 3px solid var(--gold-line);
+      border-radius: 0 10px 10px 0;
+      background: var(--gold-soft);
+      color: var(--muted);
+      font-size: 0.9rem;
+      transition: color 0.6s ease, background-color 0.6s ease, border-color 0.6s ease;
+    }
+    .tl-body code {
+      font-family: ui-monospace, Consolas, "Courier New", monospace;
+      font-size: 0.86em;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      transition: background-color 0.6s ease, border-color 0.6s ease;
+    }
+    .tl-body pre {
+      margin: 9px 0;
+      padding: 12px 14px;
+      border-radius: 12px;
+      overflow-x: auto;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      transition: background-color 0.6s ease, border-color 0.6s ease;
+    }
+    .tl-body pre code { padding: 0; border: none; background: none; }
+    .tl-body a {
+      color: var(--gold);
+      border-bottom: 1px solid var(--gold-line);
+      transition: color 0.6s ease, border-color 0.6s ease;
+    }
+    .tl-body hr {
+      margin: 14px 0;
+      border: none;
+      border-top: 1px solid var(--line);
+      transition: border-color 0.6s ease;
+    }
+
     /* 置顶公告:金色描边突出 */
     .tl-item.pinned .tl-body {
       border-color: var(--gold-line);
@@ -197,18 +253,21 @@
 
         timeline.innerHTML = items
           .map((a) => {
-            const paras = String(a.body || "")
-              .split("\n")
-              .map((t) => t.trim())
-              .filter(Boolean)
-              .map((t) => `<p>${esc(t)}</p>`)
-              .join("");
+            // 正文按 Markdown 渲染(后台怎么写就怎么显示);渲染器没加载时退回纯文本段落
+            const body = window.C103Markdown
+              ? window.C103Markdown.render(a.body)
+              : String(a.body || "")
+                  .split("\n")
+                  .map((t) => t.trim())
+                  .filter(Boolean)
+                  .map((t) => `<p>${esc(t)}</p>`)
+                  .join("");
             const title = a.title ? `<h3>${esc(a.title)}</h3>` : "";
             const pin = a.pinned ? `<span class="tl-pin">置顶</span>` : "";
             return `
         <div class="tl-item${a.pinned ? " pinned" : ""}">
           <div class="tl-date">${esc(a.date)}${pin}</div>
-          <div class="tl-body">${title}${paras}</div>
+          <div class="tl-body">${title}${body}</div>
         </div>`;
           })
           .join("");

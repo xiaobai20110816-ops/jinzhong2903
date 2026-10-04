@@ -470,6 +470,149 @@ function renderAccount() {
 }
 
 /* ============================================================
+   Markdown:极简、安全的渲染器(公告正文等富文本用)
+   先把整段文本转义成 HTML 实体,再套一层白名单语法 ——
+   所以就算有人贴 <script>,也只会原样显示成文字
+   支持:标题(#~####)/ 粗体 / 斜体 / 删除线 / 行内代码 / 代码块 /
+        链接 / 无序列表 / 有序列表 / 引用 / 分割线
+   ============================================================ */
+window.C103Markdown = (function () {
+  const esc = (s) =>
+    String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  // 只放行安全协议,挡掉 javascript: 这类
+  function safeUrl(u) {
+    const s = String(u || "").trim();
+    return /^(https?:|mailto:|\/|\.\/|#)/i.test(s) ? s : "";
+  }
+
+  // 行内语法(输入必须是已转义的文本)
+  function inline(s) {
+    let t = esc(s);
+    t = t.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
+      const href = safeUrl(url);
+      if (!href) return m;
+      return '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
+    });
+    t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    t = t.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
+    t = t.replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    return t;
+  }
+
+  function render(src) {
+    const lines = String(src == null ? "" : src).replace(/\r\n?/g, "\n").split("\n");
+    const out = [];
+    let i = 0;
+    let para = [];
+    let list = null; // { tag: "ul"|"ol", items: [] }
+
+    const flushPara = () => {
+      if (para.length) {
+        out.push("<p>" + para.map(inline).join("<br>") + "</p>");
+        para = [];
+      }
+    };
+    const flushList = () => {
+      if (list) {
+        out.push(
+          "<" + list.tag + ">" + list.items.map((x) => "<li>" + inline(x) + "</li>").join("") + "</" + list.tag + ">"
+        );
+        list = null;
+      }
+    };
+    const flushAll = () => { flushPara(); flushList(); };
+
+    while (i < lines.length) {
+      const t = lines[i].trim();
+
+      // 代码块 ``` ... ```
+      if (/^```/.test(t)) {
+        flushAll();
+        i++;
+        const buf = [];
+        while (i < lines.length && !/^```/.test(lines[i].trim())) {
+          buf.push(lines[i]);
+          i++;
+        }
+        i++; // 收尾的 ```
+        out.push("<pre><code>" + esc(buf.join("\n")) + "</code></pre>");
+        continue;
+      }
+
+      if (!t) { flushAll(); i++; continue; }
+
+      if (/^(-{3,}|\*{3,})$/.test(t)) { flushAll(); out.push("<hr>"); i++; continue; }
+
+      const h = t.match(/^(#{1,4})\s+(.*)$/);
+      if (h) {
+        flushAll();
+        const lv = h[1].length + 2; // # → h3,页面里 h1/h2 留给标题
+        out.push("<h" + lv + ">" + inline(h[2]) + "</h" + lv + ">");
+        i++;
+        continue;
+      }
+
+      if (/^>\s?/.test(t)) {
+        flushAll();
+        const buf = [];
+        while (i < lines.length && /^>\s?/.test(lines[i].trim())) {
+          buf.push(lines[i].trim().replace(/^>\s?/, ""));
+          i++;
+        }
+        out.push("<blockquote>" + buf.map(inline).join("<br>") + "</blockquote>");
+        continue;
+      }
+
+      const ul = t.match(/^[-*+]\s+(.*)$/);
+      if (ul) {
+        flushPara();
+        if (!list || list.tag !== "ul") { flushList(); list = { tag: "ul", items: [] }; }
+        list.items.push(ul[1]);
+        i++;
+        continue;
+      }
+
+      const ol = t.match(/^\d+[.)]\s+(.*)$/);
+      if (ol) {
+        flushPara();
+        if (!list || list.tag !== "ol") { flushList(); list = { tag: "ol", items: [] }; }
+        list.items.push(ol[1]);
+        i++;
+        continue;
+      }
+
+      flushList();
+      para.push(t);
+      i++;
+    }
+    flushAll();
+    return out.join("");
+  }
+
+  // 纯文本版(去掉所有标记),给首页那种「只看一句摘要」的地方用
+  function text(src) {
+    return String(src == null ? "" : src)
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^>\s?/gm, "")
+      .replace(/^\s*[-*+]\s+/gm, "")
+      .replace(/^\s*\d+[.)]\s+/gm, "")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/[*_~`]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  return { render: render, text: text, escape: esc };
+})();
+
+/* ============================================================
    开屏公告:每次更新都在这里填一次
    ------------------------------------------------------------
    约定(每次改代码都要做):
@@ -479,7 +622,7 @@ function renderAccount() {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-04";
+const SPLASH_VERSION = "2026-10-04-2";
 const SPLASH_DATE = "2026.10.04";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
 const SPLASH_LEAD = "这次补上了三件事：实名、皮肤、更清楚的后台。";
@@ -487,6 +630,7 @@ const SPLASH_NOTES = [
   "实名制上线 —— 通过审核后，名字后面会带一个蓝色小勾",
   "学生风采改成账号驱动 —— 只展示通过审核的同学，点卡片直接进个人主页",
   "四套主题皮肤 —— 导航栏「外观」里一键换：鎏金 / 极光 / 蔷薇 / 松林",
+  "班级公告支持 Markdown —— 标题、加粗、列表、引用、代码块、链接",
   "管理后台新增「账号统计」，用量看板里能看代码规模",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;

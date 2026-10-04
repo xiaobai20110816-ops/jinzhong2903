@@ -704,7 +704,9 @@
         const box = document.querySelector("#announcements .news-list");
         if (!box || !list.length) return;
         const digest = (a) => {
-          const line = String(a.body || "").split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
+          const raw = String(a.body || "").split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
+          // 摘要去掉 Markdown 标记,别把 ** 或 # 露出来
+          const line = window.C103Markdown ? window.C103Markdown.text(raw) : raw;
           const text = a.title && line ? a.title + " —— " + line : (a.title || line);
           return text.length > 62 ? text.slice(0, 62) + "…" : text;
         };

@@ -489,7 +489,7 @@
           <div class="glass panel" id="panel-ann">
             <div class="panel-head">
               <h2>班级公告</h2>
-              <p>首页的「班级公告」和公告页都读这里。勾了置顶的排在最前面，日期写 2026.10.03 这种格式。</p>
+              <p>首页的「班级公告」和公告页都读这里。勾了置顶的排在最前面，日期写 2026.10.03 这种格式。<b>正文支持 Markdown</b>：<code># 小标题</code>、<code>**加粗**</code>、<code>- 列表</code>、<code>&gt; 引用</code>、行内 <code>代码</code>、<code>[链接](https://…)</code>。</p>
             </div>
             <div class="rows" id="ann-list"></div>
             <div class="panel-foot">
@@ -662,7 +662,7 @@
             <label class="chk"><input class="i-pin" type="checkbox" ${a.pinned ? "checked" : ""}> 置顶</label>
             <button class="icon-btn del" type="button" title="删掉这条">×</button>
           </div>
-          <textarea class="i-body" rows="4" placeholder="正文，一行一段">${esc(a.body)}</textarea>`;
+          <textarea class="i-body" rows="4" placeholder="正文，支持 Markdown：# 小标题、**加粗**、- 列表、> 引用、\`代码\`、[链接](https://…)">${esc(a.body)}</textarea>`;
         $(".del", el).addEventListener("click", () => el.remove());
         return el;
       }
@@ -1421,13 +1421,13 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 11130,
+        total: 11319,
         files: 42,
         updated: "2026-10-04",
         parts: [
-          { name: "页面 HTML", lines: 4232 },
+          { name: "页面 HTML", lines: 4293 },
           { name: "样式 CSS", lines: 2969 },
-          { name: "前端 JS", lines: 1589 },
+          { name: "前端 JS", lines: 1717 },
           { name: "后端 Functions", lines: 2335 },
           { name: "配置 JSON", lines: 5 },
         ],
