@@ -79,7 +79,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-05.4";
+const SCHEMA_VERSION = "2026-10-05.5";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -213,6 +213,10 @@ export function ensureSchema(db) {
       await addColumn(db, "users", "cert_level", "TEXT");
       // 个人主页相册:存图片 key 的 JSON 数组(最多 9 张)
       await addColumn(db, "users", "photos", "TEXT");
+      // 昵称:用户自己起的显示名,全站优先显示;空 = 没设,退回真名 / 账号名
+      await addColumn(db, "users", "display_name", "TEXT");
+      // 个人主页壁纸:只存图片 key,空 = 没设
+      await addColumn(db, "users", "wallpaper_key", "TEXT");
 
       // ---- 个人主页点赞:一人对一人只能点一次,靠联合主键去重 ----
       await db
@@ -365,6 +369,10 @@ export function publicUser(row) {
     banned: row.banned ? 1 : 0,
     verified: row.verified ? 1 : 0,
     real_name: String(row.real_name == null ? "" : row.real_name).trim(),
+    // 昵称:全站优先显示的主名,自己当然也看得到
+    display_name: String(row.display_name == null ? "" : row.display_name).trim(),
+    // 个人主页壁纸 key:自己看自己时带上,方便个人中心回显 / 清除
+    wallpaper_key: row.wallpaper_key || "",
     // 官方认证头衔:公开信息,自己当然也看得到
     cert_title: String(row.cert_title == null ? "" : row.cert_title).trim(),
     cert_level: certLevel(row.cert_level),
@@ -394,6 +402,8 @@ export function namedUser(row, viewer) {
     role: row.role || "member",
     avatar: row.avatar_key || "",
     verified: row.verified ? 1 : 0,
+    // 昵称是公开信息,谁都能看,不跟真名一样做权限过滤
+    display_name: String(row.display_name == null ? "" : row.display_name).trim(),
     // 认证头衔是公开信息,不跟真名一样做权限过滤
     cert_title: String(row.cert_title == null ? "" : row.cert_title).trim(),
     cert_level: certLevel(row.cert_level),
@@ -415,7 +425,8 @@ export async function currentUser(request, env) {
 
   const row = await env.DB.prepare(
     `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, u.banned,
-            u.real_name, u.verified, u.cert_title, u.cert_level, u.photos, s.expires_at
+            u.real_name, u.verified, u.display_name, u.wallpaper_key,
+            u.cert_title, u.cert_level, u.photos, s.expires_at
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ?`
   )

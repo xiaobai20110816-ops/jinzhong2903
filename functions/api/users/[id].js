@@ -46,7 +46,7 @@ const ACHIEVEMENTS = [
 const loadUser = (db, id) =>
   db
     .prepare(
-      "SELECT id, username, role, avatar_key, signature, banned, real_name, verified, cert_title, cert_level, photos, created_at FROM users WHERE id = ?"
+      "SELECT id, username, role, avatar_key, signature, banned, real_name, verified, display_name, wallpaper_key, cert_title, cert_level, photos, created_at FROM users WHERE id = ?"
     )
     .bind(id)
     .first();
@@ -120,6 +120,11 @@ export async function onRequestGet({ request, env, params }) {
   // 真名按「看的人」的权限下发:服主 / 管理员 / 已实名的同学才看得到
   const shown = namedUser(row, me);
 
+  // 个人主页上,审核通过(verified=1)的人真名对所有人公开 —— 这是唯一放开的地方,
+  // 没审核的真名仍然只在 shown.real_name 里有(只有服主 / 管理员拿得到),绝不外泄
+  const rn = String(row.real_name || "").trim();
+  const publicReal = row.verified ? rn : (shown.real_name || "");
+
   return json({
     ok: true,
     me: me ? me.id : 0,
@@ -129,6 +134,8 @@ export async function onRequestGet({ request, env, params }) {
     achievements,
     user: {
       ...shown,
+      real_name: publicReal,
+      wallpaper_key: String(row.wallpaper_key || ""),
       signature: row.signature || "",
       banned: row.banned ? 1 : 0,
       // 相册对所有人公开,谁来主页都看得到

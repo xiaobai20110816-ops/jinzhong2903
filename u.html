@@ -427,6 +427,22 @@
       transition: color 0.6s ease;
     }
 
+    /* 个人主页壁纸:只铺在顶部横幅(.page-hero)上,再压一层遮罩,
+       保证横幅文字在花哨壁纸下也读得清。没有壁纸时这条规则不生效,页面保持原样 */
+    body.has-wallpaper .page-hero {
+      background-image:
+        linear-gradient(180deg, rgba(7, 11, 20, 0.62), rgba(7, 11, 20, 0.86)),
+        var(--pf-wall);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    :root[data-theme="light"] body.has-wallpaper .page-hero {
+      background-image:
+        linear-gradient(180deg, rgba(244, 246, 250, 0.7), rgba(244, 246, 250, 0.9)),
+        var(--pf-wall);
+    }
+
     /* 窄屏:单列,头像和名字上下排开,不再挤在一起 */
     @media (max-width: 620px) {
       .pf-card { flex-direction: column; text-align: center; padding: 26px 20px; gap: 18px; }
@@ -580,11 +596,24 @@
         </div>`;
       }
 
+      // 壁纸:有就铺到顶部横幅上,没有就摘掉,保持现在的样子,绝不留空壳
+      function applyWallpaper(u) {
+        const key = String((u && u.wallpaper_key) || "").trim();
+        if (key) {
+          document.body.classList.add("has-wallpaper");
+          document.body.style.setProperty("--pf-wall", "url('" + img(key) + "')");
+        } else {
+          document.body.classList.remove("has-wallpaper");
+          document.body.style.removeProperty("--pf-wall");
+        }
+      }
+
       // ---------- 渲染资料卡 ----------
       function renderProfile(data) {
         const root = $("#profile-root");
         if (!root) return;
         const u = data.user || {};
+        applyWallpaper(u);
         const hasSig = !!u.signature;
         const sig = hasSig ? esc(u.signature) : "这个人很神秘，什么都没写";
         // name 是「带认证徽章 svg 的 HTML」,只能放进内容里;
@@ -611,6 +640,7 @@
             <div class="pf-face-wrap">${avatar(u, "pf-face")}</div>
             <div class="pf-info">
               <h2 class="pf-name">${name}${badge(u.role)}</h2>
+              ${window.C103Person.realLine(u)}
               <p class="pf-sig${hasSig ? "" : " empty"}">${sig}</p>
               <div class="pf-meta">
                 <span><i>注册</i>${esc(fmtDate(u.created_at))}</span>

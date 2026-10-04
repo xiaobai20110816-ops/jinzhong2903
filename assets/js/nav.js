@@ -127,10 +127,16 @@ const CERT_SVG =
 const CERT_LEVELS = ["gold", "red", "black"];
 
 const C103Person = {
-  /* 该显示的名字:能看真名时用真名,否则账号名 */
+  /* 该显示的名字:昵称优先(全站主名),其次能看真名时用真名,最后账号名 */
   name(person, fallback) {
-    if (person) return person.real_name || person.name || fallback || "";
+    if (person) return person.display_name || person.real_name || person.name || fallback || "";
     return fallback || "";
+  },
+  /* 已实名的人,名字下面再压一行真名小字。
+     真名能不能带出来由后端按权限 / 个人主页接口决定,这里只管渲染 */
+  realLine(person) {
+    if (!person || !person.verified || !person.real_name) return "";
+    return '<i class="nick-real">' + esc(person.real_name) + "</i>";
   },
   /* 是否要缀蓝钩 */
   verified(person) {
@@ -803,14 +809,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-9";
+const SPLASH_VERSION = "2026-10-05-10";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "留言墙那个会发出乱码留言的 bug 已经修好，之前产生的乱码留言也一并清掉了。";
+const SPLASH_LEAD = "现在可以给自己起昵称、给个人主页换壁纸了。";
 const SPLASH_NOTES = [
-  "修复：个人主页留言框的提示文字被标签撑破，导致点「留言」发出乱码内容的问题",
-  "此前已经产生的乱码留言已由系统自动清理",
-  "官方认证头衔仍分金色、红色、黑色三个级别，在后台「成员权限」里设置",
+  "个人中心可以改昵称，昵称会作为全站显示的主名",
+  "个人中心可以上传个人主页壁纸，换成自己喜欢的样子",
+  "通过实名的同学，个人主页昵称下面会显示一行真名小字",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

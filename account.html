@@ -139,6 +139,11 @@
     .acc-block input[type="text"]:focus { border-color: var(--gold-line); background: var(--gold-soft); }
     .acc-block .pick-hint { display: inline-block; margin-left: 12px; vertical-align: middle; }
 
+    /* 昵称:输入框 + 单独一个保存按钮 */
+    .acc-nick-row { display: flex; gap: 10px; align-items: center; }
+    .acc-nick-row input[type="text"] { flex: 1; min-width: 0; }
+    .acc-nick-row .submit-btn { flex: none; padding: 11px 18px; }
+
     /* ---- 一次性激活口令 ---- */
     .acc-activate { margin-bottom: 20px; }
     .acc-activate[hidden] { display: none; }
@@ -260,6 +265,22 @@
           </div>
 
           <div class="acc-block">
+            <p class="acc-label">昵称</p>
+            <div class="acc-nick-row">
+              <input id="acc-nick" type="text" maxlength="16" placeholder="全站显示的名字，留空就用账号名">
+              <button class="submit-btn" type="button" id="acc-nick-save">保存昵称</button>
+            </div>
+          </div>
+
+          <div class="acc-block">
+            <p class="acc-label">主页壁纸</p>
+            <input id="acc-wall-file" type="file" accept="image/*" hidden>
+            <button class="pick-btn" type="button" id="acc-wall-pick">上传壁纸</button>
+            <button class="pick-btn" type="button" id="acc-wall-clear">清除壁纸</button>
+            <span class="pick-hint" id="acc-wall-hint">铺在个人主页顶部，自动压到 1MB 以内</span>
+          </div>
+
+          <div class="acc-block">
             <p class="acc-label">我的主页</p>
             <a class="submit-btn" id="acc-home" href="u.html?id=" style="text-decoration:none;display:inline-block">查看我的主页 →</a>
           </div>
@@ -330,9 +351,17 @@
         box.hidden = !logged;
         if (!logged) return;
 
-        $("#acc-name").textContent = user.name;
+        // 名字走统一渲染:昵称优先,没设昵称就退回真名 / 账号名
+        $("#acc-name").textContent = window.C103Person ? window.C103Person.name(user) : user.name;
         $("#acc-role").textContent = ROLE_TEXT[user.role] || ROLE_TEXT.member;
         $("#acc-sig").value = user.signature || "";
+        $("#acc-nick").value = user.display_name || "";
+        const wallHint = $("#acc-wall-hint");
+        if (wallHint) {
+          wallHint.textContent = user.wallpaper_key
+            ? "已设置壁纸，可重新上传或清除"
+            : "铺在个人主页顶部，自动压到 1MB 以内";
+        }
         paintFace(user.avatar);
 
         // 通往自己个人主页的入口,登录后才显示
@@ -415,6 +444,19 @@
         }
       });
 
+      /* 每次提交都把全部字段带上:接口是整份替换,漏一个就会把它清空 */
+      function profileFields(extra) {
+        return Object.assign(
+          {
+            signature: $("#acc-sig").value.trim(),
+            avatar_key: (current && current.avatar) || "",
+            display_name: $("#acc-nick").value.trim(),
+            wallpaper_key: (current && current.wallpaper_key) || "",
+          },
+          extra || {}
+        );
+      }
+
       /* ---- 换头像:压缩 → 上传 → 保存 ---- */
       on($("#acc-pick"), "click", () => $("#acc-file").click());
 
@@ -439,7 +481,7 @@
           const data = await up.json().catch(() => ({}));
           if (!up.ok || !data.ok) throw new Error(data.error || "上传失败了");
 
-          await A.saveProfile({ signature: current.signature || "", avatar_key: data.key });
+          await A.saveProfile(profileFields({ avatar_key: data.key }));
           render(A.user);
           say(msg, "头像换好了", "ok");
         } catch (err) {
@@ -456,10 +498,7 @@
         btn.disabled = true;
         btn.textContent = "保存中";
         try {
-          await A.saveProfile({
-            signature: $("#acc-sig").value.trim(),
-            avatar_key: (A.user && A.user.avatar) || "",
-          });
+          await A.saveProfile(profileFields());
           render(A.user);
           say(msg, "保存好了", "ok");
         } catch (err) {
@@ -467,6 +506,78 @@
         } finally {
           btn.disabled = false;
           btn.textContent = "保存";
+        }
+      });
+
+      /* ---- 保存昵称:全站显示的主名,留空 = 清空 ---- */
+      on($("#acc-nick-save"), "click", async () => {
+        const msg = $("#acc-msg");
+        const btn = $("#acc-nick-save");
+        const nick = $("#acc-nick").value.trim();
+        // 前端先挡一道;真正落库前服务端还会再校验一次
+        if (nick.length > 16) { say(msg, "昵称 1~16 个字", "err"); return; }
+        btn.disabled = true;
+        btn.textContent = "保存中";
+        try {
+          await A.saveProfile(profileFields({ display_name: nick }));
+          render(A.user);
+          say(msg, "昵称保存好了", "ok");
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "保存昵称";
+        }
+      });
+
+      /* ---- 换主页壁纸:压缩 → 上传 → 保存 ---- */
+      on($("#acc-wall-pick"), "click", () => $("#acc-wall-file").click());
+
+      on($("#acc-wall-file"), "change", async (e) => {
+        const file = (e.target.files || [])[0];
+        e.target.value = "";
+        if (!file) return;
+        if (!/^image\//.test(file.type)) { say($("#acc-msg"), "只能选图片文件", "err"); return; }
+
+        const msg = $("#acc-msg");
+        const btn = $("#acc-wall-pick");
+        btn.disabled = true;
+        say(msg, "正在压缩壁纸…");
+        try {
+          const blob = await window.C103Image.compress(file, { maxEdge: 1920 });
+          say(msg, "正在上传…");
+          const up = await fetch(API + "/upload", {
+            method: "POST",
+            headers: { "content-type": blob.type || "image/jpeg" },
+            body: blob,
+          });
+          const data = await up.json().catch(() => ({}));
+          if (!up.ok || !data.ok) throw new Error(data.error || "上传失败了");
+
+          await A.saveProfile(profileFields({ wallpaper_key: data.key }));
+          render(A.user);
+          say(msg, "壁纸换好了", "ok");
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      /* ---- 清除壁纸 ---- */
+      on($("#acc-wall-clear"), "click", async () => {
+        const msg = $("#acc-msg");
+        if (!(A.user && A.user.wallpaper_key)) { say(msg, "现在还没有壁纸", "err"); return; }
+        const btn = $("#acc-wall-clear");
+        btn.disabled = true;
+        try {
+          await A.saveProfile(profileFields({ wallpaper_key: "" }));
+          render(A.user);
+          say(msg, "壁纸已清除", "ok");
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
         }
       });
 

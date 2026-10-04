@@ -17,7 +17,7 @@ export async function onRequestGet({ request, env }) {
   if (!isStaff(me)) return fail("只有服主和管理员能看成员列表", 403);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, username, role, avatar_key, signature, banned, real_name, verified, cert_title, cert_level, created_at
+    `SELECT id, username, role, avatar_key, signature, banned, real_name, verified, display_name, cert_title, cert_level, created_at
        FROM users
       ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, id ASC`
   ).all();
@@ -39,6 +39,7 @@ export async function onRequestGet({ request, env }) {
     banned: u.banned ? 1 : 0,
     real_name: String(u.real_name == null ? "" : u.real_name).trim(),
     verified: u.verified ? 1 : 0,
+    display_name: String(u.display_name == null ? "" : u.display_name).trim(),
     cert_title: String(u.cert_title == null ? "" : u.cert_title).trim(),
     cert_level: String(u.cert_level == null ? "" : u.cert_level).trim(),
     created_at: u.created_at,

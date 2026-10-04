@@ -285,6 +285,19 @@
   border-color: rgba(27, 30, 38, 0.85);
 }
 
+/* 实名后压在昵称下面的一行真名小字:全站只在个人主页出现。
+   单独占一行,颜色跟 --muted 走,深浅主题下都清楚 */
+.nick-real {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.72em;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  transition: color 0.6s ease;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }

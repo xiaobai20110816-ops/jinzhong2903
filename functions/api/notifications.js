@@ -24,6 +24,7 @@ export async function onRequestGet({ request, env }) {
             u.id AS actor_id, u.username AS actor_name,
             u.avatar_key AS actor_avatar, u.role AS actor_role,
             u.real_name AS actor_real_name, u.verified AS actor_verified,
+            u.display_name AS actor_display_name,
             u.cert_title AS actor_cert_title, u.cert_level AS actor_cert_level
        FROM notifications n
        LEFT JOIN users u ON u.id = n.actor_id
@@ -56,6 +57,7 @@ export async function onRequestGet({ request, env }) {
               role: r.actor_role,
               real_name: r.actor_real_name,
               verified: r.actor_verified,
+              display_name: r.actor_display_name,
               cert_title: r.actor_cert_title,
               cert_level: r.actor_cert_level,
             },

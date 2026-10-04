@@ -41,7 +41,7 @@ async function loadAuthors(db, rows, viewer) {
   const holes = uids.map(() => "?").join(",");
   const { results } = await db
     .prepare(
-      `SELECT id, username, role, avatar_key, real_name, verified, cert_title, cert_level FROM users WHERE id IN (${holes})`
+      `SELECT id, username, role, avatar_key, real_name, verified, display_name, cert_title, cert_level FROM users WHERE id IN (${holes})`
     )
     .bind(...uids)
     .all();
@@ -208,8 +208,9 @@ export async function onRequestGet({ request, env }) {
     root.replies.push({
       ...toPost(row),
       author: authors.get(row.user_id) || null,
+      // 昵称优先,其次才是有权限时拿到的真名,最后退回账号名
       reply_to_name: targetAuthor
-        ? targetAuthor.real_name || targetAuthor.name
+        ? targetAuthor.display_name || targetAuthor.real_name || targetAuthor.name
         : target
         ? target.name
         : "",
