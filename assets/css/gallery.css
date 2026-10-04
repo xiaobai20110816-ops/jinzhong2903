@@ -61,6 +61,37 @@
 .g-hint { font-size: 0.76rem; color: var(--muted); letter-spacing: 0.02em; }
 .g-err { color: #e5484d; }
 
+/* 上传进度条 */
+.g-prog {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 18px;
+  padding: 0 2px;
+}
+.g-prog[hidden] { display: none; }
+.g-prog i {
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--chip);
+  overflow: hidden;
+  position: relative;
+  display: block;
+}
+.g-prog i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: linear-gradient(90deg, var(--gold), var(--gold-2));
+  transition: width 0.1s linear;
+}
+/* 进度条本身用 JS 改 #g-prog-bar 的 width,这里只兜底样式 */
+#g-prog-bar { position: relative; display: block; width: 0; height: 6px; border-radius: 999px; background: linear-gradient(90deg, var(--gold), var(--gold-2)); }
+.g-prog span { font-size: 0.76rem; color: var(--muted); white-space: nowrap; }
+
 /* 卡片底部操作条:标题 + 下载/删除 */
 .gal-actions {
   display: flex;

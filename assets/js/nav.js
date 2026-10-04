@@ -833,13 +833,13 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-04-16";
+const SPLASH_VERSION = "2026-10-04-17";
 const SPLASH_DATE = "2026.10.04";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "修好图库上传「点了没反应」的毛病。";
+const SPLASH_LEAD = "图库上传三连修：进度可见、超时不再裸报错、登录失效给明示。";
 const SPLASH_NOTES = [
-  "图库上传按钮重做：选完照片立刻显示已选几张，点上传就有进度提示，不再静悄悄没反应",
-  "上传框是否显示改由服务端权限决定，没实名/没登录的自动藏起来，不再误显示",
+  "上传加了真实进度条(百分比)，太慢时会明确提示「超时」，不再甩一句 Failed to fetch",
+  "登录失效时会提示重新登录，不再让上传静悄悄失败",
   "实名 30MB 额度、自己删自己的图、管理员/服主无限额度，规则不变",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;

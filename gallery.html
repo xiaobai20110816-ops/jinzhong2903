@@ -48,6 +48,10 @@
         <button type="button" id="g-send" class="g-btn">上传</button>
         <span id="g-hint" class="g-hint"></span>
         <span id="g-msg" class="g-hint g-err"></span>
+        <div id="g-prog" class="g-prog" hidden>
+          <i id="g-prog-bar"></i>
+          <span id="g-prog-txt"></span>
+        </div>
       </div>
 
       <!-- 图库网格:缩略图 + 名字 + 下载原图按钮,脚本从 /api/gallery 拉 -->
@@ -86,6 +90,9 @@
       const gSend = document.getElementById("g-send");
       const gHint = document.getElementById("g-hint");
       const gMsg = document.getElementById("g-msg");
+      const gProg = document.getElementById("g-prog");
+      const gProgBar = document.getElementById("g-prog-bar");
+      const gProgTxt = document.getElementById("g-prog-txt");
       const lightbox = document.getElementById("lightbox");
       const lbImg = document.getElementById("lightbox-img");
       const lbCaption = document.getElementById("lightbox-caption");
@@ -177,7 +184,7 @@
       async function doDelete(id) {
         if (!confirm("确定删除这张照片吗？原图会一起删掉。")) return;
         try {
-          const res = await fetch("api/gallery/" + id, { method: "DELETE" });
+          const res = await fetch("api/gallery/" + id, { method: "DELETE", credentials: "same-origin" });
           const d = await res.json().catch(() => null);
           if (d && d.ok) {
             load(0);
@@ -195,6 +202,47 @@
       async function compressThumb(file) {
         const blob = await window.C103Image.compress(file, { maxEdge: 1200, targetBytes: 400 * 1024 });
         return new File([blob], "thumb.jpg", { type: blob.type || "image/jpeg" });
+      }
+
+      // 用 XHR 上传:能拿到真实的上传进度(百分比),还能设置超时。
+      // fetch 没有上传进度,大文件卡在那儿用户只能干等然后等来一个裸的 "Failed to fetch"。
+      function xhrUpload(form) {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "api/gallery", true);
+          xhr.responseType = "json";
+          xhr.timeout = 90000; // 90 秒,超了就报友好提示而不是一直转
+          xhr.upload.addEventListener("progress", (e) => {
+            if (!e.lengthComputable) return;
+            const pct = Math.round((e.loaded / e.total) * 100);
+            gProgBar.style.width = pct + "%";
+            gProgTxt.textContent = "上传 " + pct + "%";
+          });
+          xhr.onload = () => {
+            const d = xhr.response || null;
+            if (xhr.status === 401 || xhr.status === 403) {
+              gProg.hidden = true;
+              reject(new Error("登录失效或没权限：请先登录实名账号，再重新上传"));
+              return;
+            }
+            if (xhr.status >= 200 && xhr.status < 300 && d && d.ok) {
+              gProg.hidden = true;
+              resolve(d);
+              return;
+            }
+            gProg.hidden = true;
+            reject(new Error((d && d.error) || "上传失败(HTTP " + xhr.status + ")，再试一次"));
+          };
+          xhr.onerror = () => {
+            gProg.hidden = true;
+            reject(new Error("网络出错，上传中断，请检查网络再试"));
+          };
+          xhr.ontimeout = () => {
+            gProg.hidden = true;
+            reject(new Error("上传超时(90 秒)。照片太大或网络太慢，试着传小一点的图"));
+          };
+          xhr.send(form);
+        });
       }
 
       // 选完文件立刻给个反馈,别让人以为卡了
@@ -216,10 +264,13 @@
 
           gSend.disabled = true;
           gMsg.textContent = "";
+          gProg.hidden = false;
+          gProgBar.style.width = "0%";
           try {
             for (let i = 0; i < files.length; i++) {
               const file = files[i];
               const n = i + 1;
+              gProgTxt.textContent = "准备第 " + n + "/" + files.length + " 张…";
               // 压缩大图是重活,先让浏览器把提示画出来,免得看着像卡死
               gHint.textContent = "正在处理第 " + n + "/" + files.length + " 张…";
               await new Promise((r) => setTimeout(r, 30));
@@ -229,12 +280,9 @@
               form.append("thumb", await compressThumb(file));
               gHint.textContent =
                 "正在上传第 " + n + "/" + files.length + " 张（" + fmtMB(file.size) + "）…";
-              const res = await fetch("api/gallery", { method: "POST", body: form });
-              const d = await res.json().catch(() => null);
-              if (!d || !d.ok) {
-                throw new Error((d && d.error) || "第 " + n + " 张上传失败，未登录或没实名？");
-              }
+              await xhrUpload(form);
             }
+            gProg.hidden = true;
             gHint.textContent = "全部传完，正在刷新图库…";
             gMsg.textContent = "";
             gFiles.value = "";
@@ -242,6 +290,7 @@
           } catch (e) {
             gMsg.textContent = e.message || "上传中断，检查网络再试";
           } finally {
+            gProg.hidden = true;
             gSend.disabled = false;
           }
         });
@@ -249,7 +298,7 @@
 
       const load = async (retries) => {
         try {
-          const res = await fetch("api/gallery");
+          const res = await fetch("api/gallery", { credentials: "same-origin", cache: "no-store" });
           if (!res.ok) throw new Error("http " + res.status);
           const d = await res.json().catch(() => null);
           if (!d || !d.ok) throw new Error("bad payload");
