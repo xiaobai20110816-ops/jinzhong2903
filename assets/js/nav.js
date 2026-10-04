@@ -810,14 +810,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-11";
+const SPLASH_VERSION = "2026-10-05-12";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "私信功能上线了，可以给同学发悄悄话了。";
+const SPLASH_LEAD = "管理后台的用量看板加上了「免费额度对照」，一眼看出离上限还有多远。";
 const SPLASH_NOTES = [
-  "导航栏新增「私信」，可以和同学一对一聊天，有未读会亮小红点",
-  "个人主页新增「发私信」按钮",
-  "服主可在个人主页查看该同学的私聊记录",
+  "用量看板新增「免费额度对照」：请求数、D1 读写与存储、KV 各项操作与存储",
+  "每条都把「已用 / 上限」画成进度条，过 70% 转黄、过 90% 转红",
+  "D1 存储占用由数据库自身算出，不用配置也知道还剩多少",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

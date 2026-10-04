@@ -129,6 +129,10 @@ export async function onRequestGet({ request, env }) {
     } catch (e) { /* KV 没绑上就显示 0 */ }
   }
 
+  // Cloudflare 那几块只查一次,官方用量和免费额度对照共用同一份结果
+  const cloudflare = await cloudflareUsage(env.DB);
+  const d1Bytes = await d1SelfSize(env.DB);
+
   return json({
     ok: true,
     days,
@@ -137,7 +141,8 @@ export async function onRequestGet({ request, env }) {
     topPages: (topRows.results || []).map((r) => ({ path: r.path, hits: Number(r.n) || 0 })),
     totals,
     accounts: await accountStats(env.DB),
-    cloudflare: await cloudflareUsage(env.DB),
+    cloudflare: cloudflare,
+    quota: quotaGroups(cloudflare, d1Bytes),
   });
 }
 
@@ -203,68 +208,317 @@ async function accountStats(db) {
 }
 
 /* ============================================================
-   Cloudflare 官方数据
+   Cloudflare 官方数据 + 免费额度对照
    ============================================================ */
+
+/* 免费版(Workers Free / Pages Free)的各项上限。单位写在注释里。
+   套餐或额度一变,改这里就行 —— 前端所有进度条都按这份数据画 */
+const FREE = {
+  requests: 100000,                    // Workers / Pages Functions:请求数 / 天
+  d1Read: 5000000,                     // D1:读行数 / 天
+  d1Write: 100000,                     // D1:写行数 / 天
+  d1Total: 5 * 1024 * 1024 * 1024,     // D1:账号总存储 5 GB(单库另限 500 MB)
+  kvStore: 1024 * 1024 * 1024,         // KV:账号总存储 1 GB
+  kvRead: 100000,                      // KV:读 / 天
+  kvWrite: 1000,                       // KV:写 / 天
+  kvDelete: 1000,                      // KV:删 / 天
+  kvList: 1000,                        // KV:列举 / 天
+  builds: 500,                         // Pages:构建次数 / 月
+  files: 20000,                        // Pages:站点文件数
+  fileSize: 25 * 1024 * 1024,          // Pages:单个文件 25 MiB
+  domains: 100,                        // Pages:自定义域名 / 项目
+};
+
+/* 一次 GraphQL 查询:出错就抛,由外面的 safeQuery 兜住 */
+async function cfQuery(token, query, variables) {
+  const res = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+    method: "POST",
+    headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+    body: JSON.stringify({ query: query, variables: variables }),
+  });
+  const body = await res.json().catch(() => null);
+  const err = body && body.errors && body.errors[0];
+  if (err) throw new Error(String(err.message || "查询被拒绝").slice(0, 180));
+  if (!res.ok || !body || !body.data) {
+    throw new Error("HTTP " + res.status + "，多半是 Token 权限不够");
+  }
+  return body.data;
+}
+
+/* 一个数据集查不到不该拖垮别的:各自单独跑,失败只记自己那句原因 */
+async function safeQuery(promise) {
+  try {
+    return { ok: true, data: await promise };
+  } catch (e) {
+    return { ok: false, reason: String((e && e.message) || e).slice(0, 180) };
+  }
+}
+
+function firstAccount(data) {
+  return (data && data.viewer && data.viewer.accounts && data.viewer.accounts[0]) || {};
+}
+
+/* ---- 各数据集只挑我们要的字段,别的都不要(越小越快) ---- */
+const PAGES_Q = `query Usage($account: String!, $since: Time!, $until: Time!) {
+  viewer {
+    accounts(filter: { accountTag: $account }) {
+      pagesFunctionsInvocationsAdaptiveGroups(
+        limit: 10000
+        filter: { datetime_geq: $since, datetime_leq: $until }
+      ) {
+        sum { requests }
+        dimensions { datetimeHour }
+      }
+    }
+  }
+}`;
+
+const D1_ROWS_Q = `query D1Rows($account: String!, $day: Date!) {
+  viewer {
+    accounts(filter: { accountTag: $account }) {
+      d1AnalyticsAdaptiveGroups(limit: 10000, filter: { date_geq: $day, date_leq: $day }) {
+        sum { rowsRead rowsWritten }
+      }
+    }
+  }
+}`;
+
+const D1_SIZE_Q = `query D1Size($account: String!) {
+  viewer {
+    accounts(filter: { accountTag: $account }) {
+      d1StorageAdaptiveGroups(limit: 10000) {
+        max { databaseSizeBytes }
+        dimensions { date databaseId }
+      }
+    }
+  }
+}`;
+
+const KV_OPS_Q = `query KvOps($account: String!, $day: Date!) {
+  viewer {
+    accounts(filter: { accountTag: $account }) {
+      kvOperationsAdaptiveGroups(limit: 10000, filter: { date_geq: $day, date_leq: $day }) {
+        sum { requests }
+        dimensions { actionType }
+      }
+    }
+  }
+}`;
+
+const KV_SIZE_Q = `query KvSize($account: String!) {
+  viewer {
+    accounts(filter: { accountTag: $account }) {
+      kvStorageAdaptiveGroups(limit: 10000) {
+        max { byteCount keyCount }
+        dimensions { namespaceId }
+      }
+    }
+  }
+}`;
 
 async function cloudflareUsage(db) {
   const token = await getSetting(db, "cf_api_token");
-  if (!token) return { ok: false, reason: "还没配置 API Token" };
+  if (!token) return { ok: false, configured: false, reason: "还没配置 API Token" };
   const account = (await getSetting(db, "cf_account_id")) || CF_ACCOUNT_FALLBACK;
 
-  const since = new Date(Date.now() - DAYS * 86400000).toISOString();
-  const until = new Date().toISOString();
+  const now = Date.now();
+  const since = new Date(now - DAYS * 86400000).toISOString();
+  const until = new Date(now).toISOString();
+  // 免费额度按 UTC 当天 0 点重置,所以「今天」也按 UTC 算
+  const today = new Date(now).toISOString().slice(0, 10);
 
-  // Pages Functions 的调用量,按小时分组再自己汇总成天
-  const query = `query Usage($account: String!, $since: Time!, $until: Time!) {
-    viewer {
-      accounts(filter: { accountTag: $account }) {
-        pagesFunctionsInvocationsAdaptiveGroups(
-          limit: 10000
-          filter: { datetime_geq: $since, datetime_leq: $until }
-        ) {
-          sum { requests }
-          dimensions { datetimeHour }
-        }
-      }
-    }
-  }`;
+  // 五块并行查:任何一块挂掉,其余照常显示
+  const [pages, d1Rows, d1Size, kvOps, kvSize] = await Promise.all([
+    safeQuery(cfQuery(token, PAGES_Q, { account: account, since: since, until: until })),
+    safeQuery(cfQuery(token, D1_ROWS_Q, { account: account, day: today })),
+    safeQuery(cfQuery(token, D1_SIZE_Q, { account: account })),
+    safeQuery(cfQuery(token, KV_OPS_Q, { account: account, day: today })),
+    safeQuery(cfQuery(token, KV_SIZE_Q, { account: account })),
+  ]);
 
-  let res, body;
-  try {
-    res = await fetch("https://api.cloudflare.com/client/v4/graphql", {
-      method: "POST",
-      headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: JSON.stringify({ query: query, variables: { account: account, since: since, until: until } }),
-    });
-    body = await res.json();
-  } catch (e) {
-    return { ok: false, reason: "连不上 Cloudflare 的接口" };
-  }
-
-  const firstErr = body && body.errors && body.errors[0];
-  if (firstErr) {
-    return { ok: false, reason: "Cloudflare 说：" + String(firstErr.message || "查询被拒绝").slice(0, 160) };
-  }
-  if (!res.ok || !body || !body.data) {
-    return { ok: false, reason: "Cloudflare 拒绝了这次请求（HTTP " + res.status + "），多半是 Token 权限不够" };
-  }
-
-  const acc = body.data.viewer && body.data.viewer.accounts && body.data.viewer.accounts[0];
-  const groups = (acc && acc.pagesFunctionsInvocationsAdaptiveGroups) || [];
-
+  // ---- Pages Functions:30 天曲线 + 今天这一格 ----
   const days = recentDays(DAYS);
   const byDay = new Map();
   let total = 0;
-  for (const g of groups) {
-    const n = (g.sum && g.sum.requests) || 0;
-    total += n;
-    const hour = g.dimensions && g.dimensions.datetimeHour;
-    if (!hour) continue;
-    const d = dayKey(Date.parse(hour));
-    byDay.set(d, (byDay.get(d) || 0) + n);
+  let todayReq = null;
+  let pagesErr = "";
+  if (pages.ok) {
+    const groups = firstAccount(pages.data).pagesFunctionsInvocationsAdaptiveGroups || [];
+    for (const g of groups) {
+      const n = (g.sum && g.sum.requests) || 0;
+      total += n;
+      const hour = g.dimensions && g.dimensions.datetimeHour;
+      if (!hour) continue;
+      const t = Date.parse(hour);
+      byDay.set(dayKey(t), (byDay.get(dayKey(t)) || 0) + n);
+      if (new Date(t).toISOString().slice(0, 10) === today) todayReq = (todayReq || 0) + n;
+    }
+    if (todayReq === null) todayReq = 0;
+  } else {
+    pagesErr = pages.reason;
   }
 
-  return { ok: true, total: total, days: days, requests: days.map((d) => byDay.get(d) || 0) };
+  // ---- D1:今天的读写行数 + 各库最新一次快照的大小 ----
+  const d1 = { ok: false, reason: "", rowsRead: null, rowsWritten: null, bytes: null, dbs: 0 };
+  if (d1Rows.ok) {
+    let r = 0, w = 0;
+    for (const g of firstAccount(d1Rows.data).d1AnalyticsAdaptiveGroups || []) {
+      r += (g.sum && g.sum.rowsRead) || 0;
+      w += (g.sum && g.sum.rowsWritten) || 0;
+    }
+    d1.rowsRead = r;
+    d1.rowsWritten = w;
+    d1.ok = true;
+  } else {
+    d1.reason = d1Rows.reason;
+  }
+  if (d1Size.ok) {
+    // 同一个库保留日期最新的那条快照,再把各库相加,免得同一天的多条被重复累加
+    const latest = new Map();
+    for (const g of firstAccount(d1Size.data).d1StorageAdaptiveGroups || []) {
+      const dim = g.dimensions || {};
+      const key = dim.databaseId || "db";
+      const prev = latest.get(key);
+      if (!prev || String(dim.date || "") >= String(prev.date || "")) {
+        latest.set(key, { date: dim.date || "", size: (g.max && g.max.databaseSizeBytes) || 0 });
+      }
+    }
+    let bytes = 0;
+    for (const v of latest.values()) bytes += v.size;
+    d1.bytes = bytes;
+    d1.dbs = latest.size;
+    d1.ok = true;
+  } else if (!d1.reason) {
+    d1.reason = d1Size.reason;
+  }
+
+  // ---- KV:今天的读/写/删/列 + 存储 ----
+  const kv = {
+    ok: false, reason: "", reads: null, writes: null,
+    deletes: null, lists: null, bytes: null, keys: 0, namespaces: 0,
+  };
+  if (kvOps.ok) {
+    const byType = new Map();
+    for (const g of firstAccount(kvOps.data).kvOperationsAdaptiveGroups || []) {
+      const t = String((g.dimensions && g.dimensions.actionType) || "").toLowerCase();
+      byType.set(t, (byType.get(t) || 0) + ((g.sum && g.sum.requests) || 0));
+    }
+    kv.reads = byType.get("read") || 0;
+    kv.writes = byType.get("write") || 0;
+    kv.deletes = byType.get("delete") || 0;
+    kv.lists = byType.get("list") || 0;
+    kv.ok = true;
+  } else {
+    kv.reason = kvOps.reason;
+  }
+  if (kvSize.ok) {
+    let bytes = 0, keys = 0;
+    const seen = new Set();
+    for (const g of firstAccount(kvSize.data).kvStorageAdaptiveGroups || []) {
+      const id = (g.dimensions && g.dimensions.namespaceId) || "kv";
+      if (seen.has(id)) continue; // 一个命名空间只算一次
+      seen.add(id);
+      bytes += (g.max && g.max.byteCount) || 0;
+      keys += (g.max && g.max.keyCount) || 0;
+    }
+    kv.bytes = bytes;
+    kv.keys = keys;
+    kv.namespaces = seen.size;
+    kv.ok = true;
+  } else if (!kv.reason) {
+    kv.reason = kvSize.reason;
+  }
+
+  return {
+    ok: !pagesErr, // 这块只决定「官方请求曲线」能不能画
+    configured: true,
+    reason: pagesErr,
+    total: total,
+    days: days,
+    requests: days.map((d) => byDay.get(d) || 0),
+    todayRequests: todayReq,
+    today: today,
+    d1: d1,
+    kv: kv,
+  };
+}
+
+/* ============================================================
+   免费额度对照:把「已用 / 上限」整理成前端直接能画的样子
+   ============================================================ */
+
+/* used = null 表示这次没取到,前端只显示上限 */
+function quotaItem(label, used, limit, fmt, hint) {
+  const pct = used == null || !limit ? null : Math.min(100, (used / limit) * 100);
+  return { label: label, used: used == null ? null : used, limit: limit, fmt: fmt, percent: pct, hint: hint || "" };
+}
+
+function quotaGroups(cf, selfBytes) {
+  const d1 = (cf && cf.d1) || {};
+  const kv = (cf && cf.kv) || {};
+  const cfOk = !!(cf && cf.ok);
+  const cfWhy = (cf && cf.reason) || "还没配置 API Token";
+  // 已经配了 Token 却读不到,才值得把原因亮出来;一个字都没配就统一在上面提示
+  const warnOn = !!(cf && cf.configured);
+
+  // D1 占用优先用 D1 自己报的那个数(不需要 Token、随时都准),没有再退回官方接口
+  const d1Bytes = selfBytes != null ? selfBytes : (d1.ok ? d1.bytes : null);
+  const d1Hint = selfBytes != null ? "由 D1 自身页大小算出" : "";
+
+  return [
+    {
+      name: "Workers · Pages Functions",
+      note: "每访问一次 /api/... 就算一次请求。免费版 10 万次/天，按 UTC 0 点重置。",
+      warn: warnOn && !cfOk ? cfWhy : "",
+      items: [quotaItem("今日请求数", cfOk ? cf.todayRequests : null, FREE.requests, "int", cfOk ? "" : cfWhy)],
+    },
+    {
+      name: "D1 数据库",
+      note: "免费版：读 500 万行/天，写 10 万行/天，账号总存储 5 GB（单个库最大 500 MB）。",
+      warn: warnOn && !d1.ok ? d1.reason : "",
+      items: [
+        quotaItem("今日读行数", d1.ok ? d1.rowsRead : null, FREE.d1Read, "int", d1.ok ? "" : d1.reason),
+        quotaItem("今日写行数", d1.ok ? d1.rowsWritten : null, FREE.d1Write, "int", d1.ok ? "" : d1.reason),
+        quotaItem("存储占用", d1Bytes, FREE.d1Total, "bytes", d1Hint || (d1.ok ? "" : d1.reason)),
+      ],
+    },
+    {
+      name: "KV 图片库",
+      note: "免费版：读 10 万/天，写、删、列举各 1000/天，账号总存储 1 GB。",
+      warn: warnOn && !kv.ok ? kv.reason : "",
+      items: [
+        quotaItem("今日读次数", kv.ok ? kv.reads : null, FREE.kvRead, "int", kv.ok ? "" : kv.reason),
+        quotaItem("今日写次数", kv.ok ? kv.writes : null, FREE.kvWrite, "int", kv.ok ? "" : kv.reason),
+        quotaItem("今日删次数", kv.ok ? kv.deletes : null, FREE.kvDelete, "int", kv.ok ? "" : kv.reason),
+        quotaItem("今日列举次数", kv.ok ? kv.lists : null, FREE.kvList, "int", kv.ok ? "" : kv.reason),
+        quotaItem("存储占用", kv.ok ? kv.bytes : null, FREE.kvStore, "bytes", kv.ok ? "" : kv.reason),
+      ],
+    },
+    {
+      name: "Pages 站点（参考上限）",
+      note: "这几项 Cloudflare 不开放用量接口，只把免费版的上限列出来供参考。",
+      items: [
+        quotaItem("构建次数 / 月", null, FREE.builds, "int", "每次 push 触发一次构建"),
+        quotaItem("站点文件数", null, FREE.files, "int", "当前仓库里的页面与资源总数"),
+        quotaItem("单个文件上限", null, FREE.fileSize, "bytes", "超过 25 MiB 构建会直接失败"),
+        quotaItem("自定义域名", null, FREE.domains, "int", "每个项目可绑定的域名数"),
+      ],
+    },
+  ];
+}
+
+/* D1 自己报的占用大小:page_count × page_size。
+   不需要任何 Token,拿不到就返回 null,交给官方接口兜底 */
+async function d1SelfSize(db) {
+  try {
+    const c = await db.prepare("PRAGMA page_count").first();
+    const s = await db.prepare("PRAGMA page_size").first();
+    const count = Number(c ? Object.values(c)[0] : 0) || 0;
+    const size = Number(s ? Object.values(s)[0] : 0) || 0;
+    return count && size ? count * size : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 /* ============================================================
