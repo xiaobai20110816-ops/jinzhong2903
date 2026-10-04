@@ -22,17 +22,19 @@ import {
   randomHex,
   USERNAME_RE,
   isStaff,
+  namedUser,
   ROLE_OWNER,
   ROLE_ADMIN,
 } from "../_utils.js";
 
 const MIN_PASSWORD = 6;
 const MAX_PASSWORD = 64;
+const MAX_REAL_NAME = 24;
 
 const loadUser = (db, id) =>
   db
     .prepare(
-      "SELECT id, username, role, avatar_key, signature, banned, created_at FROM users WHERE id = ?"
+      "SELECT id, username, role, avatar_key, signature, banned, real_name, verified, created_at FROM users WHERE id = ?"
     )
     .bind(id)
     .first();
@@ -73,6 +75,9 @@ export async function onRequestGet({ request, env, params }) {
     .bind(id)
     .first();
 
+  // 真名按「看的人」的权限下发:服主 / 管理员 / 已实名的同学才看得到
+  const shown = namedUser(row, me);
+
   return json({
     ok: true,
     me: me ? me.id : 0,
@@ -80,10 +85,7 @@ export async function onRequestGet({ request, env, params }) {
     likes: likeRow ? likeRow.n : 0,
     postCount: postRow ? postRow.n : 0,
     user: {
-      id: row.id,
-      name: row.username,
-      role: row.role || "member",
-      avatar: row.avatar_key || "",
+      ...shown,
       signature: row.signature || "",
       banned: row.banned ? 1 : 0,
       created_at: row.created_at,
@@ -96,7 +98,8 @@ export async function onRequestPut({ request, env, params }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me || me.role !== ROLE_OWNER) return fail("只有服主能改别人的账号", 403);
+  if (!isStaff(me)) return fail("只有服主和管理员能改账号", 403);
+  const isOwner = me.role === ROLE_OWNER;
 
   const id = parseInt(params.id, 10);
   if (!id) return fail("成员编号不对");
@@ -109,6 +112,21 @@ export async function onRequestPut({ request, env, params }) {
     payload = await request.json();
   } catch (e) {
     return fail("提交的内容读不出来，请刷新页面重试");
+  }
+
+  // 管理员只负责「实名审核」这一件事:能填真名、能点通过 / 取消;
+  // 改角色、改名、重置密码、封禁、删除仍然只有服主能做
+  if (!isOwner) {
+    const keys = Object.keys(payload || {});
+    if (!keys.length || !keys.every((k) => k === "real_name" || k === "verified")) {
+      return fail("管理员只能填写真名和审核实名", 403);
+    }
+  }
+
+  // 审核通过必须有真名,否则「学生风采」上会出现一个空名字
+  if (payload.verified) {
+    const willBe = payload.real_name !== undefined ? payload.real_name : row.real_name;
+    if (!String(willBe == null ? "" : willBe).trim()) return fail("先把真名填上，再点审核通过");
   }
 
   // 自己这一行只允许改名和换密码:自己把自己的管理权摘了、或把自己封了,
@@ -163,6 +181,21 @@ export async function onRequestPut({ request, env, params }) {
     sets.push("banned = ?");
     binds.push(banned);
     changed.push(banned ? "封禁" : "解封");
+  }
+
+  // 实名:填真名 / 审核通过 / 取消实名
+  if (payload.real_name !== undefined) {
+    const rn = String(payload.real_name || "").trim().slice(0, MAX_REAL_NAME);
+    sets.push("real_name = ?");
+    binds.push(rn);
+    changed.push("真名");
+  }
+
+  if (payload.verified !== undefined) {
+    const v = payload.verified ? 1 : 0;
+    sets.push("verified = ?");
+    binds.push(v);
+    changed.push(v ? "审核通过" : "取消实名");
   }
 
   if (!sets.length) return fail("没有要改的内容");

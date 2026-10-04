@@ -16,6 +16,9 @@
         document.documentElement.dataset.theme = "light";
         document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
       }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
     } catch (e) {}
   </script>
   <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
@@ -383,7 +386,7 @@
         if (author && author.avatar) {
           return `<img class="${c}" src="${esc(img(author.avatar))}" alt="" loading="lazy">`;
         }
-        const ch = author && author.name ? String(author.name).slice(0, 1) : "匿";
+        const ch = author && author.name ? String(window.C103Person.name(author)).slice(0, 1) : "匿";
         return `<span class="${c} pf-avatar-fallback">${esc(ch)}</span>`;
       }
 
@@ -428,7 +431,7 @@
         const u = data.user || {};
         const hasSig = !!u.signature;
         const sig = hasSig ? esc(u.signature) : "这个人很神秘，什么都没写";
-        const name = esc(u.name);
+        const name = window.C103Person.html(u);
 
         root.innerHTML = `
           <article class="glass pf-card">
@@ -532,7 +535,7 @@
           <div class="pf-post-head">
             ${avatar(author, "pf-mini")}
             <div class="pf-post-who">
-              <span class="pf-post-name">${esc(p.name)}${badge(author.role)}</span>
+              <span class="pf-post-name">${window.C103Person.html(author, p.name)}${badge(author.role)}</span>
               <span class="pf-post-time">${esc(fmtRel(p.created_at))}</span>
             </div>
           </div>

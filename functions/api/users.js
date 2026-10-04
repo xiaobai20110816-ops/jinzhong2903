@@ -17,7 +17,7 @@ export async function onRequestGet({ request, env }) {
   if (!isStaff(me)) return fail("只有服主和管理员能看成员列表", 403);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, username, role, avatar_key, signature, banned, created_at
+    `SELECT id, username, role, avatar_key, signature, banned, real_name, verified, created_at
        FROM users
       ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, id ASC`
   ).all();
@@ -29,6 +29,7 @@ export async function onRequestGet({ request, env }) {
   ).all();
   for (const r of agg || []) counts.set(r.user_id, r.n);
 
+  // 这个接口只有服主 / 管理员进得来(上面刚挡过),真名可以直接给
   const users = (results || []).map((u) => ({
     id: u.id,
     name: u.username,
@@ -36,6 +37,8 @@ export async function onRequestGet({ request, env }) {
     avatar: u.avatar_key || "",
     signature: u.signature || "",
     banned: u.banned ? 1 : 0,
+    real_name: String(u.real_name == null ? "" : u.real_name).trim(),
+    verified: u.verified ? 1 : 0,
     created_at: u.created_at,
     posts: counts.get(u.id) || 0,
   }));

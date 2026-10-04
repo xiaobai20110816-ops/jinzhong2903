@@ -98,7 +98,7 @@
 .nav-links a.active { color: var(--gold); }
 .nav-links a.active::after { width: 52%; }
 
-/* ---- 深色/浅色开关:玻璃圆钮,图标随当前主题切换 ---- */
+/* ---- 外观按钮:玻璃圆钮,点开深色/浅色 + 主题色面板 ---- */
 .theme-toggle {
   flex: none;
   width: 40px;
@@ -117,12 +117,6 @@
 .theme-toggle:active { transform: scale(0.96); }
 .theme-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .theme-toggle svg { width: 19px; height: 19px; display: block; }
-
-/* 深色下显示"太阳"(点了变浅色),浅色下显示"月亮" */
-.theme-toggle .i-sun { display: block; }
-.theme-toggle .i-moon { display: none; }
-:root[data-theme="light"] .theme-toggle .i-sun { display: none; }
-:root[data-theme="light"] .theme-toggle .i-moon { display: block; }
 
 /* ---- 账号入口:没登录是「登录」,登录了显示头像 + 名字 ---- */
 .nav-account {
@@ -464,4 +458,123 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 @media (max-width: 520px) {
   .splash-card { padding: 26px 20px 22px; border-radius: 22px; }
   .splash-title { font-size: 1.28rem; }
+}
+
+/* ============================================================
+   外观面板:导航栏「外观」按钮弹出的玻璃卡
+   深色 / 浅色两枚按钮 + 四套主题色 swatch
+   ============================================================ */
+.appear-pop {
+  position: fixed;
+  top: 74px;
+  right: max(16px, calc((100vw - 1180px) / 2));
+  z-index: 65;
+  width: min(300px, calc(100vw - 32px));
+  padding: 16px 16px 14px;
+  border-radius: 18px;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.appear-pop[hidden] { display: none; }
+.appear-pop.in { opacity: 1; transform: translateY(0); }
+
+.appear-pop .ap-title,
+.appear-pop .ap-sub {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--faint);
+  text-transform: uppercase;
+  transition: color 0.6s ease;
+}
+.appear-pop .ap-sub { margin: 15px 0 9px; }
+
+/* 深色 / 浅色 */
+.ap-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ap-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.84rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 0.3s ease, background-color 0.4s ease,
+    border-color 0.4s ease, transform 0.2s ease;
+}
+.ap-opt svg { width: 17px; height: 17px; }
+.ap-opt:hover { color: var(--text); transform: translateY(-1px); }
+.ap-opt.active {
+  color: var(--gold);
+  background: var(--gold-soft);
+  border-color: var(--gold-line);
+}
+
+/* 主题色 swatch */
+.ap-skins {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.ap-skin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  cursor: pointer;
+  transition: border-color 0.4s ease, background-color 0.4s ease,
+    transform 0.2s ease;
+}
+.ap-skin:hover { transform: translateY(-1px); background: var(--gold-soft); }
+.ap-skin.active { border-color: var(--gold-line); background: var(--gold-soft); }
+.ap-dots { display: inline-flex; flex: none; }
+.ap-dots i {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid var(--glass-brd);
+  display: block;
+}
+.ap-dots i + i { margin-left: -6px; }
+.ap-skin-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  transition: color 0.6s ease;
+}
+.ap-skin.active .ap-skin-name { color: var(--gold); }
+.ap-hint {
+  margin-top: 12px;
+  font-size: 0.68rem;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  transition: color 0.6s ease;
+}
+
+@media (max-width: 620px) {
+  .appear-pop { top: 68px; right: 12px; }
 }

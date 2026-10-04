@@ -22,6 +22,7 @@ import {
   regionOf,
   POST_COLS,
   notify,
+  namedUser,
 } from "./_utils.js";
 
 const PAGE_SIZE = 20;
@@ -30,25 +31,21 @@ const MAX_IMAGES = 3;
 const COOLDOWN_MS = 15000; // 同一个账号 15 秒内只能发一条新帖
 const REPLY_COOLDOWN_MS = 3000; // 回复 / 留言墙放宽到 3 秒,不然聊不起来
 
-/* 作者资料一次查齐,别逐条查库 */
-async function loadAuthors(db, rows) {
+/* 作者资料一次查齐,别逐条查库。
+   真名按「看的人(viewer)」的权限决定带不带 —— 见 namedUser */
+async function loadAuthors(db, rows, viewer) {
   const uids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
   const authors = new Map();
   if (!uids.length) return authors;
 
   const holes = uids.map(() => "?").join(",");
   const { results } = await db
-    .prepare(`SELECT id, username, role, avatar_key FROM users WHERE id IN (${holes})`)
+    .prepare(
+      `SELECT id, username, role, avatar_key, real_name, verified FROM users WHERE id IN (${holes})`
+    )
     .bind(...uids)
     .all();
-  for (const u of results || []) {
-    authors.set(u.id, {
-      id: u.id,
-      name: u.username,
-      role: u.role || "member",
-      avatar: u.avatar_key || "",
-    });
-  }
+  for (const u of results || []) authors.set(u.id, namedUser(u, viewer));
   return authors;
 }
 
@@ -61,6 +58,9 @@ export async function onRequestGet({ request, env }) {
   const offset = (page - 1) * PAGE_SIZE;
   const authorId = parseInt(url.searchParams.get("author") || "0", 10) || 0;
   const wallId = parseInt(url.searchParams.get("wall") || "0", 10) || 0;
+
+  // 先认人:真名能不能看见、class 帖能不能看见,都取决于看的人是谁
+  const me = await currentUser(request, env);
 
   // ---- 个人主页留言墙:扁平一层,不挂回复树 ----
   if (wallId) {
@@ -81,7 +81,7 @@ export async function onRequestGet({ request, env }) {
       .all();
 
     const list = roots || [];
-    const authors = await loadAuthors(env.DB, list);
+    const authors = await loadAuthors(env.DB, list, me);
     return json({
       ok: true,
       total: totalRow ? totalRow.n : 0,
@@ -97,7 +97,6 @@ export async function onRequestGet({ request, env }) {
 
   // ---- 主留言板 / 某个人的主帖 ----
   // 分页分的是「主帖」,回复跟着主帖一起出来,不会被翻页截断
-  const me = await currentUser(request, env);
   const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
   const where = authorId
     ? "parent_id IS NULL AND wall_id IS NULL AND user_id = ?" + visOnly
@@ -121,7 +120,7 @@ export async function onRequestGet({ request, env }) {
   const list = roots || [];
   const rows = [...list, ...(await loadThread(env.DB, list.map((r) => r.id)))];
   const rowById = new Map(rows.map((r) => [r.id, r]));
-  const authors = await loadAuthors(env.DB, rows);
+  const authors = await loadAuthors(env.DB, rows, me);
 
   const out = list.map((r) => ({
     ...toPost(r),
@@ -150,10 +149,17 @@ export async function onRequestGet({ request, env }) {
     // reply_to_id 是新字段;老回复没有它,那就用真正的父帖当「回复对象」
     const targetId = row.reply_to_id || row.parent_id;
     const target = rowById.get(targetId);
+    // 「回复 @某某」也走同一套实名规则:有权限的人看到的是真名
+    const targetAuthor = target ? authors.get(target.user_id) : null;
     root.replies.push({
       ...toPost(row),
       author: authors.get(row.user_id) || null,
-      reply_to_name: target ? target.name : "",
+      reply_to_name: targetAuthor
+        ? targetAuthor.real_name || targetAuthor.name
+        : target
+        ? target.name
+        : "",
+      reply_to_verified: targetAuthor && targetAuthor.verified && targetAuthor.real_name ? 1 : 0,
     });
   }
 

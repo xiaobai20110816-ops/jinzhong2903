@@ -71,7 +71,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-04.4";
+const SCHEMA_VERSION = "2026-10-04.5";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -163,6 +163,10 @@ export function ensureSchema(db) {
 
       // 老库升级:封禁标记(1 = 登不进来,但账号和留言都还在)
       await addColumn(db, "users", "banned", "INTEGER DEFAULT 0");
+      // 实名:真名由服主 / 管理员在后台录入并审核,
+      // verified = 1 才算通过,通过后才出现在「学生风采」里
+      await addColumn(db, "users", "real_name", "TEXT");
+      await addColumn(db, "users", "verified", "INTEGER DEFAULT 0");
 
       // ---- 个人主页点赞:一人对一人只能点一次,靠联合主键去重 ----
       await db
@@ -295,7 +299,9 @@ export function readCookie(request, name) {
 /* 用户名规则:2~16 位,中文 / 字母 / 数字 / 下划线 */
 export const USERNAME_RE = /^[\u4e00-\u9fa5A-Za-z0-9_]{2,16}$/;
 
-/* 一行 users 记录 → 前端能用的样子(绝不外泄 salt / pass_hash) */
+/* 一行 users 记录 → 前端能用的样子(绝不外泄 salt / pass_hash)。
+   这个函数只用在「返回给本人」的接口上(登录 / 注册 / 我),
+   所以真名一并带上没问题 —— 自己当然看得到自己的真名 */
 export function publicUser(row) {
   if (!row) return null;
   return {
@@ -305,7 +311,39 @@ export function publicUser(row) {
     avatar: row.avatar_key || "",
     signature: row.signature || "",
     banned: row.banned ? 1 : 0,
+    verified: row.verified ? 1 : 0,
+    real_name: String(row.real_name == null ? "" : row.real_name).trim(),
   };
+}
+
+/* ============================================================
+   实名可见性
+   规则:真名只给「服主 / 管理员」和「已实名的同学」看。
+   没权限的人(游客、还没实名的账号)看到的一律是账号名。
+   ============================================================ */
+
+export function canSeeRealName(viewer) {
+  return isStaff(viewer) || !!(viewer && viewer.verified);
+}
+
+/* 一行 users → 按「看的人」的权限决定带不带真名。
+   服主 / 管理员连没审核的真名也看得到(要拿来审核);
+   已实名的同学只看得到同样审核通过的人的真名。 */
+export function namedUser(row, viewer) {
+  if (!row) return null;
+  const out = {
+    id: row.id,
+    name: row.username,
+    role: row.role || "member",
+    avatar: row.avatar_key || "",
+    verified: row.verified ? 1 : 0,
+  };
+  const rn = String(row.real_name == null ? "" : row.real_name).trim();
+  if (rn) {
+    if (isStaff(viewer)) out.real_name = rn;
+    else if (viewer && viewer.verified && out.verified) out.real_name = rn;
+  }
+  return out;
 }
 
 /* 从 Cookie 里认出当前登录的人;没登录或已过期就返回 null。
@@ -316,7 +354,8 @@ export async function currentUser(request, env) {
   if (!token) return null;
 
   const row = await env.DB.prepare(
-    `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, u.banned, s.expires_at
+    `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, u.banned,
+            u.real_name, u.verified, s.expires_at
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ?`
   )

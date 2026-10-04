@@ -13,6 +13,9 @@
         document.documentElement.dataset.theme = "light";
         document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
       }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
     } catch (e) {}
   </script>
   <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
@@ -229,7 +232,7 @@
       const face = (p, cls) =>
         p.avatar
           ? `<img class="${cls}" src="${API}/img/${esc(p.avatar)}" alt="" loading="lazy">`
-          : `<span class="${cls}">${esc((p.name || "?").slice(0, 1))}</span>`;
+          : `<span class="${cls}">${esc((window.C103Person.name(p) || "?").slice(0, 1))}</span>`;
 
       const roleTag = (p) =>
         ROLE_LABEL[p.role] ? `<em class="${esc(p.role)}">${ROLE_LABEL[p.role]}</em>` : "";
@@ -241,7 +244,7 @@
             (p, i) => `<a class="rk-row${i < 3 ? " top" + (i + 1) : ""}" href="u.html?id=${p.id}">
               <span class="rk-no">${i + 1}</span>
               ${face(p, "rk-face")}
-              <span class="rk-name">${esc(p.name)}${roleTag(p)}</span>
+              <span class="rk-name">${window.C103Person.html(p)}${roleTag(p)}</span>
               <span class="rk-n">${p.n === undefined ? "" : p.n + unit}</span>
             </a>`
           )
@@ -254,7 +257,7 @@
           .map(
             (h) => `<a class="rk-hot-row" href="story.html">
               <span class="rk-hot-body">
-                ${esc(h.name)}：${esc(h.excerpt) || "（图片）"}
+                ${window.C103Person.html(h)}：${esc(h.excerpt) || "（图片）"}
                 <span class="rk-hot-meta">${new Date(h.created_at).toLocaleDateString("zh-CN")}</span>
               </span>
               <span class="rk-hot-n">${h.replies} 条回复</span>

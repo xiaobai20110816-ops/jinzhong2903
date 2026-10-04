@@ -111,7 +111,7 @@
     if (author && author.avatar) {
       return `<img class="story-avatar" src="${API}/img/${esc(author.avatar)}" alt="" loading="lazy">`;
     }
-    const ch = author ? String(author.name).slice(0, 1) : "匿";
+    const ch = author ? String(C103Person.name(author)).slice(0, 1) : "匿";
     return `<span class="story-avatar story-avatar-fallback">${esc(ch)}</span>`;
   }
 
@@ -134,7 +134,8 @@
     const face = avatarHTML(p.author);
     // 「仅本班」的帖子挂个小标签,让发的人自己看得出这条只有登录的人能看
     const vis = p.visibility === "class" ? '<em class="vis-badge">仅本班</em>' : "";
-    const name = `<span class="story-name">${esc(p.name)}${vis}${badgeHTML(p.author)}</span>`;
+    // 名字统一走 C103Person:能看真名就显示真名 + 蓝钩,否则显示账号名
+    const name = `<span class="story-name">${C103Person.html(p.author, p.name)}${vis}${badgeHTML(p.author)}</span>`;
     return `<div class="story-head">
       ${href ? `<a class="story-face-link" href="${href}">${face}</a>` : face}
       <div class="story-who">
@@ -164,7 +165,7 @@
     const edit = canManage ? `<button class="story-edit" type="button" data-edit="${p.id}">编辑</button>` : "";
     const del = canManage ? `<button class="story-del" type="button" data-del="${p.id}">删除</button>` : "";
     return `<div class="story-actions">
-      <button class="story-reply" type="button" data-reply="${p.id}" data-name="${esc(p.name)}">回复</button>
+      <button class="story-reply" type="button" data-reply="${p.id}" data-name="${esc(C103Person.name(p.author, p.name))}">回复</button>
       ${edit}${pin}${del}
     </div>`;
   }
@@ -197,7 +198,7 @@
   // 回复:平铺一层,不再缩进;用「回复 @某某」标出对象
   function subHTML(p) {
     const to = p.reply_to_name
-      ? `<p class="story-to">回复 <b>@${esc(p.reply_to_name)}</b></p>`
+      ? `<p class="story-to">回复 <b>@${esc(p.reply_to_name)}${p.reply_to_verified ? window.C103Person.check : ""}</b></p>`
       : "";
     return `<article class="story-card story-sub" data-id="${p.id}">
       ${headHTML(p)}
@@ -229,7 +230,7 @@
     if (gate) gate.hidden = logged;
     if (!logged) return;
 
-    if (els.meName) els.meName.innerHTML = esc(state.user.name) + badgeHTML(state.user);
+    if (els.meName) els.meName.innerHTML = C103Person.html(state.user) + badgeHTML(state.user);
     if (els.meAvatar) els.meAvatar.innerHTML = avatarHTML(state.user);
     if (els.meSig) els.meSig.textContent = state.user.signature || "还没写个性签名";
     syncPick();

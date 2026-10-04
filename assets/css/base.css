@@ -125,6 +125,95 @@
   --shadow: 0 18px 50px rgba(16, 19, 26, 0.14);
 }
 
+/* ============================================================
+   多套皮肤:只换「点缀色 + 氛围柔光」,版式/结构完全不动。
+   classic 鎏金是默认色(不写 data-skin);其余三套由 nav.js 写到
+   <html data-skin="...">。深色变体必须显式排除浅色
+   (:not([data-theme="light"])),否则会盖掉上面的浅色 token。
+   ============================================================ */
+
+/* ---- 极光:青 + 靛蓝,冷调、清透 ---- */
+:root[data-skin="aurora"]:not([data-theme="light"]) {
+  --gold: #45d6e8;
+  --gold-2: #7c8cff;
+  --gold-soft: rgba(69, 214, 232, 0.14);
+  --gold-line: rgba(69, 214, 232, 0.30);
+  --frost-1: rgba(70, 150, 255, 0.34);
+  --frost-2: rgba(69, 214, 232, 0.26);
+  --frost-3: rgba(124, 140, 255, 0.26);
+  --frost-4: rgba(0, 214, 200, 0.20);
+  --frost-5: rgba(150, 110, 255, 0.22);
+}
+:root[data-theme="light"][data-skin="aurora"] {
+  --gold: #0b7f96;
+  --gold-2: #3f52c9;
+  --gold-soft: rgba(11, 127, 150, 0.10);
+  --gold-line: rgba(11, 127, 150, 0.26);
+  --frost-1: rgba(80, 150, 255, 0.36);
+  --frost-2: rgba(60, 200, 225, 0.40);
+  --frost-3: rgba(126, 140, 255, 0.30);
+  --frost-4: rgba(0, 190, 180, 0.24);
+  --frost-5: rgba(160, 120, 255, 0.26);
+}
+
+/* ---- 蔷薇:玫粉 + 暖橙,温柔、有戏剧感 ---- */
+:root[data-skin="rose"]:not([data-theme="light"]) {
+  --gold: #ff7aa8;
+  --gold-2: #ffb37a;
+  --gold-soft: rgba(255, 122, 168, 0.14);
+  --gold-line: rgba(255, 122, 168, 0.30);
+  --frost-1: rgba(255, 110, 170, 0.30);
+  --frost-2: rgba(255, 150, 190, 0.24);
+  --frost-3: rgba(255, 122, 26, 0.22);
+  --frost-4: rgba(255, 180, 120, 0.20);
+  --frost-5: rgba(190, 110, 255, 0.22);
+}
+:root[data-theme="light"][data-skin="rose"] {
+  --gold: #c03a6e;
+  --gold-2: #d97400;
+  --gold-soft: rgba(192, 58, 110, 0.10);
+  --gold-line: rgba(192, 58, 110, 0.24);
+  --frost-1: rgba(255, 120, 175, 0.36);
+  --frost-2: rgba(255, 150, 190, 0.40);
+  --frost-3: rgba(255, 110, 180, 0.30);
+  --frost-4: rgba(255, 180, 120, 0.28);
+  --frost-5: rgba(190, 120, 255, 0.28);
+}
+
+/* ---- 松林:青绿 + 暖黄,清新、有生命力 ---- */
+:root[data-skin="forest"]:not([data-theme="light"]) {
+  --gold: #4be3a0;
+  --gold-2: #ffd166;
+  --gold-soft: rgba(75, 227, 160, 0.14);
+  --gold-line: rgba(75, 227, 160, 0.30);
+  --frost-1: rgba(60, 200, 140, 0.28);
+  --frost-2: rgba(255, 209, 102, 0.24);
+  --frost-3: rgba(0, 190, 160, 0.20);
+  --frost-4: rgba(120, 220, 120, 0.20);
+  --frost-5: rgba(90, 170, 255, 0.18);
+}
+:root[data-theme="light"][data-skin="forest"] {
+  --gold: #0f7a52;
+  --gold-2: #b8890a;
+  --gold-soft: rgba(15, 122, 82, 0.10);
+  --gold-line: rgba(15, 122, 82, 0.24);
+  --frost-1: rgba(60, 200, 140, 0.36);
+  --frost-2: rgba(255, 200, 90, 0.42);
+  --frost-3: rgba(0, 190, 160, 0.26);
+  --frost-4: rgba(120, 210, 120, 0.26);
+  --frost-5: rgba(90, 170, 255, 0.24);
+}
+
+/* 实名蓝钩:全站统一尺寸,跟在名字后面 */
+.nick-check {
+  width: 0.95em;
+  height: 0.95em;
+  display: inline-block;
+  vertical-align: -0.08em;
+  margin-left: 3px;
+  flex: none;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }

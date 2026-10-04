@@ -7,7 +7,7 @@
    都是「别人对我」的动作;自己对自己做的不记。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser } from "./_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, namedUser } from "./_utils.js";
 
 const MAX = 40;
 
@@ -22,7 +22,8 @@ export async function onRequestGet({ request, env }) {
   const { results } = await env.DB.prepare(
     `SELECT n.id, n.type, n.post_id, n.wall_id, n.excerpt, n.read, n.created_at,
             u.id AS actor_id, u.username AS actor_name,
-            u.avatar_key AS actor_avatar, u.role AS actor_role
+            u.avatar_key AS actor_avatar, u.role AS actor_role,
+            u.real_name AS actor_real_name, u.verified AS actor_verified
        FROM notifications n
        LEFT JOIN users u ON u.id = n.actor_id
       WHERE n.user_id = ?
@@ -43,13 +44,19 @@ export async function onRequestGet({ request, env }) {
       excerpt: r.excerpt || "",
       read: r.read ? 1 : 0,
       created_at: r.created_at,
+      // 通知里的「谁回复了我」同样按实名规则显示
       actor: r.actor_id
-        ? {
-            id: r.actor_id,
-            name: r.actor_name,
-            avatar: r.actor_avatar || "",
-            role: r.actor_role || "member",
-          }
+        ? namedUser(
+            {
+              id: r.actor_id,
+              username: r.actor_name,
+              avatar_key: r.actor_avatar,
+              role: r.actor_role,
+              real_name: r.actor_real_name,
+              verified: r.actor_verified,
+            },
+            me
+          )
         : null,
     };
   });

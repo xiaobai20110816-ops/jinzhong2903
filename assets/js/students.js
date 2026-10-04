@@ -1,13 +1,10 @@
 /* ============================================================
-   103班：音乐领军班 · 学生数据与渲染
-   名单已支持后台编辑:数据来自 GET /api/content 的 students 板块,
-   以后增删同学请到「管理后台」操作,不用再改这个文件。
-   拿不到内容(断网 / 接口没接上)时,退回下面这份兜底名单;
-   兜底为空就显示「COMING SOON / 敬请期待」,页面永远不会空白。
+   103班：音乐领军班 · 学生风采
+   名单来自账号:GET /api/students 只返回「实名审核通过」的账号。
+   真名 / 蓝钩按看的人的权限下发 —— 服主 · 管理员 · 已实名的同学
+   看到真名 + 蓝色小钩,其他人看到账号名。
+   一个已审核的都没有时显示「敬请期待」,页面永远不会空白。
    ============================================================ */
-
-// 兜底名单(接口拿不到内容时用),留空即显示「敬请期待」
-const STUDENTS = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   const grid = document.getElementById("students-grid");
@@ -19,40 +16,55 @@ document.addEventListener("DOMContentLoaded", () => {
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
     );
   const img = window.C103Img || ((v) => v);
+  const P = window.C103Person; // 名字 + 蓝钩的统一渲染(nav.js 里)
 
-  // 名单为空时显示「敬请期待」(原样保留)
-  const renderSoon = () => {
+  const ROLE_LABEL = { owner: "服主", admin: "管理员" };
+
+  // 没有已审核的账号时显示「敬请期待」(原样保留)
+  const renderSoon = (note) => {
     grid.innerHTML = `
       <div class="students-soon">
         <p class="soon-en">COMING SOON</p>
         <h2 class="soon-cn">敬请期待</h2>
-        <p class="soon-note">名单整理中,同学们的风采即将登场。</p>
+        <p class="soon-note">${esc(note || "名单整理中,同学们的风采即将登场。")}</p>
       </div>`;
   };
 
   const render = (list) => {
-    // 加载失败 / 列表为空都退回兜底名单
-    const students = Array.isArray(list) && list.length ? list : STUDENTS;
-    if (!students.length) return renderSoon();
+    const students = Array.isArray(list) ? list : [];
+    if (!students.length) return renderSoon("实名审核还在进行，通过的同学会陆续登场。");
 
     grid.innerHTML = students
       .map((s) => {
-        const name = String(s.name || "");
+        const name = P ? P.name(s) : s.name || "";
+        const shown = P ? P.html(s) : esc(name);
         // 有头像用头像,没有就显示名字首字
         const face = s.avatar
           ? `<img src="${esc(img(s.avatar))}" alt="${esc(name)}">`
-          : esc(name.charAt(0));
+          : esc(String(name).charAt(0) || "?");
+        const role = ROLE_LABEL[s.role]
+          ? `<em class="student-role ${esc(s.role)}">${ROLE_LABEL[s.role]}</em>`
+          : "";
+        const tag = s.signature ? `<span class="position">${esc(s.signature)}</span>` : "";
         return `
-      <figure class="student-card">
+      <a class="student-card" href="u.html?id=${encodeURIComponent(s.id)}">
         <div class="student-avatar">${face}</div>
-        <h3>${esc(name)}</h3>
-        <span class="position">${esc(s.tag || "")}</span>
-      </figure>`;
+        <h3>${shown}${role}</h3>
+        ${tag}
+      </a>`;
       })
       .join("");
   };
 
-  // load() 失败时 resolve 出 null,render 会退回兜底,不会空白
-  if (!window.C103Content) return renderSoon();
-  C103Content.load().then((content) => render(content && content.students));
+  if (!window.C103Auth) return renderSoon("名单暂时读不到，刷新一下再试。");
+
+  // 先等 nav.js 问清楚「我是谁」:真名和蓝钩取决于看的人是谁
+  Promise.resolve(window.C103Auth.ready)
+    .then(() => fetch("api/students", { credentials: "same-origin" }))
+    .then((r) => r.json().then((d) => ({ ok: r.ok, d: d })))
+    .then(({ ok, d }) => {
+      if (!ok || !d.ok) throw new Error((d && d.error) || "读不到名单");
+      render(d.students);
+    })
+    .catch(() => renderSoon("名单暂时读不到，刷新一下再试。"));
 });

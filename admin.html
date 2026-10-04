@@ -14,6 +14,9 @@
         document.documentElement.dataset.theme = "light";
         document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
       }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
     } catch (e) {}
   </script>
   <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
@@ -276,6 +279,30 @@
       background: rgba(255, 80, 80, 0.12);
       border: 1px solid rgba(255, 100, 100, 0.55);
     }
+    /* 实名审核:状态徽章 + 真名输入框 */
+    .member .ver-badge {
+      font-size: 0.66rem;
+      letter-spacing: 1px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .member .ver-badge.on { color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-line); }
+    .member .ver-badge.off { color: var(--muted); background: var(--chip); border: 1px solid var(--line); }
+    .member .i-real {
+      width: 100%;
+      margin-top: 9px;
+      font-family: var(--font-body);
+      font-size: 0.84rem;
+      color: var(--text);
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.3s ease, background-color 0.4s ease, color 0.6s ease;
+    }
+    .member .i-real:focus { border-color: var(--gold-line); background: var(--gold-soft); }
     /* 改名 / 重置密码:中性小按钮,颜色走变量,深浅主题都不糊 */
     .member .m-btn {
       font-family: var(--font-body);
@@ -449,7 +476,7 @@
         <div id="adm-main" hidden>
           <div class="adm-tabs">
             <button class="adm-tab active" type="button" data-panel="ann">班级公告</button>
-            <button class="adm-tab" type="button" data-panel="students">学生风采</button>
+            <button class="adm-tab" type="button" data-panel="students">实名审核</button>
             <button class="adm-tab" type="button" data-panel="dorms">宿舍风采</button>
             <button class="adm-tab" type="button" data-panel="moments">高光时刻</button>
             <button class="adm-tab" type="button" data-panel="site">首页文案</button>
@@ -473,20 +500,14 @@
             </div>
           </div>
 
-          <!-- ========== 学生 ========== -->
+          <!-- ========== 实名审核 ========== -->
           <div class="glass panel" id="panel-students" hidden>
             <div class="panel-head">
-              <h2>学生风采</h2>
-              <p>这里为空时，学生风采页显示「敬请期待」。头像可以直接从电脑上传，会自动压到 1MB 以内。</p>
+              <h2>实名审核</h2>
+              <p>学生风采改成「账号驱动」了：只有审核通过的账号才会出现在学生风采里，并带上蓝色小勾。填上真名点「审核通过」即可；真名只有服主、管理员和同样通过实名的同学看得到，其他同学只看到账号名。</p>
             </div>
-            <div class="rows" id="stu-list"></div>
-            <div class="panel-foot">
-              <button class="btn ghost" type="button" id="stu-add">＋ 加一位同学</button>
-              <div>
-                <span class="msg" id="stu-msg"></span>
-                <button class="btn" type="button" data-save="students" data-msg="stu-msg">保存名单</button>
-              </div>
-            </div>
+            <div class="rows" id="verify-list"></div>
+            <p class="msg" id="ver-msg"></p>
           </div>
 
           <!-- ========== 宿舍 ========== -->
@@ -652,59 +673,97 @@
         $("#ann-list").appendChild(annRow({ date: "", title: "", body: "", pinned: false }));
       });
 
-      /* ============ 学生 ============ */
-      function stuRow(s) {
-        const el = document.createElement("div");
-        el.className = "row";
-        el.innerHTML = `
-          <div class="row-top">
-            <button class="avatar-slot" type="button" title="点头像上传">${s.avatar ? `<img src="${esc(img(s.avatar))}" alt="">` : "＋"}</button>
-            <input class="i-key" type="hidden" value="${esc(s.avatar)}">
-            <input class="i-name w-grow" type="text" placeholder="姓名" value="${esc(s.name)}">
-            <input class="i-tag w-grow" type="text" placeholder="人物定位标签，如「主唱」「定海神针」" value="${esc(s.tag)}">
-            <button class="icon-btn del" type="button" title="删掉">×</button>
-          </div>`;
-        $(".del", el).addEventListener("click", () => el.remove());
-
-        const slot = $(".avatar-slot", el);
-        const keyBox = $(".i-key", el);
-        const file = document.createElement("input");
-        file.type = "file";
-        file.accept = "image/*";
-        file.hidden = true;
-        el.appendChild(file);
-        slot.addEventListener("click", () => file.click());
-        file.addEventListener("change", async () => {
-          const f = (file.files || [])[0];
-          file.value = "";
-          if (!f) return;
-          slot.textContent = "…";
-          try {
-            const key = await upload(f, 512);
-            keyBox.value = key;
-            slot.innerHTML = `<img src="${esc(img(key))}" alt="">`;
-          } catch (err) {
-            slot.textContent = "＋";
-            say("stu-msg", err.message, "err");
+      /* ============ 实名审核 ============ */
+      /* 学生风采改成账号驱动:这里只负责给账号填真名、标记是否通过实名。
+         真名存进 users.real_name,审核状态存 users.verified。 */
+      async function renderVerify(okMsg) {
+        const box = $("#verify-list");
+        if (!box) return;
+        say("ver-msg", "");
+        box.innerHTML = '<p class="msg">正在读取…</p>';
+        try {
+          const res = await fetch(API + "/users", { credentials: "same-origin" });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "读不到成员列表");
+          const users = (d.users || []).filter((u) => !u.banned);
+          // 待审核的排前面,审核完的沉到下面,方便一眼看到要处理谁
+          users.sort((a, b) => (a.verified ? 1 : 0) - (b.verified ? 1 : 0) || a.id - b.id);
+          box.innerHTML = "";
+          if (!users.length) {
+            box.innerHTML = '<p class="msg">还没有可审核的账号。</p>';
+            return;
           }
+          users.forEach((u) => box.appendChild(verifyRow(u)));
+          if (okMsg) say("ver-msg", okMsg, "ok");
+        } catch (err) {
+          box.innerHTML = "";
+          say("ver-msg", err.message, "err");
+        }
+      }
+
+      /* 实名审核的一个操作:禁用按钮 → 请求 → 成功刷新本面板 / 失败复原 */
+      async function runVerifyOp(btn, doneText, task) {
+        btn.disabled = true;
+        try {
+          await task();
+          renderVerify(doneText);
+          return true;
+        } catch (err) {
+          say("ver-msg", err.message, "err");
+          btn.disabled = false;
+          return false;
+        }
+      }
+
+      function verifyRow(u) {
+        const el = document.createElement("div");
+        el.className = "row member";
+        const face = u.avatar
+          ? `<img src="${esc(img(u.avatar))}" alt="">`
+          : esc(String(u.name || "?").slice(0, 1));
+        const done = !!u.verified;
+        el.innerHTML = `
+          <span class="m-face">${face}</span>
+          <div class="m-info">
+            <div class="m-line">
+              <span class="m-name">${esc(u.name)}</span>
+              <span class="ver-badge ${done ? "on" : "off"}">${done ? "已实名" : "待审核"}</span>
+            </div>
+            <div class="m-sub">${esc(u.signature || "（还没写个性签名）")}</div>
+            <div class="m-meta">注册于 ${esc(fmtDate(u.created_at))} · 已发 ${Number(u.posts) || 0} 条</div>
+            <input class="i-real" type="text" maxlength="24" placeholder="填写真名（只有服主、管理员和已实名同学看得到）" value="${esc(u.real_name || "")}">
+          </div>
+          <div class="m-right"></div>`;
+        const right = $(".m-right", el);
+        const input = $(".i-real", el);
+
+        const ok = document.createElement("button");
+        ok.type = "button";
+        ok.className = "m-btn ver-ok";
+        ok.textContent = done ? "保存真名" : "审核通过";
+        ok.addEventListener("click", () => {
+          const rn = input.value.trim();
+          if (!rn) { say("ver-msg", "先把真名填上，再点审核通过", "err"); input.focus(); return; }
+          const body = done ? { real_name: rn } : { real_name: rn, verified: 1 };
+          runVerifyOp(ok, done ? `已更新「${rn}」的真名` : `「${rn}」已通过实名，学生风采里能看到 TA 了`, () =>
+            patchUser(u.id, body));
         });
+        right.appendChild(ok);
+
+        if (done) {
+          const undo = document.createElement("button");
+          undo.type = "button";
+          undo.className = "m-del";
+          undo.textContent = "取消实名";
+          undo.addEventListener("click", () => {
+            const who = u.real_name || u.name;
+            if (!confirm(`取消「${who}」的实名？\n\nTA 会从学生风采里消失，名字也会变回账号名。`)) return;
+            runVerifyOp(undo, "已取消实名", () => patchUser(u.id, { verified: 0 }));
+          });
+          right.appendChild(undo);
+        }
         return el;
       }
-      function renderStudents() {
-        const box = $("#stu-list");
-        box.innerHTML = "";
-        (data.students || []).forEach((s) => box.appendChild(stuRow(s)));
-      }
-      function collectStudents() {
-        return $$("#stu-list .row").map((r) => ({
-          name: $(".i-name", r).value.trim(),
-          tag: $(".i-tag", r).value.trim(),
-          avatar: $(".i-key", r).value,
-        }));
-      }
-      $("#stu-add").addEventListener("click", () => {
-        $("#stu-list").appendChild(stuRow({ name: "", tag: "", avatar: "" }));
-      });
 
       /* ============ 宿舍 ============ */
       /* 宿舍照片只存地址;高光照片还带一句说明,点图可以改 */
@@ -1088,7 +1147,6 @@
       /* ============ 保存 ============ */
       const COLLECT = {
         announcements: collectAnn,
-        students: collectStudents,
         dorms: collectDorms,
         moments: collectMoments,
         site: collectSite,
@@ -1126,7 +1184,6 @@
       function refreshPanels(saved) {
         if (saved === "site") renderSite();
         if (saved === "announcements") renderAnn();
-        if (saved === "students") renderStudents();
         if (saved === "dorms") renderDorms();
         if (saved === "moments") renderMoments();
       }
@@ -1341,6 +1398,7 @@
           const name = tab.dataset.panel;
           $$(".panel").forEach((p) => { p.hidden = p.id !== "panel-" + name; });
           if (name === "members") renderMembers();
+          if (name === "students") renderVerify();
           if (name === "usage") renderUsage();
         });
       });
@@ -1372,7 +1430,7 @@
             }
             data = d;
             renderAnn();
-            renderStudents();
+            renderVerify();
             renderDorms();
             renderMoments();
             renderSite();

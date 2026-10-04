@@ -16,6 +16,9 @@
         document.documentElement.dataset.theme = "light";
         document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
       }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
     } catch (e) {}
   </script>
   <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->

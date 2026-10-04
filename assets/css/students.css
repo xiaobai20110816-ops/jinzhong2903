@@ -12,9 +12,11 @@
   gap: 22px;
 }
 
-/* 玻璃卡:半透明 + 背景模糊 + 高光描边 */
+/* 玻璃卡:半透明 + 背景模糊 + 高光描边。
+   整张卡是一个链接,点进 TA 的个人主页 */
 .student-card {
   position: relative;
+  display: block;
   background: var(--glass-surface);
   -webkit-backdrop-filter: blur(26px) saturate(180%);
   backdrop-filter: blur(26px) saturate(180%);
@@ -59,7 +61,25 @@
   font-family: var(--font-display);
   font-size: 1.25rem;
   letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
 }
+/* 服主 / 管理员小标签 */
+.student-role {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: 0.62rem;
+  letter-spacing: 1px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  vertical-align: middle;
+  transition: color 0.6s ease, background-color 0.6s ease;
+}
+.student-role.owner { color: #0b0f1a; background: linear-gradient(120deg, var(--gold), var(--gold-2)); }
+.student-role.admin { color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-line); }
 .student-card .position {
   display: inline-block;
   margin-top: 10px;

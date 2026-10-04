@@ -21,6 +21,16 @@ const NAV_ITEMS = [
 const THEME_KEY = "class103-theme";
 const THEME_COLORS = { dark: "#070b14", light: "#f4f6fa" };
 
+/* 皮肤:只换「点缀色 + 氛围柔光」,版式完全不动。
+   classic 是默认色(不写 data-skin 属性),其余三套覆盖在 base.css 里 */
+const SKIN_KEY = "class103-skin";
+const SKINS = [
+  { id: "classic", name: "鎏金", dots: ["#f0b90b", "#ff8a00"] },
+  { id: "aurora", name: "极光", dots: ["#3fd8e8", "#7c8cff"] },
+  { id: "rose", name: "蔷薇", dots: ["#ff7aa8", "#ffb37a"] },
+  { id: "forest", name: "松林", dots: ["#4be3a0", "#ffd166"] },
+];
+
 function readTheme() {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
@@ -35,6 +45,18 @@ function applyTheme(theme) {
   if (meta) meta.setAttribute("content", THEME_COLORS[theme]);
 
   try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* 隐私模式下忽略 */ }
+}
+
+function readSkin() {
+  const s = document.documentElement.dataset.skin || "";
+  return SKINS.some((x) => x.id === s) ? s : "classic";
+}
+
+function applySkin(id) {
+  const skin = SKINS.some((x) => x.id === id) ? id : "classic";
+  if (skin === "classic") document.documentElement.removeAttribute("data-skin");
+  else document.documentElement.dataset.skin = skin;
+  try { localStorage.setItem(SKIN_KEY, skin); } catch (e) { /* 忽略 */ }
 }
 
 /* ============================================================
@@ -72,6 +94,38 @@ function esc(s) {
 }
 
 const ROLE_LABEL = { owner: "服主", admin: "管理员" };
+
+/* ============================================================
+   名字 + 实名蓝钩:全站统一按这一套渲染
+   真名能不能看见是后端按权限决定的 —— 有 real_name 就是能看,
+   verified=1 且带 real_name 才在名字后面缀一个蓝色小钩。
+   ============================================================ */
+
+const BLUE_CHECK =
+  '<svg class="nick-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+  '<circle cx="12" cy="12" r="11" fill="#2f8bff"></circle>' +
+  '<path d="M6.8 12.5l3.4 3.4L17.2 9" fill="none" stroke="#fff" stroke-width="2.4" ' +
+  'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+const C103Person = {
+  /* 该显示的名字:能看真名时用真名,否则账号名 */
+  name(person, fallback) {
+    if (person) return person.real_name || person.name || fallback || "";
+    return fallback || "";
+  },
+  /* 是否要缀蓝钩 */
+  verified(person) {
+    return !!(person && person.verified && person.real_name);
+  },
+  /* 名字 HTML(已转义)+ 蓝钩 */
+  html(person, fallback) {
+    const nm = esc(C103Person.name(person, fallback));
+    return nm + (C103Person.verified(person) ? BLUE_CHECK : "");
+  },
+  check: BLUE_CHECK,
+};
+
+window.C103Person = C103Person;
 
 /* ============================================================
    图片压缩:留言配图和头像共用同一套逻辑
@@ -404,11 +458,15 @@ function renderAccount() {
   }
 
   btn.classList.add("is-in");
-  btn.title = u.name + (ROLE_LABEL[u.role] ? "（" + ROLE_LABEL[u.role] + "）" : "");
+  // 自己的真名 / 蓝钩同样按实名规则显示
+  const shown = C103Person.name(u);
+  btn.title = shown + (ROLE_LABEL[u.role] ? "（" + ROLE_LABEL[u.role] + "）" : "");
   const face = u.avatar
     ? `<img class="acc-avatar" src="${API}/img/${esc(u.avatar)}" alt="">`
-    : `<span class="acc-avatar acc-letter">${esc(u.name.slice(0, 1))}</span>`;
-  btn.innerHTML = face + '<span class="acc-text">' + esc(u.name) + "</span>";
+    : `<span class="acc-avatar acc-letter">${esc(shown.slice(0, 1))}</span>`;
+  const check = C103Person.verified(u) ? BLUE_CHECK : "";
+  btn.innerHTML =
+    face + '<span class="acc-text">' + esc(shown) + "</span>" + check;
 }
 
 /* ============================================================
@@ -501,15 +559,10 @@ document.addEventListener("DOMContentLoaded", () => {
       </button>
       <a class="nav-admin" id="nav-admin" href="admin.html" data-nav hidden>管理后台</a>
       <a class="nav-account" id="nav-account" href="account.html" data-nav></a>
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换深色 / 浅色模式">
-        <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="4.2"></circle>
-          <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"></path>
-        </svg>
-        <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20.5 14.6A8.6 8.6 0 1 1 9.4 3.5a6.9 6.9 0 0 0 11.1 11.1Z"></path>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="外观：深色 / 浅色与主题色" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.6"></circle>
+          <path d="M12 3.4v17.2a8.6 8.6 0 0 0 0-17.2Z" fill="currentColor" stroke="none" opacity=".55"></path>
         </svg>
       </button>
       <button id="nav-toggle" class="nav-toggle" aria-label="打开菜单" data-nav>
@@ -589,8 +642,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const face =
           a && a.avatar
             ? `<img class="notif-face" src="${API}/img/${esc(a.avatar)}" alt="">`
-            : `<span class="notif-face notif-letter">${esc(a ? a.name.slice(0, 1) : "?")}</span>`;
-        const who = a ? esc(a.name) : "有人";
+            : `<span class="notif-face notif-letter">${esc(a ? C103Person.name(a).slice(0, 1) : "?")}</span>`;
+        const who = a ? C103Person.html(a) : "有人";
         return `<a class="notif-item${n.read ? "" : " unread"}" href="${notifLink(n)}" data-nid="${n.id}">
           ${face}
           <span class="notif-body">
@@ -672,10 +725,82 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---- 10.3 开屏弹窗 ----
   showSplash();
 
-  // ---- 主题开关 ----
+  // ---- 外观面板:深色 / 浅色 + 四套主题色 ----
   const themeBtn = document.getElementById("theme-toggle");
-  themeBtn.addEventListener("click", () => {
-    applyTheme(readTheme() === "light" ? "dark" : "light");
+  const appear = document.createElement("div");
+  appear.id = "appear-pop";
+  appear.className = "appear-pop";
+  appear.hidden = true;
+  appear.setAttribute("role", "dialog");
+  appear.setAttribute("aria-label", "外观设置");
+  appear.innerHTML = `
+    <p class="ap-title">外观模式</p>
+    <div class="ap-row" id="ap-themes">
+      <button type="button" class="ap-opt" data-theme-opt="dark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20.5 14.6A8.6 8.6 0 1 1 9.4 3.5a6.9 6.9 0 0 0 11.1 11.1Z"></path>
+        </svg><span>深色</span>
+      </button>
+      <button type="button" class="ap-opt" data-theme-opt="light">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"></path>
+        </svg><span>浅色</span>
+      </button>
+    </div>
+    <p class="ap-sub">主题色</p>
+    <div class="ap-skins" id="ap-skins">${SKINS.map(
+      (s) => `<button type="button" class="ap-skin" data-skin-opt="${s.id}" title="${s.name}">
+        <span class="ap-dots"><i style="background:${s.dots[0]}"></i><i style="background:${s.dots[1]}"></i></span>
+        <span class="ap-skin-name">${s.name}</span>
+      </button>`
+    ).join("")}</div>
+    <p class="ap-hint">主题色只换点缀与氛围柔光，版式不变</p>`;
+  document.body.appendChild(appear);
+
+  const syncAppear = () => {
+    const t = readTheme();
+    appear.querySelectorAll("[data-theme-opt]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.themeOpt === t);
+    });
+    const sk = readSkin();
+    appear.querySelectorAll("[data-skin-opt]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.skinOpt === sk);
+    });
+    themeBtn.setAttribute("aria-expanded", appear.hidden ? "false" : "true");
+  };
+
+  const closeAppear = () => {
+    appear.classList.remove("in");
+    themeBtn.setAttribute("aria-expanded", "false");
+    setTimeout(() => { appear.hidden = true; }, 200);
+  };
+  const openAppear = () => {
+    syncAppear();
+    appear.hidden = false;
+    themeBtn.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => appear.classList.add("in"));
+  };
+
+  themeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (appear.hidden) openAppear();
+    else closeAppear();
+  });
+
+  appear.querySelectorAll("[data-theme-opt]").forEach((b) => {
+    b.addEventListener("click", () => { applyTheme(b.dataset.themeOpt); syncAppear(); });
+  });
+  appear.querySelectorAll("[data-skin-opt]").forEach((b) => {
+    b.addEventListener("click", () => { applySkin(b.dataset.skinOpt); syncAppear(); });
+  });
+  document.addEventListener("click", (e) => {
+    if (appear.hidden) return;
+    if (appear.contains(e.target) || e.target === themeBtn || themeBtn.contains(e.target)) return;
+    closeAppear();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !appear.hidden) closeAppear();
   });
 
   // ---- 手机汉堡菜单开合 ----
