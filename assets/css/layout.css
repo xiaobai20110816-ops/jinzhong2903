@@ -578,3 +578,27 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 @media (max-width: 620px) {
   .appear-pop { top: 68px; right: 12px; }
 }
+
+/* ---- Markdown 工具栏:插在 textarea 上面,由 nav.js 生成 ---- */
+.md-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.md-btn {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.74rem;
+  letter-spacing: 1px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--chip);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.25s ease, background-color 0.4s ease, border-color 0.4s ease,
+    opacity 0.3s ease;
+}
+.md-btn:hover { color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }
+.md-btn:disabled { opacity: 0.45; cursor: default; }

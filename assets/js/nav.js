@@ -485,15 +485,25 @@ window.C103Markdown = (function () {
       .replace(/"/g, "&quot;");
 
   // 只放行安全协议,挡掉 javascript: 这类
+  // 带协议(形如 xxx:)的只认 http(s) / mailto;不带协议的相对地址(api/img/x.jpg、/a、./a、#a)一律放行
+  // 先去掉控制字符 —— 浏览器解析 URL 时会忽略它们,留着就容易拿 java\tscript: 这类绕过检查
   function safeUrl(u) {
-    const s = String(u || "").trim();
-    return /^(https?:|mailto:|\/|\.\/|#)/i.test(s) ? s : "";
+    const s = String(u == null ? "" : u).replace(/[\u0000-\u001f\u007f]/g, "").trim();
+    if (!s) return "";
+    if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return /^(https?:|mailto:)/i.test(s) ? s : "";
+    return s;
   }
 
   // 行内语法(输入必须是已转义的文本)
   function inline(s) {
     let t = esc(s);
     t = t.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    // 图片 ![说明](地址) —— 必须排在链接前面,否则里面那段 [说明](地址) 会先被当成链接
+    t = t.replace(/!\[([^\]\n]*)\]\(([^)\s]+)\)/g, (m, alt, url) => {
+      const src = safeUrl(url);
+      if (!src) return m;
+      return '<img src="' + esc(src) + '" alt="' + alt + '" loading="lazy">';
+    });
     t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
       const href = safeUrl(url);
       if (!href) return m;
@@ -603,6 +613,7 @@ window.C103Markdown = (function () {
       .replace(/^>\s?/gm, "")
       .replace(/^\s*[-*+]\s+/gm, "")
       .replace(/^\s*\d+[.)]\s+/gm, "")
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
       .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
       .replace(/[*_~`]/g, "")
       .replace(/\s+/g, " ")
@@ -610,6 +621,133 @@ window.C103Markdown = (function () {
   }
 
   return { render: render, text: text, escape: esc };
+})();
+
+/* ============================================================
+   Markdown 工具栏:给任意 textarea 上面挂一排按钮,点一下把语法插进输入框
+   用法 C103Editor.mount(textarea, { upload })
+     upload(file) 可选 —— 传了才有「图片」按钮,它要把文件传上去、返回图片地址
+   ============================================================ */
+window.C103Editor = (function () {
+  function mount(ta, opts) {
+    if (!ta || ta.dataset.mdBar) return null;
+    opts = opts || {};
+
+    const bar = document.createElement("div");
+    bar.className = "md-bar";
+    let busy = false;
+    let file = null;
+    let imgAt = 0; // 点「图片」那一刻的光标位置(选文件期间可能跑掉,先记下来)
+    let imgEnd = 0;
+
+    // 把 [s,e) 这段换成 text,并把光标放到 selStart..selEnd
+    function put(text, s, e, selStart, selEnd) {
+      ta.focus();
+      if (typeof ta.setRangeText === "function") {
+        ta.setRangeText(text, s, e, "end");
+      } else {
+        ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+      }
+      if (typeof selStart === "number") {
+        ta.setSelectionRange(selStart, selEnd == null ? selStart : selEnd);
+      }
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    // 加粗 / 斜体 / 代码:包住选中的字,没选就放一小段占位文字并选中
+    function wrap(before, after, ph) {
+      const s = ta.selectionStart;
+      const e = ta.selectionEnd;
+      const sel = ta.value.slice(s, e) || ph;
+      put(before + sel + after, s, e, s + before.length, s + before.length + sel.length);
+    }
+
+    // 标题 / 列表 / 引用:作用在光标那一行;已经有同样的标记就取消
+    function prefix(mark) {
+      const s = ta.selectionStart;
+      const v = ta.value;
+      const ls = v.lastIndexOf("\n", s - 1) + 1;
+      let le = v.indexOf("\n", s);
+      if (le === -1) le = v.length;
+      const line = v.slice(ls, le);
+      if (line.startsWith(mark)) {
+        put(line.slice(mark.length), ls, le, Math.max(ls, s - mark.length));
+      } else {
+        put(mark + line, ls, le, s + mark.length);
+      }
+    }
+
+    function link() {
+      const s = ta.selectionStart;
+      const e = ta.selectionEnd;
+      const sel = ta.value.slice(s, e) || "链接文字";
+      const at = s + sel.length + 3; // [] 后面那个 ( 的位置
+      put("[" + sel + "](https://)", s, e, at, at + 8); // 顺手选中 https://
+    }
+
+    function setBusy(v) {
+      busy = v;
+      Array.prototype.forEach.call(bar.querySelectorAll(".md-btn"), (b) => { b.disabled = v; });
+    }
+
+    const items = [
+      { label: "加粗", title: "加粗", run: () => wrap("**", "**", "加粗文字") },
+      { label: "斜体", title: "斜体", run: () => wrap("*", "*", "斜体文字") },
+      { label: "标题", title: "小标题", run: () => prefix("## ") },
+      { label: "列表", title: "无序列表", run: () => prefix("- ") },
+      { label: "引用", title: "引用一段", run: () => prefix("> ") },
+      { label: "代码", title: "行内代码", run: () => wrap("`", "`", "代码") },
+      { label: "链接", title: "插入链接", run: link },
+    ];
+
+    if (typeof opts.upload === "function") {
+      items.push({
+        label: "图片",
+        title: "插入图片",
+        run: () => {
+          imgAt = ta.selectionStart;
+          imgEnd = ta.selectionEnd;
+          if (file) file.click();
+        },
+      });
+      file = document.createElement("input");
+      file.type = "file";
+      file.accept = "image/*";
+      file.hidden = true;
+      file.addEventListener("change", async () => {
+        const f = file.files && file.files[0];
+        file.value = "";
+        if (!f) return;
+        setBusy(true);
+        try {
+          const url = await opts.upload(f);
+          if (url) put("![" + (opts.alt || "图片") + "](" + url + ")", imgAt, imgEnd);
+        } catch (err) {
+          if (opts.onError) opts.onError(err);
+        } finally {
+          setBusy(false);
+          ta.focus();
+        }
+      });
+      bar.appendChild(file);
+    }
+
+    items.forEach((item) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "md-btn";
+      b.textContent = item.label;
+      b.title = item.title;
+      b.addEventListener("click", () => { if (!busy) item.run(); });
+      bar.appendChild(b);
+    });
+
+    ta.dataset.mdBar = "1";
+    ta.parentNode.insertBefore(bar, ta);
+    return bar;
+  }
+
+  return { mount: mount };
 })();
 
 /* ============================================================
@@ -622,16 +760,14 @@ window.C103Markdown = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-04-2";
+const SPLASH_VERSION = "2026-10-04-3";
 const SPLASH_DATE = "2026.10.04";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "这次补上了三件事：实名、皮肤、更清楚的后台。";
+const SPLASH_LEAD = "公告编辑器加了一排按钮，写通知不用再手打符号了。";
 const SPLASH_NOTES = [
-  "实名制上线 —— 通过审核后，名字后面会带一个蓝色小勾",
-  "学生风采改成账号驱动 —— 只展示通过审核的同学，点卡片直接进个人主页",
-  "四套主题皮肤 —— 导航栏「外观」里一键换：鎏金 / 极光 / 蔷薇 / 松林",
-  "班级公告支持 Markdown —— 标题、加粗、列表、引用、代码块、链接",
-  "管理后台新增「账号统计」，用量看板里能看代码规模",
+  "公告编辑器上线 Markdown 工具栏 —— 加粗 / 斜体 / 标题 / 列表 / 引用 / 代码 / 链接 / 图片，点一下就把语法插进输入框",
+  "公告正文现在也认图片了 —— 工具栏里传一张，直接排进正文",
+  "（上一版）实名制 + 四套主题皮肤 + 管理后台账号统计",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
