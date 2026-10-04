@@ -188,13 +188,35 @@ function toBlob(canvas, quality) {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
 }
 
-async function decodeImage(file) {
+async function decodeImage(file, maxEdge) {
   // createImageBitmap 能顺手按 EXIF 方向摆正,iPhone 竖拍的照片不会躺倒
   if (window.createImageBitmap) {
-    try {
-      return await createImageBitmap(file, { imageOrientation: "from-image" });
-    } catch (e) {
-      /* 个别浏览器不认这个选项,退回 <img> */
+    const target = Math.max(1200, maxEdge || 1600);
+    // 大文件(比如 20MB 的手机原图)按原比例解码成小图:
+    // 不然 8000×6000 的位图在内存里要铺几百 MB,浏览器会卡到「无响应」。
+    // 只传 resizeWidth,高度按原宽高比自动算;Chrome / Edge / Android 都支持
+    if (file.size > 6 * 1024 * 1024) {
+      try {
+        return await createImageBitmap(file, {
+          resizeWidth: target,
+          resizeQuality: "high",
+          imageOrientation: "from-image",
+        });
+      } catch (e) {
+        // 个别浏览器不认 resize + orientation 的组合,去掉 orientation 再试
+        try {
+          return await createImageBitmap(file, {
+            resizeWidth: target,
+            resizeQuality: "high",
+          });
+        } catch (e2) {}
+      }
+    } else {
+      try {
+        return await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch (e) {
+        /* 个别浏览器不认这个选项,退回 <img> */
+      }
     }
   }
   return await new Promise((resolve, reject) => {
@@ -219,7 +241,7 @@ const C103Image = {
 
     let src;
     try {
-      src = await decodeImage(file);
+      src = await decodeImage(file, maxEdge);
     } catch (e) {
       throw new Error("这张图浏览器读不出来（iPhone 的 HEIC 格式最常见），请在相册里先导出成 JPG 再传。");
     }
@@ -811,14 +833,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-14";
+const SPLASH_VERSION = "2026-10-05-15";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "图库开放给每一位实名同学：每人 30MB，随便传、自己管自己。";
+const SPLASH_LEAD = "修好大图上传卡死：20MB 的照片也能秒级处理。";
 const SPLASH_NOTES = [
-  "实名认证通过的同学都能传照片，每人 30MB 额度，原图原样上传不压缩",
-  "自己传的照片能自己删；管理员、服主不限额度，也能删任何人的",
-  "图库页显示剩余额度，传完自动刷新，单张超大(KV 存不下)会先拦住告诉你",
+  "之前传 20MB 左右的大照片，浏览器会卡到没反应——现在解码时直接缩小，不再卡",
+  "上传时能看到「正在处理第几张 / 正在上传」的进度提示",
+  "实名 30MB 额度、自己删自己的图、管理员/服主无限额度，规则不变",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

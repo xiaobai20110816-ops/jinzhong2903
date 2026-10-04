@@ -209,17 +209,25 @@
           gSend.disabled = true;
           gMsg.textContent = "";
           try {
-            for (const file of files) {
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              const n = i + 1;
+              // 压缩大图是重活,先让浏览器把提示画出来,免得看着像卡死
+              gHint.textContent = "正在处理第 " + n + "/" + files.length + " 张…";
+              await new Promise((r) => setTimeout(r, 30));
               const form = new FormData();
               form.append("title", t);
               form.append("full", file, file.name);
               form.append("thumb", await compressThumb(file));
+              gHint.textContent =
+                "正在上传第 " + n + "/" + files.length + " 张（" + fmtMB(file.size) + "）…";
               const res = await fetch("api/gallery", { method: "POST", body: form });
               const d = await res.json().catch(() => null);
               if (!d || !d.ok) {
-                throw new Error((d && d.error) || "第 " + (files.indexOf(file) + 1) + " 张上传失败");
+                throw new Error((d && d.error) || "第 " + n + " 张上传失败");
               }
             }
+            gHint.textContent = "全部传完，正在刷新图库…";
             gMsg.textContent = "";
             gFiles.value = "";
             load(0); // 传完重拉,额度也跟着刷新
