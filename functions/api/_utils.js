@@ -63,6 +63,9 @@ export function safeParse(text) {
    防止有人往帖子里塞任意字符串当图片地址 */
 export const IMAGE_KEY_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
 
+/* 图库图片 key:32 位 hex + (.full 或 .thumb) + 扩展名 */
+export const GALLERY_KEY_RE = /^[a-f0-9]{32}\.(?:full|thumb)\.(jpg|png|webp)$/;
+
 /* 官方认证的三个级别:金 / 红 / 黑,只影响药丸配色。
    空串 = 没级别(头衔也空就是没认证,头衔有值但级别空则按金处理) */
 export const CERT_LEVELS = ["gold", "red", "black"];
@@ -79,7 +82,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-05.6";
+const SCHEMA_VERSION = "2026-10-05.7";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -326,6 +329,24 @@ export function ensureSchema(db) {
         .run();
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_msg_inbox ON messages(to_id, read, created_at DESC)`)
+        .run();
+
+      // ---- 班级图库:每张原图 5MB 左右存 KV,表里只记元数据 ----
+      // title 是图的名字;full_key / thumb_key 分别是 KV 里的原图和缩略图 key
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS gallery (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             title TEXT NOT NULL,
+             full_key TEXT NOT NULL,
+             thumb_key TEXT NOT NULL,
+             uploaded_by INTEGER,
+             created_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_gallery_created ON gallery(created_at DESC)`)
         .run();
 
       // 顺手做一次性的脏数据修复(settings 表已经建好,标记写在里面)

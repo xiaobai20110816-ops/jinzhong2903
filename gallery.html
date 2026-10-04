@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 班级图库">
+  <title>班级图库 · 103班 音乐领军班</title>
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#070b14">
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
+    } catch (e) {}
+  </script>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/gallery.css">
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Gallery</div>
+    <h1><span class="gold-text">班级图库</span></h1>
+    <p>每一张，都是我们这个班的画面</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <!-- 图库网格:缩略图 + 名字 + 下载原图按钮,脚本从 /api/gallery 拉 -->
+      <div id="gallery-grid" class="gallery-grid">
+        <p class="glass gallery-empty">正在读取图库…</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 灯箱:点缩略图放大原图,下方给下载按钮 -->
+  <div id="lightbox" class="lightbox" aria-hidden="true">
+    <span class="close" id="lightbox-close" role="button" tabindex="0">×</span>
+    <img id="lightbox-img" alt="">
+    <div class="lb-bar">
+      <span id="lightbox-caption" class="lightbox-caption"></span>
+      <a id="lightbox-dl" class="lb-dl" download>下载原图</a>
+    </div>
+  </div>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // 班级图库:从 /api/gallery 拉列表,缩略图铺成网格,点开看大图
+    // 原图存在 KV,每张 5MB 左右;“下载原图”按钮直接指向原图,不会先压小
+    document.addEventListener("DOMContentLoaded", () => {
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      const thumb = (k) => "api/gallery/img/" + encodeURIComponent(k);
+      const full = (k) => "api/gallery/img/" + encodeURIComponent(k);
+
+      const grid = document.getElementById("gallery-grid");
+      const lightbox = document.getElementById("lightbox");
+      const lbImg = document.getElementById("lightbox-img");
+      const lbCaption = document.getElementById("lightbox-caption");
+      const lbDl = document.getElementById("lightbox-dl");
+      const lbClose = document.getElementById("lightbox-close");
+
+      function closeLightbox() {
+        lightbox.classList.remove("show");
+        lightbox.setAttribute("aria-hidden", "true");
+      }
+      lbClose.addEventListener("click", closeLightbox);
+      lbClose.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); closeLightbox(); }
+      });
+      lightbox.addEventListener("click", (e) => {
+        if (e.target === lightbox) closeLightbox();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeLightbox();
+      });
+
+      function openLightbox(item) {
+        lbImg.src = full(item.full);
+        lbImg.alt = item.title;
+        lbCaption.textContent = item.title;
+        lbDl.href = full(item.full);
+        lbDl.setAttribute("download", item.title + ".jpg");
+        lightbox.classList.add("show");
+        lightbox.setAttribute("aria-hidden", "false");
+      }
+
+      function render(items) {
+        if (!items || !items.length) {
+          grid.innerHTML = '<p class="glass gallery-empty">图库还是空的，等发布后这里会一张张亮起来。</p>';
+          return;
+        }
+        grid.innerHTML = items
+          .map(
+            (it) => `
+          <figure class="gal-item">
+            <img src="${esc(thumb(it.thumb))}" alt="${esc(it.title)}" loading="lazy">
+            <figcaption>
+              <span class="gal-title">${esc(it.title)}</span>
+              <a class="gal-dl" href="${esc(full(it.full))}" download="${esc(it.title)}.jpg" title="下载原图">下载原图</a>
+            </figcaption>
+          </figure>`
+          )
+          .join("");
+
+        // 点卡片看大图;下载按钮单独点不触发看大图
+        grid.querySelectorAll(".gal-item").forEach((item) => {
+          const idx = Array.prototype.indexOf.call(grid.children, item);
+          item.addEventListener("click", (e) => {
+            if (e.target.closest(".gal-dl")) return; // 点了下载
+            openLightbox(items[idx]);
+          });
+        });
+      }
+
+      const load = async (retries) => {
+        try {
+          const res = await fetch("api/gallery");
+          if (!res.ok) throw new Error("http " + res.status);
+          const d = await res.json().catch(() => null);
+          if (!d || !d.ok) throw new Error("bad payload");
+          render(d.items || []);
+        } catch (e) {
+          // nav.js 没加载出来时会给兜底;这里稍微重试,免得偶发网络抖一下白屏
+          if (retries > 0) return setTimeout(() => load(retries - 1), 600);
+          grid.innerHTML =
+            '<p class="glass gallery-empty">图库没读上来，检查一下网络再刷新。</p>';
+        }
+      };
+      load(2);
+    });
+  </script>
+</body>
+</html>

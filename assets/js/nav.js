@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "students.html", label: "学生风采" },
   { href: "dormitory.html", label: "宿舍风采" },
   { href: "moments.html", label: "高光时刻" },
+  { href: "gallery.html", label: "图库" },
   { href: "story.html", label: "103 纪事" },
   { href: "rank.html", label: "活跃榜" },
   { href: "announcements.html", label: "班级公告" },
@@ -810,14 +811,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-05-12";
+const SPLASH_VERSION = "2026-10-05-13";
 const SPLASH_DATE = "2026.10.05";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "管理后台的用量看板加上了「免费额度对照」，一眼看出离上限还有多远。";
+const SPLASH_LEAD = "新增「班级图库」，照片存云端，看缩略图、点开大图、一键下载原图。";
 const SPLASH_NOTES = [
-  "用量看板新增「免费额度对照」：请求数、D1 读写与存储、KV 各项操作与存储",
-  "每条都把「已用 / 上限」画成进度条，过 70% 转黄、过 90% 转红",
-  "D1 存储占用由数据库自身算出，不用配置也知道还剩多少",
+  "导航栏多了「图库」：照片铺成缩略图网格，点开看大图，下面有「下载原图」",
+  "原图按原样存进 KV（每张 5MB 左右），不压缩，下载就是你手机里的那份",
+  "服主 / 管理员在后台「图库」页签上传：选多张、起个名，一键上传",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

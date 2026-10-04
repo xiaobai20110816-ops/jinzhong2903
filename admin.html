@@ -204,6 +204,64 @@
     }
     .shot.add:hover { color: var(--gold); }
 
+    /* ---- 图库管理:上传条 + 已上传的图列表 ---- */
+    .g-upload {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .g-upload input[type="text"] { flex: 1; min-width: 200px; margin-top: 0; }
+    .g-pick {
+      display: inline-flex;
+      align-items: center;
+      padding: 9px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: var(--chip);
+      font-size: 0.84rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .g-pick:hover { border-color: var(--gold-line); }
+    .g-pick input[type="file"] { display: none; }
+    .g-btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 12px;
+      color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+      font-weight: 700;
+      font-size: 0.84rem;
+      cursor: pointer;
+    }
+    .g-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* 已上传的图:缩略图一行行展示,带名字 + 删除 */
+    .g-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .g-row img { flex: none; width: 58px; height: 58px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+    .g-row .g-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.86rem; }
+    .g-row .g-xt {
+      flex: none;
+      border: 1px solid #e5484d;
+      background: transparent;
+      color: #e5484d;
+      padding: 5px 12px;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+    .g-row .g-xt:hover { background: rgba(229, 72, 77, 0.12); }
+
     .avatar-slot {
       flex: none;
       width: 46px;
@@ -551,6 +609,7 @@
             <button class="adm-tab" type="button" data-panel="members">成员权限</button>
             <button class="adm-tab" type="button" data-panel="usage">用量看板</button>
             <button class="adm-tab" type="button" data-panel="accounts">账号统计</button>
+            <button class="adm-tab" type="button" data-panel="gallery">图库</button>
           </div>
 
           <!-- ========== 公告 ========== -->
@@ -674,6 +733,26 @@
               <p>注册与新增、实名审核进度、活跃情况、角色与状态。活跃按「登录过」算，同一个人多设备登录只算一个。</p>
             </div>
             <div id="acc-body"><p class="msg">正在统计…</p></div>
+          </div>
+
+          <!-- ========== 图库 ========== -->
+          <div class="glass panel" id="panel-gallery" hidden>
+            <div class="panel-head">
+              <h2>班级图库</h2>
+              <p>上传的照片会存到 KV，原图基本原样保留（每张 5MB 左右），网站这边只拿一张小缩略图来铺网格，点开看大图、点下载拿原图。选多张一起传也行。</p>
+            </div>
+            <div id="gallery-admin">
+              <div class="g-upload">
+                <input type="text" id="g-title" maxlength="40" placeholder="给这些照片起个名字（如：体育节合影）">
+                <label class="g-pick">
+                  <input type="file" id="g-files" accept="image/*" multiple>
+                  选择照片
+                </label>
+                <button type="button" id="g-send" class="g-btn">上传</button>
+                <span id="g-msg" class="tip"></span>
+              </div>
+              <div id="g-list"><p class="msg">正在读取…</p></div>
+            </div>
           </div>
         </div>
 
@@ -1629,14 +1708,14 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 14327,
-        files: 47,
+        total: 14920,
+        files: 52,
         updated: "2026-10-05",
         parts: [
-          { name: "页面 HTML", lines: 5746 },
-          { name: "样式 CSS", lines: 3346 },
-          { name: "前端 JS", lines: 1998 },
-          { name: "后端 Functions", lines: 3232 },
+          { name: "页面 HTML", lines: 6055 },
+          { name: "样式 CSS", lines: 3472 },
+          { name: "前端 JS", lines: 1999 },
+          { name: "后端 Functions", lines: 3389 },
           { name: "配置 JSON", lines: 5 },
         ],
       };
@@ -1717,6 +1796,104 @@
           </div>`;
       }
 
+      /* ============ 图库 ============ */
+      // 上传:原图原样 + 前端压一张缩略图,multipart 一起交给后端
+      async function compressThumb(file) {
+        // 缩略图定为长边 1200,质量交给 C103Image 自动压到 400KB 内
+        const blob = await window.C103Image.compress(file, { maxEdge: 1200, targetBytes: 400 * 1024 });
+        return new File([blob], "thumb.jpg", { type: blob.type || "image/jpeg" });
+      }
+
+      async function renderGallery() {
+        const box = $("#g-list");
+        const load = async () => {
+          try {
+            const res = await fetch(API + "/gallery");
+            const d = await res.json().catch(() => null);
+            const items = (d && d.items) || [];
+            if (!items.length) {
+              box.innerHTML = '<p class="msg">图库还是空的，先从上面挑几张传上来。</p>';
+              return;
+            }
+            const gimg = (k) => API + "/gallery/img/" + encodeURIComponent(k);
+            box.innerHTML =
+              '<div class="g-list-inner">' +
+              items
+                .map(
+                  (it) => `
+                <div class="g-row" data-id="${it.id}">
+                  <img src="${gimg(it.thumb)}" alt="">
+                  <span class="g-t">${esc(it.title || "(未命名)")}</span>
+                  <a class="g-xt" href="${gimg(it.full)}" download="${esc(it.title || "图")}.jpg" style="border-color:var(--gold-line);color:var(--gold);text-decoration:none;">下载</a>
+                  <button type="button" class="g-xt" data-del="${it.id}" title="删除">删除</button>
+                </div>`
+                )
+                .join("") +
+              "</div>";
+            $$(".g-row [data-del]", box).forEach((b) => {
+              b.addEventListener("click", async () => {
+                if (!confirm("确定删除这张图吗？原图会一起没掉。")) return;
+                const id = b.dataset.del;
+                try {
+                  const res = await fetch(API + "/gallery/" + id, { method: "DELETE" });
+                  const d = await res.json().catch(() => null);
+                  if (d && d.ok) {
+                    b.closest(".g-row").remove();
+                  } else {
+                    say("g-msg", "删除失败，重试一下", "err");
+                  }
+                } catch (e) {
+                  say("g-msg", "删除失败，重试一下", "err");
+                }
+              });
+            });
+          } catch (e) {
+            box.innerHTML = '<p class="msg">图库没读上来，检查一下网络再刷新。</p>';
+          }
+        };
+
+        // 上传按钮只在首次进入时绑一次
+        if (!window.__galleryBound) {
+          window.__galleryBound = true;
+          const pick = $("#g-files");
+          const send = $("#g-send");
+          const title = $("#g-title");
+          const msg = $("#g-msg");
+
+          send.addEventListener("click", async () => {
+            const files = Array.from(pick.files || []).filter((f) => f.size > 0);
+            if (!files.length) { say("g-msg", "先选几张照片", "err"); return; }
+            const t = title.value.trim();
+            if (!t) { say("g-msg", "先给照片起个名字", "err"); return; }
+
+            send.disabled = true;
+            msg.textContent = "正在上传 " + files.length + " 张…";
+            try {
+              for (const file of files) {
+                const form = new FormData();
+                form.append("title", t);
+                form.append("full", file, file.name);
+                form.append("thumb", await compressThumb(file));
+                const res = await fetch(API + "/gallery", { method: "POST", body: form });
+                const d = await res.json().catch(() => null);
+                if (!d || !d.ok) {
+                  say("g-msg", d && d.error ? d.error : "第 " + (files.indexOf(file) + 1) + " 张上传失败", "err");
+                  break;
+                }
+              }
+            } catch (e) {
+              say("g-msg", "上传中断，检查网络再试", "err");
+            }
+            send.disabled = false;
+            pick.value = "";
+            msg.textContent = "上传完成";
+            await load();
+          });
+        }
+
+        await load();
+      }
+
       /* ============ 页签 ============ */
       $$(".adm-tab").forEach((tab) => {
         tab.addEventListener("click", () => {
@@ -1727,6 +1904,7 @@
           if (name === "students") renderVerify();
           if (name === "usage") renderUsage();
           if (name === "accounts") renderAccounts();
+          if (name === "gallery") renderGallery();
         });
       });
 
