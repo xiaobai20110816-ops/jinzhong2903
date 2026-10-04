@@ -15,7 +15,7 @@ import {
   currentUser,
   isStaff,
   randomHex,
-} from "./_utils.js";
+} from "../_utils.js";
 
 const TYPES = {
   "image/jpeg": "jpg",
