@@ -211,6 +211,18 @@
   font-weight: 600;
 }
 
+/* 上传者:标题下面一行小灰字 */
+.gal-author {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
 /* 保存按钮:小金药丸,触屏上 hover 不到也能点(现在是 <button>,补上按钮的默认样式重置) */
 .gal-dl {
   flex: none;

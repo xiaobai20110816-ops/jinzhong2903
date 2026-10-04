@@ -42,8 +42,8 @@
       <!-- 上传区:实名认证过的同学 / 管理员 / 服主可见 -->
       <div id="g-upload" class="g-up" hidden>
         <input type="text" id="g-title" maxlength="40" placeholder="给照片起个名字（如：体育节合影）">
-        <select id="g-level" class="g-sel" title="上传画质：档位越小，传得越快、下载越快">
-          <option value="orig">超大（原始不压缩）</option>
+        <select id="g-level" class="g-sel" title="上传画质：只压不小，档位越小传得越快">
+          <option value="orig">原始（不压缩）</option>
           <option value="xl">大 · 2560px</option>
           <option value="md" selected>中 · 1920px</option>
           <option value="sm">小 · 1280px</option>
@@ -74,13 +74,8 @@
     <img id="lightbox-img" alt="">
     <div class="lb-bar">
       <span id="lightbox-caption" class="lightbox-caption"></span>
-      <select id="lightbox-level" class="g-sel" title="下载画质：档位越小，文件越小、下得越快">
-        <option value="orig">超大（原始不压缩）</option>
-        <option value="xl">大 · 2560px</option>
-        <option value="md">中 · 1920px</option>
-        <option value="sm">小 · 1280px</option>
-        <option value="xs">极小 · 960px</option>
-      </select>
+      <!-- 档位由脚本按这张图的上传画质填充:只给「上传档位及其以下」 -->
+      <select id="lightbox-level" class="g-sel" title="下载画质：只能选上传档位及其以下"></select>
       <button id="lightbox-dl" class="lb-dl" type="button">保存</button>
     </div>
   </div>
@@ -149,7 +144,9 @@
         lbItem = item;
         lbImg.src = full(item.full);
         lbImg.alt = item.title;
-        lbCaption.textContent = item.title;
+        lbCaption.textContent = item.title + (item.by ? "　上传：" + item.by : "");
+        // 灯箱的下载档位跟着这张图的上传画质走:只给「上传档位及其以下」
+        lbLevel.innerHTML = levelOptions(item.level);
         // 灯箱里也给删除:自己的图能删,管理员/服主能删所有
         lightbox.classList.add("show");
         lightbox.setAttribute("aria-hidden", "false");
@@ -179,13 +176,10 @@
               <img src="${esc(thumb(it.thumb))}" alt="${esc(it.title)}" loading="lazy">
               <figcaption>
                 <span class="gal-title">${esc(it.title)}</span>
+                <span class="gal-author">上传：${esc(it.by || "已注销")}</span>
                 <span class="gal-actions">
-                  <select class="gal-sel" title="下载画质：档位越小，文件越小、下得越快">
-                    <option value="orig">超大（原始）</option>
-                    <option value="xl">大 · 2560px</option>
-                    <option value="md">中 · 1920px</option>
-                    <option value="sm">小 · 1280px</option>
-                    <option value="xs">极小 · 960px</option>
+                  <select class="gal-sel" title="下载画质：只能选上传档位及其以下">
+                    ${levelOptions(it.level)}
                   </select>
                   <button type="button" class="gal-dl" title="按所选画质保存到本地">保存</button>
                   ${showDel ? '<button type="button" class="gal-del" data-id="' + it.id + '" title="删除">删除</button>' : ""}
@@ -241,23 +235,45 @@
         xs: { maxEdge: 960, quality: 0.72 },
       };
 
+      // 档位从大到小排。图片存进去时已经按上传档位压过一次了,
+      // 下载只能给「上传档位及其以下」——再给更大的档位没意义,压缩只会变小。
+      const LEVEL_ORDER = ["orig", "xl", "md", "sm", "xs"];
+      const LEVEL_LABEL = {
+        orig: "原始（不压缩）",
+        xl: "大 · 2560px",
+        md: "中 · 1920px",
+        sm: "小 · 1280px",
+        xs: "极小 · 960px",
+      };
+
+      // 按某张图的上传档位,生成可选下载档位(从它自己一直往小排)。
+      // 老数据没有 level 字段时按 orig 处理(全档位可选,行为跟以前一致)。
+      function levelOptions(itemLevel) {
+        const i = Math.max(0, LEVEL_ORDER.indexOf(itemLevel || "orig"));
+        return LEVEL_ORDER.slice(i)
+          .map((k) => '<option value="' + k + '">' + LEVEL_LABEL[k] + "</option>")
+          .join("");
+      }
+
       // 缩略图:从「已经压好的原图」再压一张小的,这样不必把 20MB 的原文件解码两遍
       async function compressThumb(source) {
         const blob = await window.C103Image.compress(source, { maxEdge: 1200, targetBytes: 400 * 1024 });
         return new File([blob], "thumb.jpg", { type: blob.type || "image/jpeg" });
       }
 
-      // 下载:按选中档位导出。orig = 直接存原图(不过 canvas,不用等);
-      // 其余档 = 先把原图拉下来,再用跟上传一模一样的那套压缩逻辑缩一遍另存为 JPG。
+      // 下载:按选中档位导出。选中「这张图的上传档位」= 直接存 KV 里那张(不过 canvas,不用等);
+      // 选更小的档位 = 先把这张图拉下来,再用跟上传一模一样的那套压缩逻辑再缩一遍另存为 JPG。
       async function downloadAt(item, levelKey, btn) {
+        const itemLevel = item.level || "orig";
+        const direct = levelKey === itemLevel; // 存的本来就是这一档,直接下
         const lv = LEVELS[levelKey];
         const name = (item.title || "photo") + ".jpg";
         const oldText = btn ? btn.textContent : "";
-        if (btn) { btn.disabled = true; btn.textContent = lv ? "压缩中…" : "下载中…"; }
+        if (btn) { btn.disabled = true; btn.textContent = direct ? "下载中…" : "压缩中…"; }
         try {
           let href = full(item.full);
           let revoke = null;
-          if (lv) {
+          if (!direct && lv) {
             const res = await fetch(href, { credentials: "same-origin" });
             if (!res.ok) throw new Error("HTTP " + res.status);
             const blob = await res.blob();
@@ -384,6 +400,8 @@
 
               const form = new FormData();
               form.append("title", t);
+              // 把上传档位一起报给服务端存下来,下载时只给「这一档及其以下」
+              form.append("level", gLevel.value);
               form.append("full", fullBlob, fullName);
               form.append("thumb", await compressThumb(fullBlob));
               gHint.textContent =

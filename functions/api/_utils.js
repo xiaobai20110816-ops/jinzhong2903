@@ -82,7 +82,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-05.8";
+const SCHEMA_VERSION = "2026-10-05.9";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -341,6 +341,7 @@ export function ensureSchema(db) {
              full_key TEXT NOT NULL,
              thumb_key TEXT NOT NULL,
              uploaded_by INTEGER,
+             upload_level TEXT DEFAULT 'orig',
              created_at INTEGER NOT NULL
            )`
         )
@@ -350,6 +351,8 @@ export function ensureSchema(db) {
         .run();
       // 老库升级:记原图字节数,额度按它累计;按上传人算
       await addColumn(db, "gallery", "full_size", "INTEGER DEFAULT 0");
+      // 老库升级:记上传时选的画质档位,下载时只能选「这一档及其以下」
+      await addColumn(db, "gallery", "upload_level", "TEXT DEFAULT 'orig'");
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_gallery_by ON gallery(uploaded_by, created_at DESC)`)
         .run();

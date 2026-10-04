@@ -34,6 +34,11 @@ const MAX_THUMB = 512 * 1024;
 
 const KV_PREFIX = "gal:"; // 图库的 KV key 前缀,跟帖图 "img:" 分开
 
+// 上传时能选的画质档位(必须跟前端 LEVELS 的 key 一致)。
+// 存下来是为了让下载时只给「这一档及其以下」—— 存进去的图已经压过了,
+// 再让人下「更大」的档位没意义(压缩只会变小,不会凭空多出像素)。
+const LEVEL_KEYS = ["orig", "xl", "md", "sm", "xs"];
+
 /* 谁能传:服主 / 管理员 / 实名认证通过的同学 */
 function canUpload(me) {
   return !!me && (isStaff(me) || me.verified === 1);
@@ -60,6 +65,9 @@ export async function onRequestPost({ request, env }) {
     }
 
     const title = String(form.get("title") || "").trim().slice(0, 40);
+    // 上传时选的画质档位;非法值一律当 orig(原样存)
+    const rawLevel = String(form.get("level") || "").trim();
+    const uploadLevel = LEVEL_KEYS.indexOf(rawLevel) >= 0 ? rawLevel : "orig";
     const fullFile = form.get("full");
     const thumbFile = form.get("thumb");
 
@@ -117,9 +125,9 @@ export async function onRequestPost({ request, env }) {
     });
 
     await env.DB.prepare(
-      "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, full_size, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO gallery (title, full_key, thumb_key, uploaded_by, full_size, upload_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
-      .bind(title, fullKey, thumbKey, me.id, fullFile.size, Date.now())
+      .bind(title, fullKey, thumbKey, me.id, fullFile.size, uploadLevel, Date.now())
       .run();
 
     return json({ ok: true, full: fullKey, thumb: thumbKey, title });
@@ -134,8 +142,8 @@ export async function onRequestGet({ request, env }) {
   await ensureSchema(env.DB);
 
   const { results } = await env.DB.prepare(
-    `SELECT g.id, g.title, g.full_key, g.thumb_key, g.full_size, g.created_at,
-            g.uploaded_by, u.username AS by_name
+    `SELECT g.id, g.title, g.full_key, g.thumb_key, g.full_size, g.upload_level, g.created_at,
+            g.uploaded_by, u.username AS by_name, u.display_name AS by_display
        FROM gallery g
        LEFT JOIN users u ON u.id = g.uploaded_by
       ORDER BY g.created_at DESC, g.id DESC`
@@ -148,7 +156,10 @@ export async function onRequestGet({ request, env }) {
     full: r.full_key,
     thumb: r.thumb_key,
     full_size: Number(r.full_size) || 0,
-    by: r.by_name || "",
+    // 上传时选的档位:下载只给这一档及其以下
+    level: LEVEL_KEYS.indexOf(String(r.upload_level || "")) >= 0 ? r.upload_level : "orig",
+    // 展示上传者:优先昵称,没设就退回账号名
+    by: (r.by_display && String(r.by_display).trim()) || r.by_name || "",
     by_id: r.uploaded_by || 0,
     created_at: r.created_at,
   }));
