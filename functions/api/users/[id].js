@@ -31,6 +31,14 @@ const MIN_PASSWORD = 6;
 const MAX_PASSWORD = 64;
 const MAX_REAL_NAME = 24;
 
+/* ---- 班级成就:三项指标达到阈值就自动解锁称号,展示在个人名片上 ----
+   指标全部现算,不建表也不存状态 —— 数据本来就是现成的,存一份反而要对账 */
+const ACHIEVEMENTS = [
+  { key: "posts", name: "笔杆子", desc: "发布 10 条主帖", need: 10 },
+  { key: "likes", name: "人气王", desc: "个人主页被赞 5 次", need: 5 },
+  { key: "replies", name: "社交达人", desc: "评论过 10 个人", need: 10 },
+];
+
 const loadUser = (db, id) =>
   db
     .prepare(
@@ -75,6 +83,36 @@ export async function onRequestGet({ request, env, params }) {
     .bind(id)
     .first();
 
+  // 「评论过多少人」:回复过的楼主 + 在他主页留过言的人,两边并起来去重
+  const peopleRow = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM (
+       SELECT p2.user_id AS uid
+         FROM posts p JOIN posts p2 ON p2.id = p.reply_to_id
+        WHERE p.user_id = ? AND p2.user_id IS NOT NULL AND p2.user_id <> p.user_id
+       UNION
+       SELECT p.wall_id AS uid
+         FROM posts p
+        WHERE p.user_id = ? AND p.wall_id IS NOT NULL AND p.wall_id <> p.user_id
+     )`
+  )
+    .bind(id, id)
+    .first()
+    .catch(() => null);
+
+  const counts = {
+    posts: Number(postRow ? postRow.n : 0) || 0,
+    likes: Number(likeRow ? likeRow.n : 0) || 0,
+    replies: Number(peopleRow ? peopleRow.n : 0) || 0,
+  };
+  const achievements = ACHIEVEMENTS.map((a) => ({
+    key: a.key,
+    name: a.name,
+    desc: a.desc,
+    need: a.need,
+    now: counts[a.key],
+    got: counts[a.key] >= a.need,
+  }));
+
   // 真名按「看的人」的权限下发:服主 / 管理员 / 已实名的同学才看得到
   const shown = namedUser(row, me);
 
@@ -84,6 +122,7 @@ export async function onRequestGet({ request, env, params }) {
     liked,
     likes: likeRow ? likeRow.n : 0,
     postCount: postRow ? postRow.n : 0,
+    achievements,
     user: {
       ...shown,
       signature: row.signature || "",

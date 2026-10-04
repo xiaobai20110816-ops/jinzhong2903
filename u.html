@@ -297,6 +297,66 @@
     }
     .pf-toast.in { opacity: 1; transform: translate(-50%, 0); }
 
+    /* 成就:解锁的描金,没解锁的灰着,但进度条让人看得到还差多少 */
+    .pf-ach-count {
+      margin-left: auto;
+      font-size: 0.76rem;
+      letter-spacing: 1px;
+      color: var(--faint);
+      transition: color 0.6s ease;
+    }
+    .pf-achs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .pf-ach { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 18px; }
+    .pf-ach-medal {
+      flex: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--faint);
+      transition: color 0.4s ease, background-color 0.6s ease, border-color 0.6s ease;
+    }
+    .pf-ach-medal svg { width: 21px; height: 21px; }
+    .pf-ach.got { border-color: var(--gold-line); }
+    .pf-ach.got .pf-ach-medal {
+      color: #0b0f1a;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+      border-color: transparent;
+    }
+    .pf-ach-main { flex: 1 1 auto; min-width: 0; }
+    .pf-ach-name {
+      display: block;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1rem;
+      letter-spacing: 2px;
+      color: var(--muted);
+      transition: color 0.4s ease;
+    }
+    .pf-ach.got .pf-ach-name { color: var(--gold); }
+    .pf-ach-desc { display: block; margin-top: 3px; font-size: 0.76rem; color: var(--faint); transition: color 0.6s ease; }
+    .pf-ach-bar {
+      display: block;
+      margin-top: 8px;
+      height: 5px;
+      border-radius: 999px;
+      background: var(--chip);
+      overflow: hidden;
+      transition: background-color 0.6s ease;
+    }
+    .pf-ach-bar i {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--gold), var(--gold-2));
+      transition: width 0.6s ease;
+    }
+    .pf-ach-num { flex: none; font-size: 0.74rem; letter-spacing: 1px; color: var(--faint); transition: color 0.6s ease; }
+    .pf-ach.got .pf-ach-num { color: var(--gold); }
+
     /* 窄屏:单列,头像和名字上下排开,不再挤在一起 */
     @media (max-width: 620px) {
       .pf-card { flex-direction: column; text-align: center; padding: 26px 20px; gap: 18px; }
@@ -380,6 +440,31 @@
         return "";
       }
 
+      // ---------- 成就:称号 + 进度,来自 GET /api/users/:id 的 achievements ----------
+      const ACH_ICON = {
+        posts:
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M15 4.6 19.4 9 9.4 19H5v-4.4z"/></svg>',
+        likes:
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.3-7-9.1A4 4 0 0 1 12 8.2a4 4 0 0 1 7 2.7C19 15.7 12 20 12 20z"/></svg>',
+        replies:
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.6a7.6 7.6 0 0 1-11 6.8L5 20l1-3.9A7.6 7.6 0 1 1 20 11.6z"/></svg>',
+      };
+
+      function achCard(a) {
+        const need = Number(a.need) || 1;
+        const now = Number(a.now) || 0;
+        const pct = Math.max(0, Math.min(100, Math.round((now / need) * 100)));
+        return `<div class="glass pf-ach${a.got ? " got" : ""}">
+          <span class="pf-ach-medal">${ACH_ICON[a.key] || ""}</span>
+          <div class="pf-ach-main">
+            <b class="pf-ach-name">${esc(a.name)}</b>
+            <span class="pf-ach-desc">${esc(a.desc)}</span>
+            <span class="pf-ach-bar"><i style="width:${pct}%"></i></span>
+          </div>
+          <span class="pf-ach-num">${a.got ? "已解锁" : now + " / " + need}</span>
+        </div>`;
+      }
+
       // 头像:有图用图,没有就用名字首字兜底
       function avatar(author, cls) {
         const c = cls || "pf-mini";
@@ -433,6 +518,18 @@
         const sig = hasSig ? esc(u.signature) : "这个人很神秘，什么都没写";
         const name = window.C103Person.html(u);
 
+        // 成就板块:接口给了才渲染(拿不到就整块不出现,不留空壳)
+        const achs = Array.isArray(data.achievements) ? data.achievements : [];
+        const achBlock = achs.length
+          ? `<section class="pf-block">
+              <div class="pf-head">
+                <span class="en">Achievements</span><h2>成就</h2>
+                <span class="pf-ach-count">已解锁 ${achs.filter((a) => a.got).length} / ${achs.length}</span>
+              </div>
+              <div class="pf-achs">${achs.map(achCard).join("")}</div>
+            </section>`
+          : "";
+
         root.innerHTML = `
           <article class="glass pf-card">
             <div class="pf-face-wrap">${avatar(u, "pf-face")}</div>
@@ -448,6 +545,8 @@
               </button>
             </div>
           </article>
+
+          ${achBlock}
 
           <section class="pf-block">
             <div class="pf-head"><span class="en">Posts</span><h2>TA 的留言</h2></div>

@@ -760,14 +760,14 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-04-3";
+const SPLASH_VERSION = "2026-10-04-4";
 const SPLASH_DATE = "2026.10.04";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "公告编辑器加了一排按钮，写通知不用再手打符号了。";
+const SPLASH_LEAD = "个人主页多了一栏成就，去把三个称号拿满吧。";
 const SPLASH_NOTES = [
-  "公告编辑器上线 Markdown 工具栏 —— 加粗 / 斜体 / 标题 / 列表 / 引用 / 代码 / 链接 / 图片，点一下就把语法插进输入框",
-  "公告正文现在也认图片了 —— 工具栏里传一张，直接排进正文",
-  "（上一版）实名制 + 四套主题皮肤 + 管理后台账号统计",
+  "班级成就上线 —— 个人主页能看到「笔杆子 / 人气王 / 社交达人」三个称号",
+  "发帖满 10 条、主页被赞满 5 次、评论过 10 个人，自动解锁；没解锁的会显示还差多少",
+  "（上一版）公告编辑器的 Markdown 工具栏",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
