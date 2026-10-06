@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="103班 · 全屏看视频">
+  <title>看视频 · 103班 音乐领军班</title>
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#05070d">
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+      }
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
+    } catch (e) {}
+  </script>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/story.css">
+  <link rel="stylesheet" href="assets/css/video.css">
+</head>
+<body class="video-page">
+
+  <!-- 全屏播放:上下滑切换,右侧点赞 / 评论 / 收藏 / 分享 -->
+  <div class="player-shell" id="player">
+    <div class="player-scroll" id="player-scroll"></div>
+  </div>
+
+  <!-- 播放页自己的顶栏(站点导航在这一页是隐藏的) -->
+  <div class="player-top">
+    <a class="player-back" href="videos.html" aria-label="回视频页">←</a>
+    <span class="player-brand">103 · 视频</span>
+  </div>
+
+  <!-- 评论抽屉 -->
+  <div class="v-drawer" id="v-drawer">
+    <div class="v-drawer-mask"></div>
+    <div class="v-drawer-card">
+      <div class="v-drawer-head">
+        <b>评论</b>
+        <span class="v-count" id="v-drawer-count"></span>
+        <button class="v-drawer-x" type="button" id="v-drawer-x" aria-label="关闭">×</button>
+      </div>
+      <div class="v-drawer-list" id="v-drawer-list"></div>
+      <div class="v-drawer-foot">
+        <div class="v-reply-bar" id="v-reply-bar" hidden></div>
+        <div class="v-cmt-form">
+          <textarea id="v-cmt-text" rows="1" maxlength="500" placeholder="说点什么…"></textarea>
+          <button class="v-cmt-send" type="button" id="v-cmt-send">发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/nav.js"></script>
+  <script src="assets/js/video.js"></script>
+</body>
+</html>

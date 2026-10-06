@@ -68,6 +68,10 @@ export const IMAGE_KEY_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
    缩略图一律留在 KV,所以没有前缀。 */
 export const GALLERY_KEY_RE = /^(?:b2-)?[a-f0-9]{32}\.(?:full|thumb)\.(jpg|png|webp)$/;
 
+/* 视频 key:上传时就带上 "b2v-" 前缀(视频一律存 B2,不进 KV)。
+   前缀是给读视频的路由认的,库里存的也是带前缀的这一串 */
+export const VIDEO_KEY_RE = /^b2v-[a-f0-9]{32}\.(mp4|webm|mov|m4v)$/;
+
 /* 官方认证的三个级别:金 / 红 / 黑,只影响药丸配色。
    空串 = 没级别(头衔也空就是没认证,头衔有值但级别空则按金处理) */
 export const CERT_LEVELS = ["gold", "red", "black"];
@@ -84,7 +88,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-06.1";
+const SCHEMA_VERSION = "2026-10-06.2";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -176,6 +180,8 @@ export function ensureSchema(db) {
       await addColumn(db, "posts", "pinned", "INTEGER DEFAULT 0");
       await addColumn(db, "posts", "wall_id", "INTEGER");      // 挂在谁的「个人主页留言墙」下(主留言板为 NULL)
       await addColumn(db, "posts", "visibility", "TEXT DEFAULT 'public'"); // 'public' 所有人可见 / 'class' 仅本班(登录)可见
+      // 挂在某个视频下面的评论:有值就不是留言板的帖子,列表查询一律排除掉
+      await addColumn(db, "posts", "video_id", "INTEGER");
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_parent ON posts(parent_id, created_at)`)
         .run();
@@ -321,6 +327,8 @@ export function ensureSchema(db) {
         .run();
       // 老库升级:记下「被回复/被留言的那条自己的 id」,点通知才能直接跳到那一条
       await addColumn(db, "notifications", "reply_id", "INTEGER");
+      // 老库升级:视频评论 / 视频点赞产生的通知,点它要跳到 video.html
+      await addColumn(db, "notifications", "video_id", "INTEGER");
       // 只查「我的、未读的、最新的」,这三列一起建索引最省
       await db
         .prepare(
@@ -374,6 +382,64 @@ export function ensureSchema(db) {
       await addColumn(db, "gallery", "upload_level", "TEXT DEFAULT 'orig'");
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_gallery_by ON gallery(uploaded_by, created_at DESC)`)
+        .run();
+
+      // ---- 视频:文件本身全在 B2,库里只留元数据(key / 封面 / 时长 / 大小) ----
+      // b2_key 是 B2 对象名(带 "b2v-" 前缀),读的时候由 /api/videos/file 签名代理
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS videos (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             user_id INTEGER NOT NULL,
+             title TEXT NOT NULL DEFAULT '',
+             body TEXT NOT NULL DEFAULT '',
+             b2_key TEXT NOT NULL,
+             cover_key TEXT NOT NULL DEFAULT '',
+             mime TEXT NOT NULL DEFAULT 'video/mp4',
+             size INTEGER NOT NULL DEFAULT 0,
+             duration REAL NOT NULL DEFAULT 0,
+             width INTEGER NOT NULL DEFAULT 0,
+             height INTEGER NOT NULL DEFAULT 0,
+             visibility TEXT NOT NULL DEFAULT 'public',
+             created_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at DESC)`)
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_videos_user ON videos(user_id, created_at DESC)`)
+        .run();
+
+      // ---- 视频点赞:一人一视频一条,联合主键去重 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS video_likes (
+             video_id INTEGER NOT NULL,
+             user_id INTEGER NOT NULL,
+             created_at INTEGER NOT NULL,
+             PRIMARY KEY (video_id, user_id)
+           )`
+        )
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_videolikes_video ON video_likes(video_id)`)
+        .run();
+
+      // ---- 视频收藏:和点赞一样,一人一条 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS video_favs (
+             video_id INTEGER NOT NULL,
+             user_id INTEGER NOT NULL,
+             created_at INTEGER NOT NULL,
+             PRIMARY KEY (video_id, user_id)
+           )`
+        )
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_videofavs_video ON video_favs(video_id)`)
         .run();
 
       // 顺手做一次性的脏数据修复(settings 表已经建好,标记写在里面)
@@ -608,6 +674,47 @@ export function isStaff(user) {
   return !!user && (user.role === ROLE_OWNER || user.role === ROLE_ADMIN);
 }
 
+/* 关联表的两个批量查询:一张表只有两列有意义(对象 id + 用户 id),
+   点赞 / 收藏都是这个形状,所以抽出来共用,别为每种动作各写一遍 SQL */
+
+function uniqIds(ids) {
+  return Array.from(new Set((ids || []).map((n) => parseInt(n, 10)).filter((n) => n > 0)));
+}
+
+/* 这批对象各有多少条记录。返回 Map(id → n) */
+async function relCounts(db, table, col, ids) {
+  const uniq = uniqIds(ids);
+  const out = new Map();
+  if (!uniq.length) return out;
+  const holes = uniq.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(`SELECT ${col} AS id, COUNT(*) AS n FROM ${table} WHERE ${col} IN (${holes}) GROUP BY ${col}`)
+    .bind(...uniq)
+    .all()
+    .catch(() => ({ results: [] }));
+  for (const r of results || []) out.set(r.id, Number(r.n) || 0);
+  return out;
+}
+
+/* 这批对象里,「我」有记录的。返回 Set(id) */
+async function relMine(db, table, col, userId, ids) {
+  const uid = parseInt(userId, 10) || 0;
+  const uniq = uniqIds(ids);
+  if (!uid || !uniq.length) return new Set();
+  const holes = uniq.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(`SELECT ${col} AS id FROM ${table} WHERE user_id = ? AND ${col} IN (${holes})`)
+    .bind(uid, ...uniq)
+    .all()
+    .catch(() => ({ results: [] }));
+  return new Set((results || []).map((r) => r.id));
+}
+
+export const videoLikeCounts = (db, ids) => relCounts(db, "video_likes", "video_id", ids);
+export const videoLikedBy = (db, uid, ids) => relMine(db, "video_likes", "video_id", uid, ids);
+export const videoFavCounts = (db, ids) => relCounts(db, "video_favs", "video_id", ids);
+export const videoFavedBy = (db, uid, ids) => relMine(db, "video_favs", "video_id", uid, ids);
+
 /* ============================================================
    IP 属地:只解析到省级就停,原始 IP 一个字节都不落库
    ============================================================ */
@@ -694,7 +801,7 @@ export async function loadThread(db, rootIds) {
 
 /* 列表要读的列:集中一处,加字段时不会漏掉某条 SQL */
 export const POST_COLS =
-  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, created_at";
+  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, video_id, created_at";
 
 /* 一行数据库记录 → 前端要的样子 */
 export function toPost(row) {
@@ -708,6 +815,27 @@ export function toPost(row) {
     reply_to_id: row.reply_to_id || 0,
     pinned: row.pinned ? 1 : 0,
     wall_id: row.wall_id || 0,
+    video_id: row.video_id || 0,
+    visibility: row.visibility === "class" ? "class" : "public",
+    created_at: row.created_at,
+  };
+}
+
+/* 一行 videos 记录 → 前端要的样子。file 是 B2 key,
+   前端统一用 /api/videos/file/<file> 取流,不用关心存在哪儿 */
+export function toVideo(row) {
+  return {
+    id: row.id,
+    user_id: row.user_id || 0,
+    title: row.title || "",
+    body: row.body || "",
+    file: row.b2_key || "",
+    cover: row.cover_key || "",
+    mime: row.mime || "video/mp4",
+    size: Number(row.size) || 0,
+    duration: Number(row.duration) || 0,
+    width: Number(row.width) || 0,
+    height: Number(row.height) || 0,
     visibility: row.visibility === "class" ? "class" : "public",
     created_at: row.created_at,
   };
@@ -809,8 +937,8 @@ export async function notify(db, opts) {
   try {
     await db
       .prepare(
-        `INSERT INTO notifications (user_id, actor_id, type, post_id, wall_id, reply_id, excerpt, read, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
+        `INSERT INTO notifications (user_id, actor_id, type, post_id, wall_id, reply_id, video_id, excerpt, read, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
       )
       .bind(
         userId,
@@ -819,6 +947,7 @@ export async function notify(db, opts) {
         parseInt(opts.postId, 10) || null,
         parseInt(opts.wallId, 10) || null,
         parseInt(opts.replyId, 10) || null,
+        parseInt(opts.videoId, 10) || null,
         String(opts.excerpt || "").slice(0, 120),
         Date.now()
       )

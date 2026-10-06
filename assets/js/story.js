@@ -7,9 +7,10 @@
    4) 每条都显示头像、身份徽章和 IP 属地;服主/管理员可置顶
    5) 删除:本人删自己的,服主/管理员删任意一条(不再需要删帖口令)
 
-   同一份脚本给三个地方用,靠 window.CLASS103_BOARD 里的 mode 区分:
+   同一份脚本给四处地方用,靠 window.CLASS103_BOARD 里的 mode 区分:
      - mode: "list"   (默认) 103 纪事页:整篇铺开的列表,带回复树
-     - mode: "cards"  首页:小红书式双列卡片流,只给封面 / 标题 / 发帖人 / 点赞
+     - mode: "cards"  首页:小红书式双列卡片流,帖子 + 视频混在一起,按时间倒序
+     - mode: "videos" 视频页(videos.html):只要视频的双列卡片流
      - mode: "single" 帖子详情页(post.html):一条主帖 + 全部评论
    ============================================================ */
 
@@ -21,7 +22,8 @@
   const COMPACT_REPLIES = 5;         // 首页紧凑模式:一条主帖最多先展开 5 条回复
 
   const CFG = Object.assign({ limit: 0, compact: false, mode: "list" }, window.CLASS103_BOARD || {});
-  const MODE = CFG.mode === "cards" || CFG.mode === "single" ? CFG.mode : "list";
+  const MODES = ["cards", "videos", "single"];
+  const MODE = MODES.indexOf(CFG.mode) >= 0 ? CFG.mode : "list";
 
   const $ = (sel) => document.querySelector(sel);
   const on = (el, ev, fn) => {
@@ -242,11 +244,6 @@
         </div>`
       : `<div class="card-cover card-noimg"><span>${esc(titleOf(p))}</span></div>`;
 
-    const name = `<span class="story-name card-author-name">${C103Person.html(
-      p.author,
-      p.name
-    )}${badgeHTML(p.author)}</span>`;
-
     return `<article class="story-card xhs-card${p.pinned ? " is-pinned" : ""}" data-id="${p.id}">
       <a class="card-link" href="post.html?id=${p.id}" data-veil aria-label="打开这一条"></a>
       ${p.pinned ? '<span class="story-pin">置顶</span>' : ""}
@@ -254,8 +251,49 @@
       <div class="card-info">
         <p class="card-title">${esc(titleOf(p))}</p>
         <div class="card-foot">
-          <span class="card-author">${faceHTML(p.author)}${name}</span>
+          <span class="card-author">${faceHTML(p.author)}${authorNameHTML(p.author, p.name)}</span>
           <button class="like-pill${p.liked ? " on" : ""}" type="button" data-like="${p.id}" data-on="${p.liked ? 1 : 0}" aria-label="点赞"><i>${p.liked ? "♥" : "♡"}</i><span>${p.likes || 0}</span></button>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  /* 卡片上那行发帖人:头像 + 名字(带身份徽章 / 认证药丸) */
+  function authorNameHTML(author, fallback) {
+    return `<span class="story-name card-author-name">${C103Person.html(
+      author,
+      fallback
+    )}${badgeHTML(author)}</span>`;
+  }
+
+  /* 时长:mm:ss。没有时长(老浏览器录不出来)就不显示 */
+  function fmtDur(sec) {
+    const s = Math.max(0, Math.round(Number(sec) || 0));
+    if (!s) return "";
+    const m = Math.floor(s / 60);
+    return m + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  /* 视频卡片:和帖子卡片长得一样,只是封面中间多一枚播放键、右上角显示时长。
+     点进去是全屏播放页 video.html,不是帖子详情页 */
+  function videoCardHTML(v) {
+    if (!v) return "";
+    const cover = v.cover
+      ? `<img src="${API}/img/${esc(v.cover)}" alt="" loading="lazy">`
+      : "";
+    const dur = fmtDur(v.duration);
+    return `<article class="story-card xhs-card v-card" data-id="${v.id}">
+      <a class="card-link" href="video.html?id=${v.id}" aria-label="打开这个视频"></a>
+      <div class="card-cover v-cover">
+        ${cover}
+        <span class="v-play" aria-hidden="true"></span>
+        ${dur ? `<span class="card-count">${dur}</span>` : ""}
+      </div>
+      <div class="card-info">
+        <p class="card-title">${esc(v.title || "视频")}</p>
+        <div class="card-foot">
+          <span class="card-author">${faceHTML(v.author)}${authorNameHTML(v.author)}</span>
+          <button class="like-pill${v.liked ? " on" : ""}" type="button" data-vlike="${v.id}" data-on="${v.liked ? 1 : 0}" aria-label="点赞"><i>${v.liked ? "♥" : "♡"}</i><span>${v.likes || 0}</span></button>
         </div>
       </div>
     </article>`;
@@ -447,7 +485,39 @@
     notice("读取中", "<br>正在翻开 103 的纪事…");
     if (els.pager) els.pager.hidden = true;
     try {
-      const data = await api(API + "/posts" + (MODE === "cards" ? "?feed=cards&page=" : "?page=") + page);
+      // 视频页:只铺视频卡片
+      if (MODE === "videos") {
+        const data = await api(API + "/videos?page=" + page);
+        state.page = data.page;
+        state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
+        const items = data.items || [];
+        if (!data.total) {
+          notice("还没有人发视频", "<br>第一个片子，等你来拍。");
+        } else if (els.list) {
+          els.list.innerHTML = items.map(videoCardHTML).join("");
+        }
+        renderPager(data.total);
+        return;
+      }
+
+      // 首页:帖子和视频混在一条流里(小红书那种),后端已经合好并排好序
+      if (MODE === "cards") {
+        const data = await api(API + "/feed?page=" + page);
+        state.page = data.page;
+        state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
+        const items = data.items || [];
+        if (!data.total) {
+          notice("还没有人写下第一句", "<br>第一行字，等你来落笔。");
+        } else if (els.list) {
+          els.list.innerHTML = items
+            .map((it) => (it.type === "video" ? videoCardHTML(it.video) : cardHTML(it.post)))
+            .join("");
+        }
+        renderPager(data.total);
+        return;
+      }
+
+      const data = await api(API + "/posts?page=" + page);
       state.page = data.page;
       state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
       let posts = data.posts || [];
@@ -456,8 +526,7 @@
       if (!data.total) {
         notice("还没有人写下第一句", "<br>第一行字，等你来落笔。");
       } else if (els.list) {
-        els.list.innerHTML =
-          MODE === "cards" ? posts.map(cardHTML).join("") : posts.map(rootHTML).join("");
+        els.list.innerHTML = posts.map(rootHTML).join("");
       }
       renderPager(data.total);
     } catch (err) {
@@ -522,26 +591,28 @@
     if (num) num.textContent = String(n);
   }
 
-  async function onLike(btn) {
+  async function onLike(btn, kind) {
     if (!state.user) {
       toast("登录后才能点赞");
       return;
     }
-    const id = parseInt(btn.getAttribute("data-like"), 10) || 0;
-    if (!id || state.liking === id) return;
+    const video = kind === "video";
+    const id = parseInt(btn.getAttribute(video ? "data-vlike" : "data-like"), 10) || 0;
+    const key = (video ? "v" : "p") + id;
+    if (!id || state.liking === key) return;
 
     const wasOn = btn.getAttribute("data-on") === "1";
     const nextOn = !wasOn;
     const num = btn.querySelector("span");
     const prev = parseInt((num && num.textContent) || "0", 10) || 0;
 
-    state.liking = id;
+    state.liking = key;
     // 先自己翻面,手感立刻跟上;失败再翻回去
     paintLike(btn, nextOn, Math.max(0, prev + (nextOn ? 1 : -1)));
     btn.classList.add("bump");
 
     try {
-      const d = await api(API + "/posts/" + id + "/like", { method: "POST" });
+      const d = await api(API + (video ? "/videos/" : "/posts/") + id + "/like", { method: "POST" });
       paintLike(btn, !!d.liked, d.likes);
     } catch (err) {
       paintLike(btn, wasOn, prev);
@@ -570,6 +641,11 @@
     let rootId = p || r;
     try {
       const d = await api(API + "/posts?find=" + (r || p));
+      // 这条其实是视频下面的评论,留言板里根本没有它,直接转去播放页
+      if (d.kind === "video" && d.video_id) {
+        location.href = "video.html?id=" + d.video_id + (r ? "&r=" + r : "");
+        return true;
+      }
       page = d.page || 1;
       rootId = d.root_id || rootId;
     } catch (err) {
@@ -780,11 +856,18 @@
 
     on(els.list, "click", (e) => {
       // 点赞最优先:卡片里的按钮压在整卡链接之上,但保险起见还是先拦一下
+      const vlike = e.target.closest("[data-vlike]");
+      if (vlike) {
+        e.preventDefault();
+        e.stopPropagation();
+        onLike(vlike, "video");
+        return;
+      }
       const like = e.target.closest("[data-like]");
       if (like) {
         e.preventDefault();
         e.stopPropagation();
-        onLike(like);
+        onLike(like, "post");
         return;
       }
       const rep = e.target.closest("[data-reply]");

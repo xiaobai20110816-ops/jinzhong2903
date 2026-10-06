@@ -108,6 +108,19 @@ export function b2ObjectName(dbKey) {
   return "img/" + String(dbKey).slice(B2_PREFIX.length);
 }
 
+/* 视频单独一个前缀,存到 B2 的目录也分开("video/")。
+   视频体积大,一律走 B2,不进 KV,所以前缀是在上传时就写死的。
+   库里存的 b2_key 就是带前缀的这一串,对象名 1:1 可逆。 */
+export const B2V_PREFIX = "b2v-";
+
+export function isVideoKey(key) {
+  return typeof key === "string" && key.startsWith(B2V_PREFIX);
+}
+
+export function videoObjectName(dbKey) {
+  return "video/" + String(dbKey).slice(B2V_PREFIX.length);
+}
+
 /* ---------- SigV4 签名 ---------- */
 
 function canonicalQuery(params) {

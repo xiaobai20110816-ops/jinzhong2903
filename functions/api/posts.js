@@ -54,10 +54,17 @@ export async function onRequestGet({ request, env }) {
   // 只回页码和根帖 id,不重复吐内容。
   const findId = parseInt(url.searchParams.get("find") || "0", 10) || 0;
   if (findId) {
-    const row = await env.DB.prepare("SELECT id, parent_id, wall_id FROM posts WHERE id = ?")
+    const row = await env.DB.prepare(
+      "SELECT id, parent_id, wall_id, video_id FROM posts WHERE id = ?"
+    )
       .bind(findId)
       .first();
     if (!row) return json({ ok: true, kind: "none", page: 1, root_id: 0 });
+
+    // 视频下面的评论不在留言板里,让前端去 video.html 找人
+    if (row.video_id) {
+      return json({ ok: true, kind: "video", video_id: row.video_id, page: 1, root_id: 0 });
+    }
 
     // 回复是一层平铺,parent_id 直接就是根帖;留言墙的墙主记在 wall_id
     const rootId = row.parent_id || row.id;
@@ -90,7 +97,7 @@ export async function onRequestGet({ request, env }) {
     const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
     const before = await env.DB.prepare(
       `SELECT COUNT(*) AS n FROM posts
-        WHERE parent_id IS NULL AND wall_id IS NULL ${visOnly}
+        WHERE parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL ${visOnly}
           AND (pinned > ? OR (pinned = ? AND (created_at > ? OR (created_at = ? AND id > ?))))`
     )
       .bind(root.pinned || 0, root.pinned || 0, root.created_at, root.created_at, rootId)
@@ -140,8 +147,8 @@ export async function onRequestGet({ request, env }) {
   // 分页分的是「主帖」,回复跟着主帖一起出来,不会被翻页截断
   const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
   const where = authorId
-    ? "parent_id IS NULL AND wall_id IS NULL AND user_id = ?" + visOnly
-    : "parent_id IS NULL AND wall_id IS NULL" + visOnly;
+    ? "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL AND user_id = ?" + visOnly
+    : "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL" + visOnly;
   const bindWhere = authorId ? [authorId] : [];
 
   const totalRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM posts WHERE ${where}`)
@@ -260,6 +267,18 @@ export async function onRequestPost({ request, env }) {
     .slice(0, MAX_IMAGES);
   const replyTo = parseInt(payload.reply_to_id, 10) || 0;
   const wallId = parseInt(payload.wall, 10) || 0;
+  // 评论区挂在某个视频下面(video.html 里留言):和留言墙一样是另一条支线,
+  // 不进主留言板,靠 posts.video_id 认领
+  let videoId = parseInt(payload.video, 10) || 0;
+  let videoOwner = 0;
+  if (videoId) {
+    const v = await env.DB.prepare("SELECT id, user_id, visibility FROM videos WHERE id = ?")
+      .bind(videoId)
+      .first();
+    if (!v) return fail("这个视频已经不在了，刷新一下再看看", 404);
+    if (v.visibility === "class" && !me) return fail("这条内容仅本班同学可见", 403);
+    videoOwner = v.user_id || 0;
+  }
   // 可见性只对「主帖」有意义:回复跟随主帖,留言墙一律公开
   const visibility = payload.visibility === "class" ? "class" : "public";
 
@@ -326,13 +345,22 @@ export async function onRequestPost({ request, env }) {
   let replyTarget = null;
   if (replyTo) {
     const target = await env.DB.prepare(
-      "SELECT id, parent_id, user_id FROM posts WHERE id = ?"
+      "SELECT id, parent_id, user_id, video_id FROM posts WHERE id = ?"
     )
       .bind(replyTo)
       .first();
     if (!target) return fail("要回复的那条已经不在了，刷新一下再看看");
     parentId = target.parent_id || target.id;
     replyTarget = target;
+    // 回复的是视频下面的评论,那这条回复也跟着留在这个视频下面
+    if (target.video_id) {
+      videoId = target.video_id;
+      const v = await env.DB.prepare("SELECT user_id FROM videos WHERE id = ?")
+        .bind(videoId)
+        .first()
+        .catch(() => null);
+      videoOwner = (v && v.user_id) || 0;
+    }
   }
 
   const now = Date.now();
@@ -341,7 +369,8 @@ export async function onRequestPost({ request, env }) {
   )
     .bind(me.id)
     .first();
-  const waitMs = parentId ? REPLY_COOLDOWN_MS : COOLDOWN_MS;
+  // 视频下面的评论和「回复」一样属于聊天,不该按发主帖的 15 秒来卡
+  const waitMs = parentId || videoId ? REPLY_COOLDOWN_MS : COOLDOWN_MS;
   if (last && now - last.created_at < waitMs) {
     const wait = Math.ceil((waitMs - (now - last.created_at)) / 1000);
     return fail(`发得有点快啦，${wait} 秒后再来`, 429);
@@ -353,8 +382,8 @@ export async function onRequestPost({ request, env }) {
   const vis = parentId ? "public" : visibility; // 回复跟随主帖,自己不单独设可见性
 
   const res = await env.DB.prepare(
-    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, created_at)
-     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?, ?)`
+    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, video_id, visibility, created_at)
+     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
   )
     .bind(
       me.name,
@@ -365,6 +394,7 @@ export async function onRequestPost({ request, env }) {
       region,
       replyTo || null,
       pinned,
+      videoId || null,
       vis,
       now
     )
@@ -379,6 +409,16 @@ export async function onRequestPost({ request, env }) {
       type: "reply",
       postId: parentId,
       replyId: res.meta.last_row_id,
+      videoId: videoId || 0,
+      excerpt: body || "[图片]",
+    });
+  } else if (videoId) {
+    // 在别人视频底下留了条评论 → 告诉视频作者
+    await notify(env.DB, {
+      userId: videoOwner,
+      actorId: me.id,
+      type: "vcomment",
+      videoId: videoId,
       excerpt: body || "[图片]",
     });
   }
@@ -395,6 +435,7 @@ export async function onRequestPost({ request, env }) {
       reply_to_id: replyTo,
       pinned,
       wall_id: 0,
+      video_id: videoId || 0,
       visibility: vis,
       author: me,
       reply_to_name: "",

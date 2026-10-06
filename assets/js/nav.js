@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "dormitory.html", label: "宿舍风采" },
   { href: "moments.html", label: "高光时刻" },
   { href: "gallery.html", label: "图库" },
+  { href: "videos.html", label: "视频" },
   { href: "story.html", label: "103 纪事" },
   { href: "rank.html", label: "活跃榜" },
   { href: "announcements.html", label: "班级公告" },
@@ -836,16 +837,16 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-06-5";
+const SPLASH_VERSION = "2026-10-06-6";
 const SPLASH_DATE = "2026.10.06";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "官网换新域名啦：jinzhong2903.me，比以前更好记。老地址仍能打开，会慢慢不用。";
+const SPLASH_LEAD = "视频来了：全班的片子都能传能看，点开就是全屏，上下滑接着刷。";
 const SPLASH_NOTES = [
-  "官网新域名 jinzhong2903.me 已启用，站内所有地址都换成了新域名",
-  "首页留言板是小红书式双列卡片流：封面、标题、发帖人、点赞数，点开卡片看正文、多图和全部评论",
-  "详情页 post.html：?id= 是主帖，带上 &r= 会直接滚到那条回复并描金",
-  "帖子点赞：卡片和详情页都能点，一人一帖只算一次；头像右下角亮绿点表示「在线」",
-  "点铃铛里的「回复了你」直接打开详情页并定位到那条回复",
+  "新增「视频」页：实名认证过的同学 / 管理员 / 服主都能传片子，封面自动从画面里截一张",
+  "视频全屏播放页：上下滑切换，右侧点赞、评论、收藏、分享，点画面暂停 / 继续，键盘 ↑↓ 也能换片",
+  "首页卡片流现在是帖子和视频混着排的，视频卡片中间有播放键、右上角显示时长",
+  "视频下面的评论、回复和帖子一样，点铃铛里的「评论了你的视频」直接跳到那条评论",
+  "视频存在 B2 云存储，站内只存地址，拖进度条也没问题",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -1063,7 +1064,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.appendChild(panel);
   const notifList = panel.querySelector("#notif-list");
 
-  const NOTIF_TEXT = { reply: "回复了你", wall: "在你主页留了言", like: "赞了你的主页" };
+  const NOTIF_TEXT = { reply: "回复了你", wall: "在你主页留了言", like: "赞了你的主页", vcomment: "评论了你的视频" };
 
   function fmtAgo(ms) {
     const d = Date.now() - ms;
@@ -1082,6 +1083,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return "u.html?id=" + (n.wall_id || 0) + (n.post_id ? "&p=" + n.post_id : "");
     }
     if (n.type === "like") return "u.html?id=" + ((C103Auth.user && C103Auth.user.id) || "");
+    // 视频下面的评论:直接去全屏播放页,带上 &r= 会定位到那条评论
+    if (n.video_id) return "video.html?id=" + n.video_id + (n.reply_id ? "&r=" + n.reply_id : "");
     if (!n.post_id) return "story.html";
     return "post.html?id=" + n.post_id + (n.reply_id ? "&r=" + n.reply_id : "");
   }
