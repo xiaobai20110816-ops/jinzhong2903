@@ -764,6 +764,8 @@
   gap: 14px;
   align-items: start;
 }
+/* 「读取中」/「还没有人写」这类提示占满整行,别挤在左边半格里 */
+.card-grid > .notice { grid-column: 1 / -1; }
 
 /* 卡片本体:比列表版更瘦,内边距压到最小,让封面占满卡宽 */
 .xhs-card {
