@@ -2,16 +2,24 @@
    103 纪事 · Backblaze B2 客户端
    ------------------------------------------------------------
    为什么用 B2:KV 单值上限 25MiB,视频根本放不下;R2 要绑卡,
-   B2 不要。B2 是 Cloudflare Bandwidth Alliance 成员,出流量免费。
+   B2 不要。B2 是 Cloudflare Bandwidth Alliance 成员,B2 → CF
+   这段流量免费,所以「Function 代理 + 边缘缓存」不花出流量钱。
+
+   为什么不是「公开桶 + CDN 直连」:
+   B2 现在不允许没有付款记录的新账号把桶设成 allPublic
+   (b2_update_bucket 直接回 no_payment_history)。学生没有信用卡,
+   所以桶只能是私有的,由本站 Function 签名去 B2 取流再转发,
+   顺手写进 caches.default,同一张图第二次打开就走边缘缓存。
 
    这里手写两套调用:
-   1) 原生 B2 API —— 只用来「测试连接 / 列桶 / 一键配 CORS 与公开桶」
-      接口的鉴权就是最朴素的 Basic(keyID:applicationKey),好验证。
-   2) S3 兼容 API —— 上传 / 删除 / 探测,用 AWS SigV4 签名。
+   1) 原生 B2 API —— 只用来「测试连接(验证密钥 + 列桶)」
+      鉴权是最朴素的 Basic(keyID:applicationKey)。
+   2) S3 兼容 API —— 上传 / 读取 / 删除,用 AWS SigV4 签名,
       路径走 path-style:https://s3.<region>.backblazeb2.com/<桶>/<key>
 
-   图片和视频一律不经 Function 转发:库里只存 key,
-   前端拿 <CDN 基础地址>/img/<key> 直连 Cloudflare 边缘。
+   注意:主应用程序密钥(keyID = 12 位账号 ID)不能用于 S3 接口,
+   B2 会回 InvalidAccessKeyId / Malformed Access Key Id。
+   必须去控制台 Application Keys 里单独建一把,S3 用它的 keyID。
 
    文件名以下划线开头,不会被当成路由。
    ============================================================ */
@@ -53,7 +61,6 @@ const FIELDS = {
   appKey: ["B2_APP_KEY", "b2_app_key"],
   endpoint: ["B2_ENDPOINT", "b2_endpoint"],
   bucket: ["B2_BUCKET", "b2_bucket"],
-  cdn: ["B2_CDN", "b2_cdn"],
 };
 
 export const B2_SETTING_KEYS = Object.values(FIELDS).map((p) => p[1]);
@@ -64,23 +71,15 @@ function normalizeEndpoint(v) {
   return s ? "https://" + s : "";
 }
 
-/* CDN 基础地址要保留路径(如 /file/桶名),只去掉结尾斜杠 */
-function normalizeBase(v) {
-  let s = String(v || "").trim().replace(/\/+$/, "");
-  if (!s) return "";
-  if (!/^https?:\/\//i.test(s)) s = "https://" + s;
-  return s;
-}
-
 export function regionOfEndpoint(endpoint) {
   const host = String(endpoint || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   const parts = host.split(".");
   // s3.us-west-004.backblazeb2.com → us-west-004
-  return parts.length > 1 && parts[0].toLowerCase() === "s3" ? parts[1] : parts[1] || "";
+  return parts.length > 1 ? parts[1] : "";
 }
 
 export async function b2Config(env, db) {
-  const out = { keyId: "", appKey: "", endpoint: "", bucket: "", cdn: "" };
+  const out = { keyId: "", appKey: "", endpoint: "", bucket: "" };
   for (const field of Object.keys(FIELDS)) {
     const [envName, dbName] = FIELDS[field];
     let v = env && env[envName] ? String(env[envName]).trim() : "";
@@ -88,10 +87,8 @@ export async function b2Config(env, db) {
     out[field] = v;
   }
   out.endpoint = normalizeEndpoint(out.endpoint);
-  out.cdn = normalizeBase(out.cdn);
   out.bucket = out.bucket.replace(/\s+/g, "");
   out.region = regionOfEndpoint(out.endpoint);
-  // ready = 能上传的最小配置。cdn 只影响「能不能直连看」,不影响能不能存
   out.ready = !!(out.keyId && out.appKey && out.endpoint && out.bucket);
   return out;
 }
@@ -109,11 +106,6 @@ export function isB2Key(key) {
 
 export function b2ObjectName(dbKey) {
   return "img/" + String(dbKey).slice(B2_PREFIX.length);
-}
-
-export function b2PublicUrl(cdn, dbKey) {
-  if (!cdn) return "";
-  return String(cdn).replace(/\/+$/, "") + "/" + b2ObjectName(dbKey);
 }
 
 /* ---------- SigV4 签名 ---------- */
@@ -176,8 +168,11 @@ async function s3Error(res) {
   const text = await res.text().catch(() => "");
   const code = (text.match(/<Code>([^<]+)<\/Code>/) || [])[1] || "";
   const msg = (text.match(/<Message>([^<]+)<\/Message>/) || [])[1] || "";
+  // 最常见的坑:拿主应用程序密钥(keyID = 12 位账号 ID)来签 S3,B2 一律回这句
+  if (code === "InvalidAccessKeyId")
+    return "B2 不认这把密钥。S3 接口要用「Application Keys」里单独建的那把（keyID 是 24 位左右的一长串，不是 12 位的账号 ID）；主密钥只能用于原生接口";
   if (code || msg) return "B2 拒绝了这次请求：" + [code, msg].filter(Boolean).join(" · ");
-  if (res.status === 403) return "B2 拒绝了这次请求（403）：密钥没有这个桶的权限，或桶名/Endpoint 写错了";
+  if (res.status === 403) return "B2 拒绝了这次请求（403）：密钥没有这个桶的权限，或桶名 / Endpoint 写错了";
   return "B2 返回 HTTP " + res.status;
 }
 
@@ -210,6 +205,10 @@ async function s3Request(cfg, opts) {
     "x-amz-content-sha256": sig.payloadHash,
   };
   if (opts.contentType) headers["content-type"] = opts.contentType;
+  // 额外的头(range 之类)不参与签名,B2 只要求 host / x-amz-* 进签名
+  if (opts.extraHeaders) {
+    for (const k of Object.keys(opts.extraHeaders)) headers[k] = opts.extraHeaders[k];
+  }
 
   return fetch("https://" + host + path + (query ? "?" + query : ""), {
     method: opts.method,
@@ -227,6 +226,16 @@ export async function s3Put(cfg, key, bytes, contentType) {
   });
   if (!res.ok) throw new Error(await s3Error(res));
   return true;
+}
+
+/* 读一个对象,把 B2 的原始响应交回去(状态码 / 头 / body 流都不动)。
+   桶是私有的,所以必须带着签名来取;range 直接透传,视频才能拖动进度。 */
+export function s3Get(cfg, key, range) {
+  return s3Request(cfg, {
+    method: "GET",
+    key,
+    extraHeaders: range ? { range: range } : null,
+  });
 }
 
 export async function s3Delete(cfg, key) {
@@ -248,7 +257,7 @@ export async function s3Probe(cfg) {
   return { objects: n };
 }
 
-/* ---------- 原生 B2 API(授权 / 列桶 / 配 CORS / 改公开) ---------- */
+/* ---------- 原生 B2 API(授权 / 列桶) ---------- */
 
 const API_ROOT = "https://api.backblazeb2.com";
 
@@ -309,35 +318,4 @@ export async function b2ListBuckets(auth) {
     type: b.bucketType || "",
     public: b.bucketType === "allPublic",
   }));
-}
-
-/* 一键把桶设成「公开」:私有桶的图片在 CDN 上是 403,前端根本显示不出来 */
-export async function b2SetPublic(auth, bucketId) {
-  await nativeCall(auth, "b2_update_bucket", {
-    accountId: auth.accountId,
-    bucketId,
-    bucketType: "allPublic",
-  });
-  return true;
-}
-
-/* 一键配 CORS:图库「下载时在前端压缩」要跨域 fetch 原图,
-   视频也要能被 <video> 跨域播放。B2 会把桶里原有的规则整份替换掉,
-   所以这里一次写全(本来就只有我们自己在用这个桶)。 */
-export async function b2SetCors(auth, bucketId, origins) {
-  await nativeCall(auth, "b2_set_bucket_cors_rules", {
-    accountId: auth.accountId,
-    bucketId,
-    corsRules: [
-      {
-        corsRuleName: "class103-web",
-        allowedOrigins: origins && origins.length ? origins : ["*"],
-        allowedOperations: ["b2_download_file_by_name", "s3_get", "s3_head"],
-        allowedHeaders: ["*"],
-        exposeHeaders: ["Content-Length", "Content-Type", "Content-Range"],
-        maxAgeSeconds: 86400,
-      },
-    ],
-  });
-  return true;
 }

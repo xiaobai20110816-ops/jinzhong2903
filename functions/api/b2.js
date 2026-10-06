@@ -2,9 +2,10 @@
    103 · B2 存储配置接口
    GET  /api/b2              读配置(密钥只回显尾号)
    PUT  /api/b2              保存配置
-   POST /api/b2  { action }  测试连接 / 一键准备桶(公开 + CORS)
+   POST /api/b2  { action }  测试连接(密钥 / S3 签名 / 桶)
 
    只有服主能用。密钥存在 D1 settings 表里,环境变量优先。
+   桶是私有的(见 _b2.js 开头),图片由 /api/gallery/img 代理读取。
    ============================================================ */
 
 import {
@@ -19,10 +20,7 @@ import {
   b2Config,
   b2Authorize,
   b2ListBuckets,
-  b2SetPublic,
-  b2SetCors,
   s3Probe,
-  sha256hex,
 } from "./_b2.js";
 
 function ownerOnly(me) {
@@ -49,7 +47,6 @@ export async function onRequestGet({ request, env }) {
       keyId: cfg.keyId,
       endpoint: cfg.endpoint,
       bucket: cfg.bucket,
-      cdn: cfg.cdn,
       hasKey: !!cfg.appKey,
       appKeyHint: maskKey(cfg.appKey),
       ready: cfg.ready,
@@ -71,26 +68,19 @@ export async function onRequestPut({ request, env }) {
     return fail("提交的内容读不出来，刷新页面再试");
   }
 
-  const keyId = String(body.keyId || "").trim();
-  const appKey = String(body.appKey || "").trim();
-  const endpoint = String(body.endpoint || "").trim();
-  const bucket = String(body.bucket || "").trim();
-  const cdn = String(body.cdn || "").trim();
-
-  await putSetting(env.DB, "b2_key_id", keyId);
-  await putSetting(env.DB, "b2_endpoint", endpoint);
-  await putSetting(env.DB, "b2_bucket", bucket);
-  await putSetting(env.DB, "b2_cdn", cdn);
+  await putSetting(env.DB, "b2_key_id", String(body.keyId || "").trim());
+  await putSetting(env.DB, "b2_endpoint", String(body.endpoint || "").trim());
+  await putSetting(env.DB, "b2_bucket", String(body.bucket || "").trim());
   // 密钥留空 = 不覆盖(界面上回显的是尾号,不能拿它当新密钥写回去)
+  const appKey = String(body.appKey || "").trim();
   if (appKey) await putSetting(env.DB, "b2_app_key", appKey);
 
   const cfg = await b2Config(env, env.DB);
   return json({
     ok: true,
     ready: cfg.ready,
-    hasCdn: !!cfg.cdn,
     message: cfg.ready
-      ? (cfg.cdn ? "已保存，新传的原图会走 B2" : "已保存。还差 CDN 基础地址，补上后图片才能直连显示")
+      ? "已保存，之后上传的照片和视频都会存进 B2，由本站代理读取并缓存到边缘节点"
       : "已保存，但还差 keyID / applicationKey / Endpoint / 桶名，原图暂时还是存 KV",
   });
 }
@@ -109,7 +99,6 @@ export async function onRequestPost({ request, env }) {
     return fail("请求读不出来，刷新页面再试");
   }
 
-  const action = String(body.action || "test");
   const saved = await b2Config(env, env.DB);
 
   // 表单里没填的就用已保存的;密钥留空也沿用已保存的那把
@@ -118,13 +107,10 @@ export async function onRequestPost({ request, env }) {
     appKey: String(body.appKey || "").trim() || saved.appKey,
     endpoint: String(body.endpoint || "").trim() || saved.endpoint,
     bucket: String(body.bucket || "").trim() || saved.bucket,
-    cdn: String(body.cdn || "").trim() || saved.cdn,
   };
   cfg.endpoint = cfg.endpoint.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   cfg.endpoint = cfg.endpoint ? "https://" + cfg.endpoint : "";
   cfg.bucket = cfg.bucket.replace(/\s+/g, "");
-  cfg.cdn = cfg.cdn.replace(/\/+$/, "");
-  if (cfg.cdn && !/^https?:\/\//i.test(cfg.cdn)) cfg.cdn = "https://" + cfg.cdn;
   cfg.region = (cfg.endpoint.replace(/^https?:\/\//i, "").split(".")[1]) || "";
   cfg.ready = !!(cfg.keyId && cfg.appKey && cfg.endpoint && cfg.bucket);
 
@@ -178,13 +164,12 @@ export async function onRequestPost({ request, env }) {
     if (!hit) {
       report.push({ name: "已选桶", ok: false, text: "账号里没有叫「" + cfg.bucket + "」的桶，检查拼写" });
     } else {
-      if (!hit.public) {
-        report.push({
-          name: "桶权限",
-          ok: false,
-          text: "这个桶是私有的，CDN 上打开图片会 403；点「一键准备桶」可以改成公开并配好 CORS",
-        });
-      }
+      // 桶是私有的才好:本站用签名去取,不给外人直连,也不占公开桶的额外费用
+      report.push({
+        name: "桶权限",
+        ok: true,
+        text: hit.public ? "这个桶是公开的 —— 能用，但建议在 B2 里改回私有，本站代理读取不需要公开" : "私有桶（正常，本站会用签名代理读取）",
+      });
       /* ---- 第三步:S3 签名实测(真正验证 SigV4 写对没有) ---- */
       if (cfg.endpoint) {
         try {
@@ -198,46 +183,6 @@ export async function onRequestPost({ request, env }) {
           report.push({ name: "S3 读写", ok: false, text: e.message });
         }
       }
-    }
-  }
-
-  /* ---- 第四步:CDN 通不通(HEAD 一个不存在的 key,404 就说明链路是通的) ---- */
-  if (!cfg.cdn) {
-    report.push({
-      name: "CDN",
-      ok: false,
-      text: "还没填 CDN 基础地址。图片能不能直连显示就看它，没有它只能退回 /api 转发",
-    });
-  } else {
-    const probe = cfg.cdn + "/img/__probe_" + (await sha256hex(String(Date.now()))).slice(0, 8) + ".jpg";
-    try {
-      const res = await fetch(probe, { method: "HEAD" });
-      if (res.status === 404)
-        report.push({ name: "CDN", ok: true, text: "通！" + cfg.cdn + " 已指向桶（探测到 404 = 能读到桶，只是这个文件不存在）" });
-      else if (res.status === 403)
-        report.push({ name: "CDN", ok: false, text: "CDN 通了，但桶是私有的（403）。点「一键准备桶」改成公开即可" });
-      else if (res.status === 200)
-        report.push({ name: "CDN", ok: true, text: "通（HTTP 200）" });
-      else
-        report.push({ name: "CDN", ok: res.status < 500, text: "CDN 返回 HTTP " + res.status });
-    } catch (e) {
-      report.push({
-        name: "CDN",
-        ok: false,
-        text: "连不上 " + cfg.cdn + "。去 Cloudflare DNS 加一条 CNAME 指到你的桶（Backblaze 控制台桶详情里有目标地址），并打开小黄云",
-      });
-    }
-  }
-
-  if (action === "prepare") {
-    const hit = buckets.filter((b) => b.name === cfg.bucket)[0];
-    if (!hit) return fail("先选一个真实存在的桶", 400);
-    try {
-      if (!hit.public) await b2SetPublic(auth, hit.id);
-      await b2SetCors(auth, hit.id, ["*"]);
-      report.push({ name: "准备桶", ok: true, text: "已改成公开桶，并写入 CORS 规则（允许任意来源 GET/HEAD）" });
-    } catch (e) {
-      report.push({ name: "准备桶", ok: false, text: e.message });
     }
   }
 

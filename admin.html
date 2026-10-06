@@ -758,7 +758,7 @@
           <div class="glass panel" id="panel-gallery" hidden>
             <div class="panel-head">
               <h2>班级图库</h2>
-              <p>上传的照片会存到 KV，原图基本原样保留（每张 5MB 左右），网站这边只拿一张小缩略图来铺网格，点开看大图、点下载拿原图。选多张一起传也行。<b>服主可以在「B2 配置」里接上 Backblaze B2</b>：接上之后原图不再受 KV 的 25MB 单张上限，浏览器还能直连 CDN 取图，视频也放得下了。</p>
+              <p>上传的照片会存到 KV，原图基本原样保留（每张 5MB 左右），网站这边只拿一张小缩略图来铺网格，点开看大图、点下载拿原图。选多张一起传也行。<b>服主可以在「B2 配置」里接上 Backblaze B2</b>：接上之后原图不再受 KV 的 25MB 单张上限，交给 B2 存、本站代理读取，视频也放得下了。</p>
             </div>
             <div id="gallery-admin">
               <div class="g-upload">
@@ -778,12 +778,12 @@
           <div class="glass panel" id="panel-b2" hidden>
             <div class="panel-head">
               <h2>B2 存储配置</h2>
-              <p><b>为什么要有它：</b>KV 单张上限只有 25MB，视频根本放不下；Backblaze B2 有 10GB 免费空间，还不要绑卡。接上之后，图库的原图会直接进 B2 的公开桶，浏览器通过 CDN 直连取图，<b>不再经过本站服务器</b>，又快又省。缩略图还是留在 KV（体积小、读得快）。</p>
-              <p><b>怎么做：</b>① B2 控制台建一个桶 → ② Application Keys 里建一把密钥 → ③ 把 keyID 和 applicationKey 填到下面，点「测试连接」，Endpoint 和桶名会自动填出来 → ④ 去 Cloudflare DNS 加一条 CNAME（名字 <code>cdn</code>，指向 B2 桶详情里给的地址，打开小黄云）→ ⑤ 填上 CDN 基础地址保存。密钥只存在你自己的数据库里，只有服主能看能改。</p>
+              <p><b>为什么要有它：</b>KV 单张上限只有 25MB，视频根本放不下；Backblaze B2 有 10GB 免费空间，还不要绑卡。接上之后，图库的原图会进 B2 的私有桶，由本站 Function 签名读取并缓存到 CF 边缘节点，同一张图第二个人打开就直接命中缓存。缩略图还是留在 KV（体积小、读得快）。</p>
+              <p><b>怎么做：</b>① B2 控制台建一个桶（保持私有就行）→ ② Application Keys 里建一把密钥（<b>必须单独建，不能用主应用程序密钥</b>）→ ③ 把 keyID 和 applicationKey 填到下面，点「测试连接」，Endpoint 和桶名会自动填出来 → ④ 保存。密钥只存在你自己的数据库里，只有服主能看能改。</p>
             </div>
             <div class="field-grid">
-              <label><span class="lb">keyID</span>
-                <input id="b2-key-id" type="text" autocomplete="off" placeholder="如 f3f51e6e9034">
+              <label><span class="lb">keyID（Application Keys 里新建的那把，约 25 位）</span>
+                <input id="b2-key-id" type="text" autocomplete="off" placeholder="如 004f3f51e6e90340000000002">
               </label>
               <label><span class="lb">applicationKey <em id="b2-key-hint" style="font-style:normal;color:var(--faint)"></em></span>
                 <input id="b2-app-key" type="text" autocomplete="off" placeholder="粘贴 applicationKey（留空 = 不修改已存的）">
@@ -794,16 +794,12 @@
               <label><span class="lb">桶名 Bucket Name</span>
                 <input id="b2-bucket" type="text" autocomplete="off" placeholder="如 class103-gallery">
               </label>
-              <label><span class="lb">CDN 基础地址（<b>要带桶路径</b>，末尾不要斜杠）</span>
-                <input id="b2-cdn" type="text" autocomplete="off" placeholder="https://cdn.jinzhong2903.me/file/class103-gallery">
-              </label>
             </div>
             <div class="b2-report" id="b2-report"></div>
             <div class="panel-foot">
               <span class="tip" id="b2-state">还没测过。</span>
               <div>
                 <span class="msg" id="b2-msg"></span>
-                <button class="btn ghost" type="button" id="b2-prep" hidden>一键准备桶</button>
                 <button class="btn ghost" type="button" id="b2-test">测试连接</button>
                 <button class="btn" type="button" id="b2-save">保存</button>
               </div>
@@ -1764,14 +1760,14 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 17740,
+        total: 17688,
         files: 54,
         updated: "2026-10-06",
         parts: [
-          { name: "页面 HTML", lines: 6952 },
+          { name: "页面 HTML", lines: 6941 },
           { name: "样式 CSS", lines: 3838 },
-          { name: "前端 JS", lines: 2269 },
-          { name: "后端 Functions", lines: 4676 },
+          { name: "前端 JS", lines: 2270 },
+          { name: "后端 Functions", lines: 4634 },
           { name: "配置 JSON", lines: 5 },
         ],
       };
@@ -1880,7 +1876,7 @@
                 <div class="g-row" data-id="${it.id}">
                   <img src="${gimg(it.thumb)}" alt="">
                   <span class="g-t">${esc(it.title || "(未命名)")}</span>
-                  <a class="g-xt" href="${it.full_url || gimg(it.full)}" download="${esc(it.title || "图")}.jpg" style="border-color:var(--gold-line);color:var(--gold);text-decoration:none;">下载</a>
+                  <a class="g-xt" href="${gimg(it.full)}" download="${esc(it.title || "图")}.jpg" style="border-color:var(--gold-line);color:var(--gold);text-decoration:none;">下载</a>
                   <button type="button" class="g-xt" data-del="${it.id}" title="删除">删除</button>
                 </div>`
                 )
@@ -1960,7 +1956,6 @@
           appKey: v("#b2-app-key"),
           endpoint: v("#b2-endpoint"),
           bucket: v("#b2-bucket"),
-          cdn: v("#b2-cdn"),
         };
       }
 
@@ -1974,8 +1969,6 @@
               (r.ok ? "✓" : "✗") + " " + esc(r.name) + "</b>" + esc(r.text) + "</p>"
           )
           .join("");
-        const prep = $("#b2-prep");
-        if (prep) prep.hidden = !allOk;
         say("b2-state", allOk ? "全部通过，可以保存了。" : "还有没通过的项，按提示处理一下。", allOk ? "ok" : "");
       }
 
@@ -1990,7 +1983,6 @@
           $("#b2-key-id").value = c.keyId || "";
           $("#b2-endpoint").value = c.endpoint || "";
           $("#b2-bucket").value = c.bucket || "";
-          $("#b2-cdn").value = c.cdn || "";
           $("#b2-key-hint").textContent = c.hasKey
             ? "（已存 " + (c.appKeyHint || "····") + "，要换密钥才重填）"
             : "（还没填）";
@@ -2003,7 +1995,7 @@
       async function b2Post(action, btn) {
         const old = btn ? btn.textContent : "";
         if (btn) { btn.disabled = true; btn.textContent = "连接中…"; }
-        say("b2-msg", action === "prepare" ? "正在准备桶…" : "正在连接 Backblaze…", "saving");
+        say("b2-msg", "正在连接 Backblaze…", "saving");
         try {
           const res = await fetch(API + "/b2", {
             method: "POST",
@@ -2018,8 +2010,7 @@
           const names = (d.buckets || []).map((b) => b.name);
           if (!$("#b2-bucket").value.trim() && names.length) $("#b2-bucket").value = names[0];
           b2Report(d.report, d.allOk);
-          say("b2-msg", action === "prepare" ? "桶准备好了，别忘了点保存。" : "测试完成。", "ok");
-          if (action === "prepare") await loadB2(true);
+          say("b2-msg", "测试完成。", "ok");
         } catch (e) {
           b2Report([{ name: "连接", ok: false, text: e.message }], false);
           say("b2-msg", e.message, "err");
@@ -2030,7 +2021,6 @@
 
       if ($("#b2-test")) {
         $("#b2-test").addEventListener("click", () => b2Post("test", $("#b2-test")));
-        $("#b2-prep").addEventListener("click", () => b2Post("prepare", $("#b2-prep")));
         $("#b2-save").addEventListener("click", async () => {
           const btn = $("#b2-save");
           btn.disabled = true;

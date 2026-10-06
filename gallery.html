@@ -89,11 +89,10 @@
         String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
           ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
         );
-      // 缩略图一直在 KV;原图可能已经搬去 B2(接口会给一条 full_url 直连 CDN),
-      // 这时就不经过本站服务器了,又快又省
+      // 缩略图一直在 KV;原图可能已经搬去 B2 —— 但不管存哪,
+      // 前端统一用同一条地址,由 Function 判断是去 KV 取还是签名去 B2 取
       const thumb = (k) => "api/gallery/img/" + encodeURIComponent(k);
       const full = (k) => "api/gallery/img/" + encodeURIComponent(k);
-      const fullOf = (item) => (item && item.full_url) || full(item.full);
 
       const grid = document.getElementById("gallery-grid");
       const upBox = document.getElementById("g-upload");
@@ -145,7 +144,7 @@
 
       function openLightbox(item) {
         lbItem = item;
-        lbImg.src = fullOf(item);
+        lbImg.src = full(item.full);
         lbImg.alt = item.title;
         lbCaption.textContent = item.title + (item.by ? "　上传：" + item.by : "");
         // 灯箱的下载档位跟着这张图的上传画质走:只给「上传档位及其以下」
@@ -274,7 +273,7 @@
         const oldText = btn ? btn.textContent : "";
         if (btn) { btn.disabled = true; btn.textContent = direct ? "下载中…" : "压缩中…"; }
         try {
-          let href = fullOf(item);
+          let href = full(item.full);
           let revoke = null;
           if (!direct && lv) {
             const res = await fetch(href, { credentials: "same-origin" });

@@ -19,7 +19,7 @@ import {
   isStaff,
   randomHex,
 } from "../_utils.js";
-import { b2Config, s3Put, b2ObjectName, b2PublicUrl } from "../_b2.js";
+import { b2Config, s3Put, b2ObjectName } from "../_b2.js";
 
 const TYPES = {
   "image/jpeg": "jpg",
@@ -122,7 +122,7 @@ export async function onRequestPost({ request, env }) {
     const fullBuf = await fullFile.arrayBuffer();
     const thumbBuf = await thumbFile.arrayBuffer();
 
-    // 原图:配了 B2 就进 B2 的公开桶,前端之后直连 CDN,不再经过 Function
+    // 原图:配了 B2 就进 B2 的私有桶,读的时候由 /api/gallery/img 签名代理
     if (b2.ready) {
       await s3Put(b2, b2ObjectName(fullKey), fullBuf, fullType);
     } else {
@@ -162,17 +162,13 @@ export async function onRequestGet({ request, env }) {
   )
     .all();
 
-  // 原图在 B2 的话,直接把 CDN 地址给前端 —— 图片不再经过 Function,
-  // 少一跳、还能吃到 CF 边缘缓存。没配 CDN 就留空,前端退回 /api 转发。
-  const b2 = await b2Config(env, env.DB);
-
+  // 原图在 B2 的会带 "b2-" 前缀,读图时 Function 会自动去 B2 签名取流,
+  // 前端只管用 /api/gallery/img/<full>,不用关心图到底存在哪个后端
   const items = (results || []).map((r) => ({
     id: r.id,
     title: r.title,
     full: r.full_key,
     thumb: r.thumb_key,
-    // 直连地址(可能是空字符串,前端要判一下)
-    full_url: r.full_key && String(r.full_key).startsWith("b2-") ? b2PublicUrl(b2.cdn, r.full_key) : "",
     full_size: Number(r.full_size) || 0,
     // 上传时选的档位:下载只给这一档及其以下
     level: LEVEL_KEYS.indexOf(String(r.upload_level || "")) >= 0 ? r.upload_level : "orig",

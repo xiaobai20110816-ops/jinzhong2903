@@ -1,32 +1,71 @@
 /* ============================================================
    103 纪事 · 图库读图
    GET /api/gallery/img/:key
-   - key 带 "b2-" 前缀 → 原图在 B2,直接 302 跳到 CDN,字节不回流 Function
+   - key 带 "b2-" 前缀 → 原图在 B2,本 Function 签名取流再转发
    - 其余 → 从 KV 取原图或缩略图
-   每张都是不变量,可以长缓存
+   每张都是不变量,可以长缓存;顺手写进 caches.default,第二次打开走边缘节点
    ============================================================ */
 
 import { GALLERY_KEY_RE } from "../../_utils.js";
-import { b2Config, isB2Key, b2PublicUrl } from "../../_b2.js";
+import { b2Config, isB2Key, b2ObjectName, s3Get } from "../../_b2.js";
+
+const CACHE_CTRL = "public, max-age=31536000, immutable";
+
+/* 原图在 B2:桶是私有的,只能用 SigV4 签名去取。
+   B2 是 Cloudflare Bandwidth Alliance 成员,B2 → CF 这段不花出流量钱,
+   所以「代理转发 + 边缘缓存」既不受 25MiB 单值上限,也不额外掏钱。
+   带 Range 的请求(视频拖进度条)原样透传,但不进缓存 —— 每段字节范围都不同。 */
+async function fromB2(request, env, key, waitUntil) {
+  const b2 = await b2Config(env, env.DB);
+  if (!b2.ready) return new Response("原图存在 B2，但 B2 配置不完整", { status: 503 });
+
+  const range = request.headers.get("range") || "";
+  const cache = !range && typeof caches !== "undefined" ? caches.default : null;
+  const cacheKey = new Request(new URL(request.url).toString(), { method: "GET" });
+  if (cache) {
+    const hit = await cache.match(cacheKey).catch(() => null);
+    if (hit) return hit;
+  }
+
+  const got = await s3Get(b2, b2ObjectName(key), range);
+  if (got.status === 404) return new Response("Not found", { status: 404 });
+  if (!got.ok && got.status !== 206) {
+    const msg = await got.text().catch(() => "");
+    return new Response("B2 读取失败：" + (String(msg).slice(0, 200) || got.status), { status: 502 });
+  }
+
+  const headers = new Headers();
+  // 透传这几个头:浏览器才知道类型、大小,播放器才能拖进度
+  for (const h of [
+    "content-type",
+    "content-length",
+    "etag",
+    "content-range",
+    "accept-ranges",
+    "last-modified",
+  ]) {
+    const v = got.headers.get(h);
+    if (v) headers.set(h, v);
+  }
+  if (!headers.has("content-type")) headers.set("content-type", "image/jpeg");
+  if (!headers.has("accept-ranges")) headers.set("accept-ranges", "bytes");
+  headers.set("cache-control", CACHE_CTRL);
+
+  const res = new Response(got.body, { status: got.status, headers });
+
+  if (cache) {
+    const put = cache.put(cacheKey, res.clone()).catch(() => {});
+    if (waitUntil) waitUntil(put);
+    else await put;
+  }
+  return res;
+}
 
 export async function onRequestGet({ request, env, params, waitUntil }) {
   const key = params.key;
   if (!GALLERY_KEY_RE.test(key)) return new Response("Not found", { status: 404 });
 
-  // 原图在 B2:让浏览器自己去 CDN 取,Function 这边只回一个 302。
-  // 302 本身也长缓存,第二次打开连这一跳都省了。
-  if (isB2Key(key)) {
-    const b2 = await b2Config(env, env.DB);
-    const target = b2PublicUrl(b2.cdn, key);
-    if (!target) return new Response("原图存在 B2，但还没配 CDN 地址", { status: 503 });
-    return new Response(null, {
-      status: 302,
-      headers: {
-        location: target,
-        "cache-control": "public, max-age=31536000, immutable",
-      },
-    });
-  }
+  if (isB2Key(key)) return fromB2(request, env, key, waitUntil);
 
   if (!env.STORY_KV) return new Response("图片存储还没接上", { status: 503 });
 
@@ -59,7 +98,7 @@ export async function onRequestGet({ request, env, params, waitUntil }) {
   const meta = got.metadata || {};
   const headers = {
     "content-type": meta.ct || "image/jpeg",
-    "cache-control": "public, max-age=31536000, immutable",
+    "cache-control": CACHE_CTRL,
   };
   // 有记录就带上长度,浏览器下载能显示进度;老图没记就交给分块传输
   if (meta.size) headers["content-length"] = String(meta.size);
