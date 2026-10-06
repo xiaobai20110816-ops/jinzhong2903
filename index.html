@@ -110,9 +110,9 @@
             <a class="gate-btn" href="account.html">去登录 / 注册 →</a>
           </div>
 
-          <div class="story-list" id="story-list"></div>
+          <div class="story-list card-grid" id="story-list"></div>
 
-          <!-- 首页只放最近几条,翻页按钮在紧凑模式下不显示 -->
+          <!-- 卡片流同样分页,条目多了往下翻 -->
           <div class="pager" id="pager" hidden>
             <button type="button" id="prev-btn">‹ 更新的</button>
             <span id="page-info"></span>
@@ -743,8 +743,9 @@
     <img id="lightbox-img" alt="">
   </div>
 
-  <!-- 首页留言板:只显示最近 3 条主帖、不显示翻页;回复可以无限层往下接 -->
-  <script>window.CLASS103_BOARD = { limit: 3, compact: true };</script>
+  <!-- 首页留言板:小红书式双列卡片流,卡片只给封面 / 标题 / 发帖人 / 点赞,
+       点进去才到 post.html 看正文、多图和评论 -->
+  <script>window.CLASS103_BOARD = { mode: "cards" };</script>
   <script src="assets/js/story.js"></script>
 </body>
 </html>

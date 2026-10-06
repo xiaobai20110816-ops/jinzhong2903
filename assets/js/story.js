@@ -7,9 +7,10 @@
    4) 每条都显示头像、身份徽章和 IP 属地;服主/管理员可置顶
    5) 删除:本人删自己的,服主/管理员删任意一条(不再需要删帖口令)
 
-   同一份脚本同时给 story.html 和首页板块用:
-   首页在引入本文件之前先设 window.CLASS103_BOARD = { limit: 3, compact: true },
-   紧凑模式下只显示前 N 条主帖、不显示翻页。
+   同一份脚本给三个地方用,靠 window.CLASS103_BOARD 里的 mode 区分:
+     - mode: "list"   (默认) 103 纪事页:整篇铺开的列表,带回复树
+     - mode: "cards"  首页:小红书式双列卡片流,只给封面 / 标题 / 发帖人 / 点赞
+     - mode: "single" 帖子详情页(post.html):一条主帖 + 全部评论
    ============================================================ */
 
 (function () {
@@ -19,14 +20,15 @@
   const MAX_IMAGES = 3;
   const COMPACT_REPLIES = 5;         // 首页紧凑模式:一条主帖最多先展开 5 条回复
 
-  const CFG = Object.assign({ limit: 0, compact: false }, window.CLASS103_BOARD || {});
+  const CFG = Object.assign({ limit: 0, compact: false, mode: "list" }, window.CLASS103_BOARD || {});
+  const MODE = CFG.mode === "cards" || CFG.mode === "single" ? CFG.mode : "list";
 
   const $ = (sel) => document.querySelector(sel);
   const on = (el, ev, fn) => {
     if (el) el.addEventListener(ev, fn);
   };
 
-  const state = { page: 1, totalPages: 1, images: [], busy: false, user: null, openReply: 0, visibility: "public" };
+  const state = { page: 1, totalPages: 1, images: [], busy: false, user: null, openReply: 0, visibility: "public", liking: 0 };
   const els = {};
   // 每个内联回复框自己的待传图片:form 元素 → [ {blob,url} ]
   const replyImages = new Map();
@@ -122,6 +124,13 @@
     return "";
   }
 
+  // 头像外面套一层,好在右下角挂「在线」小绿点。
+  // author.online 只有卡片流 / 详情接口才给,列表页拿不到就不显示点
+  function faceHTML(author, cls) {
+    const dot = author && author.online ? '<i class="on-dot" title="在线"></i>' : "";
+    return `<span class="face-wrap${cls ? " " + cls : ""}">${avatarHTML(author)}${dot}</span>`;
+  }
+
   function metaHTML(p) {
     const region = p.region ? ` · IP 属地：${esc(p.region)}` : "";
     return `${fmtTime(p.created_at)}${region}`;
@@ -131,7 +140,7 @@
     // 有账号的作者:头像和名字都能点进 TA 的个人主页;早期匿名老帖保持不可点
     const uid = p.author && p.author.id;
     const href = uid ? `u.html?id=${uid}` : "";
-    const face = avatarHTML(p.author);
+    const face = faceHTML(p.author);
     // 「仅本班」的帖子挂个小标签,让发的人自己看得出这条只有登录的人能看
     const vis = p.visibility === "class" ? '<em class="vis-badge">仅本班</em>' : "";
     // 名字统一走 C103Person:能看真名就显示真名 + 蓝钩,否则显示账号名
@@ -164,7 +173,14 @@
     }
     const edit = canManage ? `<button class="story-edit" type="button" data-edit="${p.id}">编辑</button>` : "";
     const del = canManage ? `<button class="story-del" type="button" data-del="${p.id}">删除</button>` : "";
+    // 点赞只给主帖,而且只在接口带了 likes 的时候才长出来
+    // (列表页不查点赞,就别凭空多一个永远是 0 的按钮)
+    const like =
+      !p.parent_id && p.likes !== undefined
+        ? `<button class="like-pill${p.liked ? " on" : ""}" type="button" data-like="${p.id}" data-on="${p.liked ? 1 : 0}" aria-label="点赞"><i>${p.liked ? "♥" : "♡"}</i><span>${p.likes}</span></button>`
+        : "";
     return `<div class="story-actions">
+      ${like}
       <button class="story-reply" type="button" data-reply="${p.id}" data-name="${esc(C103Person.name(p.author, p.name))}">回复</button>
       ${edit}${pin}${del}
     </div>`;
@@ -206,6 +222,42 @@
       ${bodyHTML(p)}
       ${actionsHTML({ ...p, parent_id: 1 })}
       <div class="reply-slot" data-slot="${p.id}"></div>
+    </article>`;
+  }
+
+  /* ---------- 小红书式卡片(首页) ---------- */
+
+  // 卡片上放不下整篇正文,取正文压成一行当「标题」;纯图片帖给个占位说法
+  function titleOf(p) {
+    const t = String(p.body || "").replace(/\s+/g, " ").trim();
+    return t || "图片";
+  }
+
+  function cardHTML(p) {
+    const imgs = p.images || [];
+    const cover = imgs.length
+      ? `<div class="card-cover">
+          <img src="${API}/img/${esc(imgs[0])}" alt="" loading="lazy">
+          ${imgs.length > 1 ? `<span class="card-count">${imgs.length} 图</span>` : ""}
+        </div>`
+      : `<div class="card-cover card-noimg"><span>${esc(titleOf(p))}</span></div>`;
+
+    const name = `<span class="story-name card-author-name">${C103Person.html(
+      p.author,
+      p.name
+    )}${badgeHTML(p.author)}</span>`;
+
+    return `<article class="story-card xhs-card${p.pinned ? " is-pinned" : ""}" data-id="${p.id}">
+      <a class="card-link" href="post.html?id=${p.id}" data-veil aria-label="打开这一条"></a>
+      ${p.pinned ? '<span class="story-pin">置顶</span>' : ""}
+      ${cover}
+      <div class="card-info">
+        <p class="card-title">${esc(titleOf(p))}</p>
+        <div class="card-foot">
+          <span class="card-author">${faceHTML(p.author)}${name}</span>
+          <button class="like-pill${p.liked ? " on" : ""}" type="button" data-like="${p.id}" data-on="${p.liked ? 1 : 0}" aria-label="点赞"><i>${p.liked ? "♥" : "♡"}</i><span>${p.likes || 0}</span></button>
+        </div>
+      </div>
     </article>`;
   }
 
@@ -391,10 +443,11 @@
 
   async function goto(page) {
     if (page < 1) return;
+    if (MODE === "single") return loadPost();
     notice("读取中", "<br>正在翻开 103 的纪事…");
     if (els.pager) els.pager.hidden = true;
     try {
-      const data = await api(API + "/posts?page=" + page);
+      const data = await api(API + "/posts" + (MODE === "cards" ? "?feed=cards&page=" : "?page=") + page);
       state.page = data.page;
       state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
       let posts = data.posts || [];
@@ -403,7 +456,8 @@
       if (!data.total) {
         notice("还没有人写下第一句", "<br>第一行字，等你来落笔。");
       } else if (els.list) {
-        els.list.innerHTML = posts.map(rootHTML).join("");
+        els.list.innerHTML =
+          MODE === "cards" ? posts.map(cardHTML).join("") : posts.map(rootHTML).join("");
       }
       renderPager(data.total);
     } catch (err) {
@@ -416,11 +470,97 @@
     }
   }
 
+  /* ---------- 帖子详情页(post.html) ----------
+     卡片点进来看到的那一页:正文、全部图片、全部评论。
+     ?id= 是要看的主帖;?r= 是「从通知点进来的那一条回复」,渲染完滚过去描个金边 */
+  async function loadPost() {
+    const q = new URLSearchParams(location.search);
+    const id = parseInt(q.get("id") || "0", 10) || 0;
+    const rid = parseInt(q.get("r") || "0", 10) || 0;
+
+    if (!id) {
+      notice("没有指定要看哪一条", '<br><a class="post-back" href="index.html">← 回首页</a>');
+      return;
+    }
+
+    notice("读取中", "<br>正在打开这一条…");
+    try {
+      const data = await api(API + "/posts/" + id);
+      const post = data.post;
+      if (els.list) {
+        els.list.innerHTML = `<div class="post-detail">
+          <a class="post-back" href="index.html">← 回首页</a>
+          ${rootHTML(post)}
+        </div>`;
+      }
+      if (els.pager) els.pager.hidden = true;
+
+      if (rid) {
+        const target = document.getElementById("r" + rid);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.classList.add("is-focused");
+          setTimeout(() => target.classList.remove("is-focused"), 3000);
+        }
+      }
+    } catch (err) {
+      notice(
+        "这一条打不开了",
+        esc(err.message) + '<br><a class="post-back" href="index.html">← 回首页</a>'
+      );
+    }
+  }
+
+  /* ---------- 点赞(先本地翻面,服务器回来再对账) ---------- */
+
+  function paintLike(btn, on_, n) {
+    btn.classList.toggle("on", !!on_);
+    btn.setAttribute("data-on", on_ ? "1" : "0");
+    const icon = btn.querySelector("i");
+    const num = btn.querySelector("span");
+    if (icon) icon.textContent = on_ ? "♥" : "♡";
+    if (num) num.textContent = String(n);
+  }
+
+  async function onLike(btn) {
+    if (!state.user) {
+      toast("登录后才能点赞");
+      return;
+    }
+    const id = parseInt(btn.getAttribute("data-like"), 10) || 0;
+    if (!id || state.liking === id) return;
+
+    const wasOn = btn.getAttribute("data-on") === "1";
+    const nextOn = !wasOn;
+    const num = btn.querySelector("span");
+    const prev = parseInt((num && num.textContent) || "0", 10) || 0;
+
+    state.liking = id;
+    // 先自己翻面,手感立刻跟上;失败再翻回去
+    paintLike(btn, nextOn, Math.max(0, prev + (nextOn ? 1 : -1)));
+    btn.classList.add("bump");
+
+    try {
+      const d = await api(API + "/posts/" + id + "/like", { method: "POST" });
+      paintLike(btn, !!d.liked, d.likes);
+    } catch (err) {
+      paintLike(btn, wasOn, prev);
+      toast(err.message);
+      if (/登录/.test(err.message)) {
+        state.user = null;
+        renderComposer();
+      }
+    } finally {
+      state.liking = 0;
+      setTimeout(() => btn.classList.remove("bump"), 420);
+    }
+  }
+
   /* ---------- 通知深链:?p=根帖 & r=回复 ----------
      点铃铛里的「回复了你」进来时会带上这两个参数。
      先问后端这条在第几页,翻过去之后再滚到它身上、描金闪一下。 */
   async function focusDeepLink() {
-    if (CFG.compact) return false;              // 首页那块紧凑版不参与
+    if (CFG.compact || MODE !== "list") return false;   // 卡片流 / 详情页不参与
     const q = new URLSearchParams(location.search);
     const p = parseInt(q.get("p") || "0", 10) || 0;
     const r = parseInt(q.get("r") || "0", 10) || 0;
@@ -549,6 +689,11 @@
     try {
       await api(API + "/posts/" + id, { method: "DELETE" });
       state.openReply = 0;
+      // 详情页的那条被删了就没什么可看的了,直接回首页
+      if (MODE === "single") {
+        location.href = "index.html";
+        return;
+      }
       await goto(state.page);
     } catch (err) {
       toast(err.message);
@@ -634,6 +779,14 @@
     on(els.next, "click", () => goto(state.page + 1));
 
     on(els.list, "click", (e) => {
+      // 点赞最优先:卡片里的按钮压在整卡链接之上,但保险起见还是先拦一下
+      const like = e.target.closest("[data-like]");
+      if (like) {
+        e.preventDefault();
+        e.stopPropagation();
+        onLike(like);
+        return;
+      }
       const rep = e.target.closest("[data-reply]");
       if (rep) {
         if (!state.user) {

@@ -22,7 +22,10 @@ import {
   regionOf,
   POST_COLS,
   notify,
-  namedUser,
+  loadAuthors,
+  likeCounts,
+  likedBy,
+  onlineUserIds,
 } from "./_utils.js";
 
 const PAGE_SIZE = 20;
@@ -30,24 +33,6 @@ const MAX_BODY = 4000;
 const MAX_IMAGES = 3;
 const COOLDOWN_MS = 15000; // 同一个账号 15 秒内只能发一条新帖
 const REPLY_COOLDOWN_MS = 3000; // 回复 / 留言墙放宽到 3 秒,不然聊不起来
-
-/* 作者资料一次查齐,别逐条查库。
-   真名按「看的人(viewer)」的权限决定带不带 —— 见 namedUser */
-async function loadAuthors(db, rows, viewer) {
-  const uids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
-  const authors = new Map();
-  if (!uids.length) return authors;
-
-  const holes = uids.map(() => "?").join(",");
-  const { results } = await db
-    .prepare(
-      `SELECT id, username, role, avatar_key, real_name, verified, display_name, cert_title, cert_level FROM users WHERE id IN (${holes})`
-    )
-    .bind(...uids)
-    .all();
-  for (const u of results || []) authors.set(u.id, namedUser(u, viewer));
-  return authors;
-}
 
 export async function onRequestGet({ request, env }) {
   if (!env.DB) return notReady("数据库");
@@ -58,6 +43,8 @@ export async function onRequestGet({ request, env }) {
   const offset = (page - 1) * PAGE_SIZE;
   const authorId = parseInt(url.searchParams.get("author") || "0", 10) || 0;
   const wallId = parseInt(url.searchParams.get("wall") || "0", 10) || 0;
+  // feed=cards:小红书式卡片流,只要主帖本身(封面 / 标题 / 作者 / 点赞),不带回复树
+  const cards = url.searchParams.get("feed") === "cards";
 
   // 先认人:真名能不能看见、class 帖能不能看见,都取决于看的人是谁
   const me = await currentUser(request, env);
@@ -172,6 +159,34 @@ export async function onRequestGet({ request, env }) {
     .all();
 
   const list = roots || [];
+
+  // ---- 卡片流:一条 SQL 批量补齐点赞数 / 我赞没赞 / 作者在不在线,不再捞回复树 ----
+  if (cards) {
+    const ids = list.map((r) => r.id);
+    const counts = await likeCounts(env.DB, ids);
+    const mine = await likedBy(env.DB, me && me.id, ids);
+    const online = await onlineUserIds(env.DB, list.map((r) => r.user_id));
+    const authors = await loadAuthors(env.DB, list, me);
+    const out = list.map((r) => {
+      const a = authors.get(r.user_id) || null;
+      return {
+        ...toPost(r),
+        author: a ? { ...a, online: online.has(r.user_id) ? 1 : 0 } : null,
+        likes: counts.get(r.id) || 0,
+        liked: mine.has(r.id) ? 1 : 0,
+        replies: [],
+      };
+    });
+    return json({
+      ok: true,
+      total: totalRow ? totalRow.n : 0,
+      page,
+      size: PAGE_SIZE,
+      feed: "cards",
+      posts: out,
+    });
+  }
+
   const rows = [...list, ...(await loadThread(env.DB, list.map((r) => r.id)))];
   const rowById = new Map(rows.map((r) => [r.id, r]));
   const authors = await loadAuthors(env.DB, rows, me);

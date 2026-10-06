@@ -1,5 +1,6 @@
 /* ============================================================
    103 纪事 · 单条帖子
+   GET    /api/posts/:id                     帖子详情:正文 + 全部回复 + 点赞数
    PUT    /api/posts/:id   { pinned }        服主/管理员置顶或取消置顶(只对主帖有效)
                            { body, images }  改正文 / 换图:本人或服主、管理员
    DELETE /api/posts/:id                     本人可删自己的;服主/管理员可删任意一条
@@ -15,6 +16,13 @@ import {
   isStaff,
   safeParse,
   IMAGE_KEY_RE,
+  toPost,
+  loadThread,
+  loadAuthors,
+  likeCounts,
+  likedBy,
+  onlineUserIds,
+  POST_COLS,
 } from "../_utils.js";
 
 const MAX_BODY = 4000;
@@ -36,6 +44,74 @@ async function collectSubtree(db, rootId) {
     frontier = next;
   }
   return ids;
+}
+
+/* 帖子详情:点卡片进来看到的那一页 —— 正文、全部图片、所有评论。
+   传进来的可以是主帖 id,也可以是某条回复 id(自动上溯到根帖) */
+export async function onRequestGet({ request, env, params }) {
+  if (!env.DB) return notReady("数据库");
+  await ensureSchema(env.DB);
+
+  const id = parseInt(params.id, 10);
+  if (!id) return fail("帖子编号不对");
+
+  const me = await currentUser(request, env);
+
+  let root = await env.DB.prepare(`SELECT ${POST_COLS} FROM posts WHERE id = ?`)
+    .bind(id)
+    .first();
+  if (!root) return fail("这条已经不在了", 404);
+
+  // 老数据可能多层嵌套,这里一律上溯到根
+  let guard = 0;
+  while (root.parent_id && guard++ < 50) {
+    const up = await env.DB.prepare(`SELECT ${POST_COLS} FROM posts WHERE id = ?`)
+      .bind(root.parent_id)
+      .first();
+    if (!up) break;
+    root = up;
+  }
+
+  // 「仅本班可见」的主帖,游客直接看不到(和列表口径一致)
+  if (root.visibility === "class" && !me) return fail("这条内容仅本班同学可见", 403);
+
+  const kids = await loadThread(env.DB, [root.id]);
+  const rows = [root, ...kids];
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const authors = await loadAuthors(env.DB, rows, me);
+
+  const counts = await likeCounts(env.DB, [root.id]);
+  const mine = await likedBy(env.DB, me && me.id, [root.id]);
+  const online = await onlineUserIds(env.DB, [root.user_id]);
+
+  const rootAuthor = authors.get(root.user_id) || null;
+  const post = {
+    ...toPost(root),
+    author: rootAuthor ? { ...rootAuthor, online: online.has(root.user_id) ? 1 : 0 } : null,
+    likes: counts.get(root.id) || 0,
+    liked: mine.has(root.id) ? 1 : 0,
+    replies: [],
+  };
+
+  // 回复平铺一层,「回复 @某某」的名字同样按看的人决定给不给真名
+  for (const row of kids) {
+    const targetId = row.reply_to_id || row.parent_id;
+    const target = rowById.get(targetId);
+    const targetAuthor = target ? authors.get(target.user_id) : null;
+    post.replies.push({
+      ...toPost(row),
+      author: authors.get(row.user_id) || null,
+      reply_to_name: targetAuthor
+        ? targetAuthor.display_name || targetAuthor.real_name || targetAuthor.name
+        : target
+        ? target.name
+        : "",
+      reply_to_verified: targetAuthor && targetAuthor.verified && targetAuthor.real_name ? 1 : 0,
+    });
+  }
+  post.replies.sort((a, b) => a.created_at - b.created_at || a.id - b.id);
+
+  return json({ ok: true, root_id: root.id, post });
 }
 
 export async function onRequestPut({ request, env, params }) {
@@ -146,6 +222,12 @@ export async function onRequestDelete({ request, env, params }) {
   await env.DB.prepare(`DELETE FROM posts WHERE id IN (${holes})`)
     .bind(...ids)
     .run();
+
+  // 帖子没了,挂在它上面的赞也别留着(免得计数越攒越乱)
+  await env.DB.prepare(`DELETE FROM post_likes WHERE post_id IN (${holes})`)
+    .bind(...ids)
+    .run()
+    .catch(() => {});
 
   // 顺手把这批帖子带的图片从 KV 里清掉,别白占免费额度
   if (env.STORY_KV) {

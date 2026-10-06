@@ -48,9 +48,9 @@ export async function onRequestPost({ request, env }) {
   const now = Date.now();
   const token = randomHex(32);
   await env.DB.prepare(
-    "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)"
+    "INSERT INTO sessions (token, user_id, created_at, expires_at, last_seen) VALUES (?, ?, ?, ?, ?)"
   )
-    .bind(token, row.id, now, now + SESSION_TTL_MS)
+    .bind(token, row.id, now, now + SESSION_TTL_MS, now)
     .run();
 
   // 顺手清掉这个人已经过期的会话,别让 sessions 表一直涨

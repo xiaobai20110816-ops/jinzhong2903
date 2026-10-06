@@ -836,17 +836,17 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-06-3";
+const SPLASH_VERSION = "2026-10-06-4";
 const SPLASH_DATE = "2026.10.06";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "后台多了「B2 配置」：接上 Backblaze B2 之后，图库的原图再也不受 25MB 的单张上限，视频也放得下了。";
+const SPLASH_LEAD = "留言板换成了小红书式的卡片流：首页一眼看封面和标题，点进去才看正文、多图和评论。";
 const SPLASH_NOTES = [
-  "管理后台新增「B2 配置」页签（只有服主看得见）：填上 B2 密钥，点「测试连接」会一路体检到 S3 读写",
-  "原图存进 B2 的私有桶，由本站签名读取并缓存到 Cloudflare 边缘节点 —— 不再受 KV 25MB 的单张上限",
-  "同一个桶里的图，第二个同学打开时直接命中边缘缓存，不用再走一趟 B2",
-  "修好了「列不出桶」的误报：限定到某个桶的密钥要带上桶名才答话，现在即使列不出桶也照常做 S3 实测",
-  "B2 有 10GB 免费空间，不用绑卡；接上之后就能开始做视频了",
-  "没配 B2 也完全照旧，原图继续存 KV，一行功能都不会少",
+  "首页改成双列卡片流：封面、标题、发帖人、点赞数，点开卡片进详情页看正文、多图和全部评论",
+  "新增帖子详情页 post.html：?id= 是主帖，带上 &r= 会直接滚到那条回复并描金",
+  "新增帖子点赞：卡片右下角和详情页都能点，一人一帖只算一次赞，点过的人名字后面有小红心",
+  "新增「在线」小绿点：5 分钟内来过的同学，头像右下角会亮一颗绿点",
+  "103 纪事页（story.html）保持原来的整篇列表不变，两条入口都还能用",
+  "点铃铛里的「回复了你」现在直接打开详情页并定位到那条回复",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -1076,14 +1076,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return x.getMonth() + 1 + " 月 " + x.getDate() + " 日";
   }
 
-  // 点通知跳哪儿:回复直接深链到那条回复,留言深链到那条留言,点赞回我的主页
+  // 点通知跳哪儿:回复直接深链到那条回复(现在详情页就有全部评论),
+  // 留言深链到那条留言,点赞回我的主页
   function notifLink(n) {
     if (n.type === "wall") {
       return "u.html?id=" + (n.wall_id || 0) + (n.post_id ? "&p=" + n.post_id : "");
     }
     if (n.type === "like") return "u.html?id=" + ((C103Auth.user && C103Auth.user.id) || "");
-    const p = n.post_id ? "?p=" + n.post_id + (n.reply_id ? "&r=" + n.reply_id : "") : "";
-    return "story.html" + p;
+    if (!n.post_id) return "story.html";
+    return "post.html?id=" + n.post_id + (n.reply_id ? "&r=" + n.reply_id : "");
   }
 
   function renderNotif(items) {

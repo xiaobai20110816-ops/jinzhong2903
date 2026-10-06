@@ -78,9 +78,9 @@ export async function onRequestPost({ request, env }) {
   const id = res.meta.last_row_id;
   const token = randomHex(32);
   await env.DB.prepare(
-    "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)"
+    "INSERT INTO sessions (token, user_id, created_at, expires_at, last_seen) VALUES (?, ?, ?, ?, ?)"
   )
-    .bind(token, id, now, now + SESSION_TTL_MS)
+    .bind(token, id, now, now + SESSION_TTL_MS, now)
     .run();
 
   return jsonWith(

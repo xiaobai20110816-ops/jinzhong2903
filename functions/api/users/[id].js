@@ -307,6 +307,7 @@ export async function onRequestDelete({ request, env, params }) {
   await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(id).run();
   await env.DB.prepare("UPDATE posts SET user_id = NULL WHERE user_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM profile_likes WHERE from_id = ? OR to_id = ?").bind(id, id).run();
+  await env.DB.prepare("DELETE FROM post_likes WHERE user_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
 
   return json({ ok: true, id, name: row.username });

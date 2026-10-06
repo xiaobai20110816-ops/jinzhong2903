@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 一条纪事的详情">
+  <title>帖子详情 · 103班 音乐领军班</title>
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#070b14">
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
+    } catch (e) {}
+  </script>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/story.css">
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Post</div>
+    <h1><span class="gold-text">这一条</span></h1>
+    <p>正文、多图、评论，都在这里</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="story-wrap">
+        <!-- 正文 + 全部评论由 assets/js/story.js 按 ?id= 渲染 -->
+        <div class="story-list" id="story-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 点图看大图 -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <img id="lightbox-img" alt="">
+  </div>
+
+  <script>
+    // 同一条帖子点进来看到的那一页:正文、全部图片、全部评论
+    window.CLASS103_BOARD = { mode: "single" };
+  </script>
+  <script src="assets/js/nav.js"></script>
+  <script src="assets/js/story.js"></script>
+</body>
+</html>

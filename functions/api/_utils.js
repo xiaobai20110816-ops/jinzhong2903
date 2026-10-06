@@ -84,7 +84,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-05.9";
+const SCHEMA_VERSION = "2026-10-06.1";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -236,6 +236,20 @@ export function ensureSchema(db) {
         .run();
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_likes_to ON profile_likes(to_id)`).run();
 
+      // ---- 帖子点赞:一人对一帖只能点一次,靠联合主键去重 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS post_likes (
+             post_id INTEGER NOT NULL,
+             user_id INTEGER NOT NULL,
+             created_at INTEGER NOT NULL,
+             PRIMARY KEY (post_id, user_id)
+           )`
+        )
+        .run();
+      // 查「这一帖有多少赞」按 post_id 走这个索引
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_postlikes_post ON post_likes(post_id)`).run();
+
       // ---- 登录会话:token 存库,浏览器只拿 httpOnly Cookie ----
       await db
         .prepare(
@@ -250,6 +264,9 @@ export function ensureSchema(db) {
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`).run();
       // 登录时顺手清过期会话,按 expires_at 找,别扫全表
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expires_at)`).run();
+      // 在线状态:每次认证时节流写一次「刚还活着」,5 分钟内算在线
+      await addColumn(db, "sessions", "last_seen", "INTEGER");
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen)`).run();
 
       // ---- 用量统计:每天每个页面被看多少次,每天来过多少个人 ----
       await db
@@ -469,6 +486,25 @@ export function namedUser(row, viewer) {
   return out;
 }
 
+/* 一批帖子的作者资料一次查齐,别逐条查库。
+   真名按「看的人(viewer)」的权限决定带不带 —— 见 namedUser。
+   返回 Map(userId → 作者对象) */
+export async function loadAuthors(db, rows, viewer) {
+  const uids = [...new Set((rows || []).map((r) => r.user_id).filter(Boolean))];
+  const authors = new Map();
+  if (!uids.length) return authors;
+
+  const holes = uids.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(
+      `SELECT id, username, role, avatar_key, real_name, verified, display_name, cert_title, cert_level FROM users WHERE id IN (${holes})`
+    )
+    .bind(...uids)
+    .all();
+  for (const u of results || []) authors.set(u.id, namedUser(u, viewer));
+  return authors;
+}
+
 /* 从 Cookie 里认出当前登录的人;没登录或已过期就返回 null。
    顺便把过期的会话删掉,免得 sessions 表越攒越大 */
 export async function currentUser(request, env) {
@@ -479,7 +515,7 @@ export async function currentUser(request, env) {
   const row = await env.DB.prepare(
     `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, u.banned,
             u.real_name, u.verified, u.display_name, u.wallpaper_key,
-            u.cert_title, u.cert_level, u.photos, s.expires_at
+            u.cert_title, u.cert_level, u.photos, s.expires_at, s.last_seen
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ?`
   )
@@ -497,7 +533,75 @@ export async function currentUser(request, env) {
     await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run().catch(() => {});
     return null;
   }
+  // 在线状态:每个会话每分钟最多写一次,不用每次请求都写库
+  const now = Date.now();
+  if (!row.last_seen || now - Number(row.last_seen) > PRESENCE_WRITE_MS) {
+    await env.DB.prepare("UPDATE sessions SET last_seen = ? WHERE token = ?")
+      .bind(now, token)
+      .run()
+      .catch(() => {});
+  }
   return publicUser(row);
+}
+
+/* ============================================================
+   在线状态 / 点赞批量查询
+   列表页一次要几十个用户、几十条帖子,逐条查会打爆数据库,
+   所以这些 helper 都只发一条 SQL
+   ============================================================ */
+
+/* 5 分钟内有过请求 = 在线 */
+export const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+/* 每人每分钟最多写一次 last_seen,避免读接口变成写放大 */
+export const PRESENCE_WRITE_MS = 60 * 1000;
+
+/* 一批用户里,谁在线。返回 Set(userId) */
+export async function onlineUserIds(db, uids, windowMs = ONLINE_WINDOW_MS) {
+  const ids = (uids || []).map((n) => parseInt(n, 10)).filter((n) => n > 0);
+  const uniq = Array.from(new Set(ids));
+  if (!uniq.length) return new Set();
+  const holes = uniq.map(() => "?").join(",");
+  const now = Date.now();
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT user_id FROM sessions
+        WHERE user_id IN (${holes}) AND last_seen >= ? AND expires_at > ?`
+    )
+    .bind(...uniq, now - windowMs, now)
+    .all()
+    .catch(() => ({ results: [] }));
+  return new Set((results || []).map((r) => r.user_id));
+}
+
+/* 一批帖子的点赞数。返回 Map(post_id → n) */
+export async function likeCounts(db, postIds) {
+  const ids = (postIds || []).map((n) => parseInt(n, 10)).filter((n) => n > 0);
+  const uniq = Array.from(new Set(ids));
+  const out = new Map();
+  if (!uniq.length) return out;
+  const holes = uniq.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(`SELECT post_id, COUNT(*) AS n FROM post_likes WHERE post_id IN (${holes}) GROUP BY post_id`)
+    .bind(...uniq)
+    .all()
+    .catch(() => ({ results: [] }));
+  for (const r of results || []) out.set(r.post_id, Number(r.n) || 0);
+  return out;
+}
+
+/* 这批帖子里,我点过赞的。返回 Set(post_id) */
+export async function likedBy(db, userId, postIds) {
+  const uid = parseInt(userId, 10) || 0;
+  const ids = (postIds || []).map((n) => parseInt(n, 10)).filter((n) => n > 0);
+  const uniq = Array.from(new Set(ids));
+  if (!uid || !uniq.length) return new Set();
+  const holes = uniq.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(`SELECT post_id FROM post_likes WHERE user_id = ? AND post_id IN (${holes})`)
+    .bind(uid, ...uniq)
+    .all()
+    .catch(() => ({ results: [] }));
+  return new Set((results || []).map((r) => r.post_id));
 }
 
 export function isStaff(user) {
