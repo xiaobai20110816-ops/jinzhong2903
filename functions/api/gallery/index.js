@@ -19,6 +19,7 @@ import {
   isStaff,
   randomHex,
 } from "../_utils.js";
+import { b2Config, s3Put, b2ObjectName, b2PublicUrl } from "../_b2.js";
 
 const TYPES = {
   "image/jpeg": "jpg",
@@ -57,6 +58,10 @@ export async function onRequestPost({ request, env }) {
     if (!canUpload(me))
       return fail("实名认证通过的同学、管理员、服主才能上传照片", 401);
 
+    // 配了 B2 就把原图丢 B2(KV 单值只有 25MiB,视频根本放不下);
+    // 没配就还是老样子存 KV,一行都不用改
+    const b2 = await b2Config(env, env.DB);
+
     let form;
     try {
       form = await request.formData();
@@ -86,8 +91,9 @@ export async function onRequestPost({ request, env }) {
     if (!fullExt) return fail("原图只收 JPG / PNG / WebP");
     if (!thumbExt) return fail("缩略图只收 JPG / PNG / WebP");
 
-    // 单张超 24MB 存不进 KV(单值上限 25MiB),直接说清楚
-    if (fullFile.size > MAX_FULL) return fail("单张超过 24MB 存不下了（KV 单值上限），拆分或以后接 B2", 413);
+    // 单张超 24MB 存不进 KV(单值上限 25MiB)。走 B2 就没这个限制
+    if (!b2.ready && fullFile.size > MAX_FULL)
+      return fail("单张超过 24MB 存不下了（KV 单值上限），去后台「B2 配置」接上 B2 就能传大图", 413);
     if (thumbFile.size > MAX_THUMB) return fail("缩略图太大", 413);
 
     // 普通实名成员算额度;管理员 / 服主跳过
@@ -106,7 +112,8 @@ export async function onRequestPost({ request, env }) {
     }
 
     const hex = randomHex(16);
-    const fullKey = hex + ".full." + fullExt;
+    // 存 B2 的原图带 "b2-" 前缀,读图/删除时一眼就知道该去哪个后端取
+    const fullKey = (b2.ready ? "b2-" : "") + hex + ".full." + fullExt;
     const thumbKey = hex + ".thumb." + thumbExt;
 
     // KV.put 只认字符串 / ArrayBuffer / ArrayBufferView / ReadableStream,
@@ -115,11 +122,16 @@ export async function onRequestPost({ request, env }) {
     const fullBuf = await fullFile.arrayBuffer();
     const thumbBuf = await thumbFile.arrayBuffer();
 
-    // 原图和缩略图分开存,读的时候按 key 后半段区分,不用整张下载就能判断。
-    // 顺手把字节数写进 metadata,读图时能带上 content-length(下载能显示进度)
-    await env.STORY_KV.put(KV_PREFIX + fullKey, fullBuf, {
-      metadata: { ct: fullType, size: fullFile.size },
-    });
+    // 原图:配了 B2 就进 B2 的公开桶,前端之后直连 CDN,不再经过 Function
+    if (b2.ready) {
+      await s3Put(b2, b2ObjectName(fullKey), fullBuf, fullType);
+    } else {
+      // 缩略图一律留在 KV,原图没接 B2 时也在这儿
+      await env.STORY_KV.put(KV_PREFIX + fullKey, fullBuf, {
+        metadata: { ct: fullType, size: fullFile.size },
+      });
+    }
+    // 缩略图始终存 KV:体积小,读取快,不占 B2 的 10GB 免费额度
     await env.STORY_KV.put(KV_PREFIX + thumbKey, thumbBuf, {
       metadata: { ct: thumbType, size: thumbFile.size },
     });
@@ -150,11 +162,17 @@ export async function onRequestGet({ request, env }) {
   )
     .all();
 
+  // 原图在 B2 的话,直接把 CDN 地址给前端 —— 图片不再经过 Function,
+  // 少一跳、还能吃到 CF 边缘缓存。没配 CDN 就留空,前端退回 /api 转发。
+  const b2 = await b2Config(env, env.DB);
+
   const items = (results || []).map((r) => ({
     id: r.id,
     title: r.title,
     full: r.full_key,
     thumb: r.thumb_key,
+    // 直连地址(可能是空字符串,前端要判一下)
+    full_url: r.full_key && String(r.full_key).startsWith("b2-") ? b2PublicUrl(b2.cdn, r.full_key) : "",
     full_size: Number(r.full_size) || 0,
     // 上传时选的档位:下载只给这一档及其以下
     level: LEVEL_KEYS.indexOf(String(r.upload_level || "")) >= 0 ? r.upload_level : "orig",

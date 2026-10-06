@@ -1,16 +1,34 @@
 /* ============================================================
    103 纪事 · 图库读图
-   GET /api/gallery/img/:key   从 KV 取原图或缩略图
+   GET /api/gallery/img/:key
+   - key 带 "b2-" 前缀 → 原图在 B2,直接 302 跳到 CDN,字节不回流 Function
+   - 其余 → 从 KV 取原图或缩略图
    每张都是不变量,可以长缓存
    ============================================================ */
 
 import { GALLERY_KEY_RE } from "../../_utils.js";
+import { b2Config, isB2Key, b2PublicUrl } from "../../_b2.js";
 
 export async function onRequestGet({ request, env, params, waitUntil }) {
-  if (!env.STORY_KV) return new Response("图片存储还没接上", { status: 503 });
-
   const key = params.key;
   if (!GALLERY_KEY_RE.test(key)) return new Response("Not found", { status: 404 });
+
+  // 原图在 B2:让浏览器自己去 CDN 取,Function 这边只回一个 302。
+  // 302 本身也长缓存,第二次打开连这一跳都省了。
+  if (isB2Key(key)) {
+    const b2 = await b2Config(env, env.DB);
+    const target = b2PublicUrl(b2.cdn, key);
+    if (!target) return new Response("原图存在 B2，但还没配 CDN 地址", { status: 503 });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: target,
+        "cache-control": "public, max-age=31536000, immutable",
+      },
+    });
+  }
+
+  if (!env.STORY_KV) return new Response("图片存储还没接上", { status: 503 });
 
   // 边缘缓存:Worker 自己生成的响应默认不会进 CF 的缓存,每次都得回源 KV。
   // 这里手动存一份到最近的节点,同一张图被第二个同学打开/下载时就直接命中,

@@ -12,9 +12,9 @@ import {
   currentUser,
   isStaff,
 } from "../_utils.js";
+import { b2Config, s3Delete, isB2Key, b2ObjectName } from "../_b2.js";
 
 export async function onRequestDelete({ request, env, params }) {
-  if (!env.STORY_KV) return notReady("图片存储");
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
 
@@ -36,8 +36,16 @@ export async function onRequestDelete({ request, env, params }) {
   if (!isMine && !isStaff(me)) return fail("只能删自己上传的照片", 403);
 
   await env.DB.prepare("DELETE FROM gallery WHERE id = ?").bind(id).run();
-  // KV 删不掉也不致命,元数据没了,残留的孤儿 key 不影响列表
-  await env.STORY_KV.delete("gal:" + row.full_key).catch(() => {});
+
+  // 原图可能在 B2,也可能在 KV(老数据 / 没配 B2 时),按前缀分流。
+  // 删不掉也不致命:元数据没了,残留的孤儿对象不影响列表
+  if (isB2Key(row.full_key)) {
+    const b2 = await b2Config(env, env.DB);
+    if (b2.ready) await s3Delete(b2, b2ObjectName(row.full_key)).catch(() => {});
+  } else if (env.STORY_KV) {
+    await env.STORY_KV.delete("gal:" + row.full_key).catch(() => {});
+  }
+  // 缩略图一直在 KV
   await env.STORY_KV.delete("gal:" + row.thumb_key).catch(() => {});
 
   return json({ ok: true });

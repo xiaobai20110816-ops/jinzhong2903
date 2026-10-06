@@ -444,6 +444,24 @@
     .msg.ok { color: var(--gold); }
     .msg.saving { color: var(--muted); }
 
+    /* B2 配置页的「体检报告」:一条一行,✓/✗ 一眼看清 */
+    .b2-report { display: grid; gap: 8px; margin-top: 16px; }
+    .b2-report:empty { display: none; }
+    .b2-report p {
+      margin: 0;
+      padding: 10px 13px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .b2-report p.ok { border-color: var(--gold-line); color: var(--text); }
+    .b2-report p.err { border-color: rgba(255, 122, 122, 0.4); }
+    .b2-report b { color: var(--text); margin-right: 6px; }
+    .b2-report code { font-size: 0.78rem; word-break: break-all; }
+
     .gate { padding: 32px 24px; text-align: center; }
     .gate h2 { font-family: var(--font-display); font-size: 1.2rem; color: var(--text); }
     .gate p { margin: 12px 0 20px; font-size: 0.86rem; line-height: 1.8; color: var(--muted); }
@@ -610,6 +628,7 @@
             <button class="adm-tab" type="button" data-panel="usage">用量看板</button>
             <button class="adm-tab" type="button" data-panel="accounts">账号统计</button>
             <button class="adm-tab" type="button" data-panel="gallery">图库</button>
+            <button class="adm-tab" type="button" data-panel="b2" data-owner-only hidden>B2 配置</button>
           </div>
 
           <!-- ========== 公告 ========== -->
@@ -739,7 +758,7 @@
           <div class="glass panel" id="panel-gallery" hidden>
             <div class="panel-head">
               <h2>班级图库</h2>
-              <p>上传的照片会存到 KV，原图基本原样保留（每张 5MB 左右），网站这边只拿一张小缩略图来铺网格，点开看大图、点下载拿原图。选多张一起传也行。</p>
+              <p>上传的照片会存到 KV，原图基本原样保留（每张 5MB 左右），网站这边只拿一张小缩略图来铺网格，点开看大图、点下载拿原图。选多张一起传也行。<b>服主可以在「B2 配置」里接上 Backblaze B2</b>：接上之后原图不再受 KV 的 25MB 单张上限，浏览器还能直连 CDN 取图，视频也放得下了。</p>
             </div>
             <div id="gallery-admin">
               <div class="g-upload">
@@ -752,6 +771,42 @@
                 <span id="g-msg" class="tip"></span>
               </div>
               <div id="g-list"><p class="msg">正在读取…</p></div>
+            </div>
+          </div>
+
+          <!-- ========== B2 配置（仅服主） ========== -->
+          <div class="glass panel" id="panel-b2" hidden>
+            <div class="panel-head">
+              <h2>B2 存储配置</h2>
+              <p><b>为什么要有它：</b>KV 单张上限只有 25MB，视频根本放不下；Backblaze B2 有 10GB 免费空间，还不要绑卡。接上之后，图库的原图会直接进 B2 的公开桶，浏览器通过 CDN 直连取图，<b>不再经过本站服务器</b>，又快又省。缩略图还是留在 KV（体积小、读得快）。</p>
+              <p><b>怎么做：</b>① B2 控制台建一个桶 → ② Application Keys 里建一把密钥 → ③ 把 keyID 和 applicationKey 填到下面，点「测试连接」，Endpoint 和桶名会自动填出来 → ④ 去 Cloudflare DNS 加一条 CNAME（名字 <code>cdn</code>，指向 B2 桶详情里给的地址，打开小黄云）→ ⑤ 填上 CDN 基础地址保存。密钥只存在你自己的数据库里，只有服主能看能改。</p>
+            </div>
+            <div class="field-grid">
+              <label><span class="lb">keyID</span>
+                <input id="b2-key-id" type="text" autocomplete="off" placeholder="如 f3f51e6e9034">
+              </label>
+              <label><span class="lb">applicationKey <em id="b2-key-hint" style="font-style:normal;color:var(--faint)"></em></span>
+                <input id="b2-app-key" type="text" autocomplete="off" placeholder="粘贴 applicationKey（留空 = 不修改已存的）">
+              </label>
+              <label><span class="lb">S3 Endpoint（点「测试连接」会自动填）</span>
+                <input id="b2-endpoint" type="text" autocomplete="off" placeholder="https://s3.us-west-004.backblazeb2.com">
+              </label>
+              <label><span class="lb">桶名 Bucket Name</span>
+                <input id="b2-bucket" type="text" autocomplete="off" placeholder="如 class103-gallery">
+              </label>
+              <label><span class="lb">CDN 基础地址（<b>要带桶路径</b>，末尾不要斜杠）</span>
+                <input id="b2-cdn" type="text" autocomplete="off" placeholder="https://cdn.jinzhong2903.me/file/class103-gallery">
+              </label>
+            </div>
+            <div class="b2-report" id="b2-report"></div>
+            <div class="panel-foot">
+              <span class="tip" id="b2-state">还没测过。</span>
+              <div>
+                <span class="msg" id="b2-msg"></span>
+                <button class="btn ghost" type="button" id="b2-prep" hidden>一键准备桶</button>
+                <button class="btn ghost" type="button" id="b2-test">测试连接</button>
+                <button class="btn" type="button" id="b2-save">保存</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1709,14 +1764,14 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 16928,
-        files: 52,
-        updated: "2026-10-05",
+        total: 17740,
+        files: 54,
+        updated: "2026-10-06",
         parts: [
-          { name: "页面 HTML", lines: 6783 },
+          { name: "页面 HTML", lines: 6952 },
           { name: "样式 CSS", lines: 3838 },
-          { name: "前端 JS", lines: 2268 },
-          { name: "后端 Functions", lines: 4034 },
+          { name: "前端 JS", lines: 2269 },
+          { name: "后端 Functions", lines: 4676 },
           { name: "配置 JSON", lines: 5 },
         ],
       };
@@ -1825,7 +1880,7 @@
                 <div class="g-row" data-id="${it.id}">
                   <img src="${gimg(it.thumb)}" alt="">
                   <span class="g-t">${esc(it.title || "(未命名)")}</span>
-                  <a class="g-xt" href="${gimg(it.full)}" download="${esc(it.title || "图")}.jpg" style="border-color:var(--gold-line);color:var(--gold);text-decoration:none;">下载</a>
+                  <a class="g-xt" href="${it.full_url || gimg(it.full)}" download="${esc(it.title || "图")}.jpg" style="border-color:var(--gold-line);color:var(--gold);text-decoration:none;">下载</a>
                   <button type="button" class="g-xt" data-del="${it.id}" title="删除">删除</button>
                 </div>`
                 )
@@ -1895,6 +1950,112 @@
         await load();
       }
 
+      /* ============ B2 配置（仅服主） ============ */
+      let b2Loaded = false;
+
+      function b2Form() {
+        const v = (id) => ($(id) ? $(id).value.trim() : "");
+        return {
+          keyId: v("#b2-key-id"),
+          appKey: v("#b2-app-key"),
+          endpoint: v("#b2-endpoint"),
+          bucket: v("#b2-bucket"),
+          cdn: v("#b2-cdn"),
+        };
+      }
+
+      function b2Report(report, allOk) {
+        const box = $("#b2-report");
+        if (!box) return;
+        box.innerHTML = (report || [])
+          .map(
+            (r) =>
+              '<p class="' + (r.ok ? "ok" : "err") + '"><b>' +
+              (r.ok ? "✓" : "✗") + " " + esc(r.name) + "</b>" + esc(r.text) + "</p>"
+          )
+          .join("");
+        const prep = $("#b2-prep");
+        if (prep) prep.hidden = !allOk;
+        say("b2-state", allOk ? "全部通过，可以保存了。" : "还有没通过的项，按提示处理一下。", allOk ? "ok" : "");
+      }
+
+      async function loadB2(force) {
+        if (b2Loaded && !force) return;
+        try {
+          const res = await fetch(API + "/b2", { credentials: "same-origin" });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "读不到配置");
+          const c = d.config || {};
+          b2Loaded = true;
+          $("#b2-key-id").value = c.keyId || "";
+          $("#b2-endpoint").value = c.endpoint || "";
+          $("#b2-bucket").value = c.bucket || "";
+          $("#b2-cdn").value = c.cdn || "";
+          $("#b2-key-hint").textContent = c.hasKey
+            ? "（已存 " + (c.appKeyHint || "····") + "，要换密钥才重填）"
+            : "（还没填）";
+          say("b2-msg", c.ready ? "原图已经在走 B2 了。" : "还没接上，填完保存后生效。", c.ready ? "ok" : "");
+        } catch (e) {
+          say("b2-msg", e.message, "err");
+        }
+      }
+
+      async function b2Post(action, btn) {
+        const old = btn ? btn.textContent : "";
+        if (btn) { btn.disabled = true; btn.textContent = "连接中…"; }
+        say("b2-msg", action === "prepare" ? "正在准备桶…" : "正在连接 Backblaze…", "saving");
+        try {
+          const res = await fetch(API + "/b2", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(Object.assign({ action: action }, b2Form())),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "连接失败");
+          // 自动回填:用户只填了密钥,Endpoint 和桶名让服务端帮忙填上
+          if (d.s3ApiUrl && !$("#b2-endpoint").value.trim()) $("#b2-endpoint").value = d.s3ApiUrl;
+          const names = (d.buckets || []).map((b) => b.name);
+          if (!$("#b2-bucket").value.trim() && names.length) $("#b2-bucket").value = names[0];
+          b2Report(d.report, d.allOk);
+          say("b2-msg", action === "prepare" ? "桶准备好了，别忘了点保存。" : "测试完成。", "ok");
+          if (action === "prepare") await loadB2(true);
+        } catch (e) {
+          b2Report([{ name: "连接", ok: false, text: e.message }], false);
+          say("b2-msg", e.message, "err");
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = old; }
+        }
+      }
+
+      if ($("#b2-test")) {
+        $("#b2-test").addEventListener("click", () => b2Post("test", $("#b2-test")));
+        $("#b2-prep").addEventListener("click", () => b2Post("prepare", $("#b2-prep")));
+        $("#b2-save").addEventListener("click", async () => {
+          const btn = $("#b2-save");
+          btn.disabled = true;
+          say("b2-msg", "保存中…", "saving");
+          try {
+            const res = await fetch(API + "/b2", {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify(b2Form()),
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
+            // 保存后把密码框清空:它只在「换密钥」时才需要填
+            $("#b2-app-key").value = "";
+            say("b2-msg", d.message || "已保存", d.ready ? "ok" : "saving");
+            await loadB2(true);
+          } catch (e) {
+            say("b2-msg", e.message, "err");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      }
+
       /* ============ 页签 ============ */
       $$(".adm-tab").forEach((tab) => {
         tab.addEventListener("click", () => {
@@ -1906,6 +2067,7 @@
           if (name === "usage") renderUsage();
           if (name === "accounts") renderAccounts();
           if (name === "gallery") renderGallery();
+          if (name === "b2") loadB2();
         });
       });
 
@@ -1919,6 +2081,10 @@
             ? "你现在的身份是普通成员。如果手里有一次性的服主激活口令，去个人中心激活一下再回来。"
             : "先用账号登录。如果你手里有一次性的服主激活口令，去个人中心激活一下再回来。";
         }
+        // 「B2 配置」里能读到密钥，只给服主开；管理员连页签都不显示
+        const isOwner = !!me && me.role === "owner";
+        $$("[data-owner-only]").forEach((el) => { el.hidden = !isOwner; });
+        if (!isOwner && $("#panel-b2")) $("#panel-b2").hidden = true;
         gate.hidden = ok;
         main.hidden = !ok;
       }

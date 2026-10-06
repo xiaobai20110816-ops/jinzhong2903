@@ -63,8 +63,10 @@ export function safeParse(text) {
    防止有人往帖子里塞任意字符串当图片地址 */
 export const IMAGE_KEY_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
 
-/* 图库图片 key:32 位 hex + (.full 或 .thumb) + 扩展名 */
-export const GALLERY_KEY_RE = /^[a-f0-9]{32}\.(?:full|thumb)\.(jpg|png|webp)$/;
+/* 图库图片 key:32 位 hex + (.full 或 .thumb) + 扩展名。
+   原图存到 B2 时前面会多个 "b2-" 前缀(区分「在 KV 还是在 B2」),
+   缩略图一律留在 KV,所以没有前缀。 */
+export const GALLERY_KEY_RE = /^(?:b2-)?[a-f0-9]{32}\.(?:full|thumb)\.(jpg|png|webp)$/;
 
 /* 官方认证的三个级别:金 / 红 / 黑,只影响药丸配色。
    空串 = 没级别(头衔也空就是没认证,头衔有值但级别空则按金处理) */
