@@ -131,13 +131,17 @@ export async function onRequestPost({ request, env }) {
     cfg.region = cfg.endpoint.replace(/^https?:\/\//i, "").split(".")[1] || "";
   }
 
-  /* ---- 第二步:列桶,顺便确认「到底有没有桶」 ---- */
+  /* ---- 第二步:列桶。只为了把桶名和权限显示出来,列不出来也不拦着 ---- */
   let buckets = [];
+  let listErr = "";
   try {
-    buckets = await b2ListBuckets(auth);
+    buckets = await b2ListBuckets(auth, cfg.bucket);
   } catch (e) {
-    return fail("密钥没问题，但列不出桶：" + e.message, 400);
+    listErr = e.message;
   }
+
+  // 用户没填桶名时,拿列表里第一个来试,省得白跑一趟
+  if (!cfg.bucket && buckets.length) cfg.bucket = buckets[0].name;
 
   const report = [
     { name: "密钥", ok: true, text: "keyID / applicationKey 有效（账号 " + auth.accountId + "）" },
@@ -148,42 +152,51 @@ export async function onRequestPost({ request, env }) {
         ? cfg.endpoint + "（区域 " + cfg.region + "）"
         : "没取到 S3 Endpoint，请去 B2 控制台「桶详情」里抄一份填上",
     },
-    {
-      name: "桶",
-      ok: buckets.length > 0,
-      text: buckets.length
-        ? "找到 " + buckets.length + " 个桶：" + buckets.map((b) => b.name + (b.public ? "(公开)" : "(私有)")).join("、")
-        : "账号下还没有桶 —— 先去 B2 控制台建一个（Buckets → Create a Bucket）",
-    },
   ];
 
+  if (buckets.length) {
+    report.push({
+      name: "桶",
+      ok: true,
+      text: "找到 " + buckets.length + " 个桶：" + buckets.map((b) => b.name + (b.public ? "(公开)" : "(私有)")).join("、"),
+    });
+  } else if (listErr) {
+    // 列桶只是「顺带看看」,真正的判定在下面的 S3 实测
+    report.push({ name: "桶", ok: true, text: "没能列出桶列表（" + listErr + "），不影响使用，继续按桶名实测即可" });
+  } else {
+    report.push({ name: "桶", ok: false, text: "账号下还没有桶 —— 先去 B2 控制台建一个（Buckets → Create a Bucket）" });
+  }
+
   if (!cfg.bucket) {
-    report.push({ name: "已选桶", ok: false, text: "还没选桶" });
+    report.push({ name: "已选桶", ok: false, text: "还没填桶名，也没能从 B2 列出桶" });
   } else {
     const hit = buckets.filter((b) => b.name === cfg.bucket)[0] || null;
-    if (!hit) {
+    if (buckets.length && !hit) {
       report.push({ name: "已选桶", ok: false, text: "账号里没有叫「" + cfg.bucket + "」的桶，检查拼写" });
     } else {
       // 桶是私有的才好:本站用签名去取,不给外人直连,也不占公开桶的额外费用
       report.push({
-        name: "桶权限",
+        name: "已选桶",
         ok: true,
-        text: hit.public ? "这个桶是公开的 —— 能用，但建议在 B2 里改回私有，本站代理读取不需要公开" : "私有桶（正常，本站会用签名代理读取）",
+        text: "「" + cfg.bucket + "」" + (hit && hit.public ? "是公开桶 —— 能用，但建议在 B2 里改回私有" : "（私有桶，正常，本站会用签名代理读取）"),
       });
-      /* ---- 第三步:S3 签名实测(真正验证 SigV4 写对没有) ---- */
-      if (cfg.endpoint) {
-        try {
-          const r = await s3Probe(cfg);
-          report.push({
-            name: "S3 读写",
-            ok: true,
-            text: "SigV4 签名通过（成功列出 " + r.objects + " 个对象）",
-          });
-        } catch (e) {
-          report.push({ name: "S3 读写", ok: false, text: e.message });
-        }
-      }
     }
+  }
+
+  /* ---- 第三步:S3 实测。这一步才是决定性的,上传 / 读取 / 删除全靠它 ---- */
+  if (cfg.endpoint && cfg.bucket) {
+    try {
+      const r = await s3Probe(cfg);
+      report.push({
+        name: "S3 读写",
+        ok: true,
+        text: "SigV4 签名通过（成功列出 " + r.objects + " 个对象）",
+      });
+    } catch (e) {
+      report.push({ name: "S3 读写", ok: false, text: e.message });
+    }
+  } else {
+    report.push({ name: "S3 读写", ok: false, text: "先把 S3 Endpoint 和桶名补上，才能实测上传 / 读取" });
   }
 
   return json({

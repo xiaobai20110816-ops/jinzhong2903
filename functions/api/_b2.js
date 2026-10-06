@@ -310,8 +310,13 @@ async function nativeCall(auth, name, body) {
   return d;
 }
 
-export async function b2ListBuckets(auth) {
-  const d = await nativeCall(auth, "b2_list_buckets", { accountId: auth.accountId });
+/* 列桶。只为「体检」用,真正干活的是下面的 S3 接口。
+   注意:限定到某个桶的 Application Key 必须带上 bucketName,
+   否则 B2 不区分「没权限」和「没指定桶」,统一回 401 unauthorized。 */
+export async function b2ListBuckets(auth, bucketName) {
+  const body = { accountId: auth.accountId };
+  if (bucketName) body.bucketName = bucketName;
+  const d = await nativeCall(auth, "b2_list_buckets", body);
   return (d.buckets || []).map((b) => ({
     id: b.bucketId || "",
     name: b.bucketName || "",
