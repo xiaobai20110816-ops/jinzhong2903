@@ -104,7 +104,7 @@ const DEFAULT_ANNOUNCEMENTS = [
       "· IP 属地 —— 每条留言下面标注省份，都是自己人，坦坦荡荡",
       "· 服主标识 —— 班委账号带金色「服主」徽章，发布的通知自动置顶",
       "· 图片上传 —— 最多 3 张，自动压缩，传得快也看得清",
-      "官网地址：jinzhong2903.pages.dev",
+      "官网地址：jinzhong2903.me",
     ].join("\n"),
   },
   {
@@ -323,6 +323,29 @@ async function upgradeContentOnce(db) {
     .run();
 }
 
+/* 一次性换域名:库里已有的内容还带着旧站地址(pages.dev)。
+   跟公告升级分开打标记 —— 只把含旧地址的那几行里的字符串换掉,
+   不覆盖任何在后台改过的内容,换完写标记就不再执行 */
+const DOMAIN_SEED = "2026-10-06-domain-me";
+const OLD_HOST = "jinzhong2903.pages.dev";
+const NEW_HOST = "jinzhong2903.me";
+
+async function migrateDomainOnce(db) {
+  const row = await db.prepare("SELECT value FROM content WHERE key = 'seed_domain'").first();
+  if (row && row.value === DOMAIN_SEED) return;
+  await db
+    .prepare("UPDATE content SET value = REPLACE(value, ?, ?) WHERE value LIKE ?")
+    .bind(OLD_HOST, NEW_HOST, "%" + OLD_HOST + "%")
+    .run();
+  await db
+    .prepare(
+      `INSERT INTO content (key, value, updated_at) VALUES ('seed_domain', ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    )
+    .bind(DOMAIN_SEED, Date.now())
+    .run();
+}
+
 export function ensureContent(db) {
   if (!contentReady) {
     contentReady = (async () => {
@@ -343,6 +366,7 @@ export function ensureContent(db) {
           .run();
       }
       await upgradeContentOnce(db);
+      await migrateDomainOnce(db);
     })().catch((err) => {
       contentReady = null; // 失败下次重来
       throw err;

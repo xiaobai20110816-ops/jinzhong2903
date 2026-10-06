@@ -836,7 +836,7 @@
       if (els.form) els.form.hidden = true;
       if (els.list) {
         els.list.innerHTML =
-          '<div class="notice"><b>要用官网打开</b>这一页需要联网才能写。请访问 jinzhong2903.pages.dev 再试。</div>';
+          '<div class="notice"><b>要用官网打开</b>这一页需要联网才能写。请访问 jinzhong2903.me 再试。</div>';
       }
       return;
     }
