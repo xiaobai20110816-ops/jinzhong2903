@@ -25,11 +25,14 @@ import { decorateVideos } from "./_videos.js";
 
 const WINDOW = 400;
 
-/* 游客那一份「合并流」在半小时内对谁都一样:不带个人点赞 / 收藏状态,
-   可见性只出 public —— 所以可以整份丢进 KV 缓存 30 秒。
+/* 游客那一份「合并流」在 30 秒内对谁都一样:不带个人点赞 / 收藏状态,
+   可见性只出 public —— 所以可以整份丢进边缘缓存。
    首页是全班点得最多的一个接口,每次都要两条 LIMIT 400 的查询 + 一轮
    内存合并 + 一轮批量补资料;缓存住之后,并发进来的游客只读一次库。
-   登录的人不看缓存(他们的点赞状态是个人的,不能串)。 */
+   登录的人不看缓存(他们的点赞状态是个人的,不能串)。
+
+   这里用 Cache API(caches.default)而不是 KV:KV 的读有 60 秒负缓存,
+   刚写进去马上读还可能读到「没有」,当缓存用不靠谱。 */
 const GUEST_TTL = 30;
 
 function jsonNoStore(body, extra) {
@@ -43,7 +46,7 @@ function jsonNoStore(body, extra) {
   });
 }
 
-export async function onRequestGet({ request, env, waitUntil }) {
+export async function onRequestGet({ request, env }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
 
@@ -56,11 +59,19 @@ export async function onRequestGet({ request, env, waitUntil }) {
 
   const me = await currentUser(request, env);
 
-  // 游客:先看缓存里有没有现成的一份
-  const guestKey = me ? "" : `feed:guest:${page}:${size}`;
-  if (guestKey && env.STORY_KV) {
-    const hit = await env.STORY_KV.get(guestKey, "text").catch(() => null);
-    if (hit) return jsonNoStore(hit, { "x-feed-cache": "hit" });
+  // 游客:先看边缘缓存里有没有现成的一份
+  const cache = !me && typeof caches !== "undefined" ? caches.default : null;
+  // 用一个只在本函数内部流通的地址做缓存键,和真实请求隔开
+  const cacheKey = cache
+    ? new Request(url.origin + "/api/feed-cache?page=" + page + "&size=" + size)
+    : null;
+  if (cache && cacheKey) {
+    const hit = await cache.match(cacheKey).catch(() => null);
+    if (hit) {
+      // 命中的那份是内部响应,取回正文后按普通接口原样吐出去
+      const text = await hit.text();
+      return jsonNoStore(text, { "x-feed-cache": "hit" });
+    }
   }
   // 「仅本班可见」的东西游客直接看不到,帖子和视频口径一致
   const postVis = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
@@ -146,13 +157,17 @@ export async function onRequestGet({ request, env, waitUntil }) {
     items,
   });
 
-  // 游客这一份顺手写回缓存:接下来的 30 秒里别人再进来直接读 KV,不碰数据库。
-  // 用 waitUntil 在后台写,不占这次请求的响应时间
-  if (guestKey && env.STORY_KV) {
-    const put = env.STORY_KV.put(guestKey, body, { expirationTtl: GUEST_TTL }).catch(() => {});
-    if (waitUntil) waitUntil(put);
-    else await put;
+  // 游客这一份顺手写回边缘缓存:接下来的 30 秒里别人再进来直接读缓存,不碰数据库
+  if (cache && cacheKey) {
+    const stored = new Response(body, {
+      status: 200,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "public, s-maxage=" + GUEST_TTL + ", max-age=" + GUEST_TTL,
+      },
+    });
+    await cache.put(cacheKey, stored).catch(() => {});
   }
 
-  return jsonNoStore(body, guestKey ? { "x-feed-cache": "miss" } : undefined);
+  return jsonNoStore(body, cacheKey ? { "x-feed-cache": "miss" } : undefined);
 }
