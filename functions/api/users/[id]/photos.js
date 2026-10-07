@@ -6,7 +6,7 @@
    前端已经先把图传到 /api/upload 拿到 key,这里只负责校验并落库。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, IMAGE_KEY_RE, ROLE_OWNER } from "../../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, classGate, IMAGE_KEY_RE, ROLE_OWNER } from "../../_utils.js";
 
 const MAX_PHOTOS = 9;
 
@@ -15,7 +15,8 @@ export async function onRequestPut({ request, env, params }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("请先登录", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   const id = parseInt(params.id, 10);
   if (!id) return fail("成员编号不对");

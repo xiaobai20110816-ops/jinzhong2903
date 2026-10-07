@@ -16,6 +16,7 @@ import {
   notReady,
   ensureSchema,
   currentUser,
+  classGate,
   isStaff,
   randomHex,
 } from "../_utils.js";
@@ -55,6 +56,8 @@ export async function onRequestPost({ request, env }) {
     await ensureSchema(env.DB);
 
     const me = await currentUser(request, env);
+    const gate = classGate(me);
+    if (gate) return gate;
     if (!canUpload(me))
       return fail("实名认证通过的同学、管理员、服主才能上传照片", 401);
 

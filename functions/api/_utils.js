@@ -88,7 +88,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-07.1";
+const SCHEMA_VERSION = "2026-10-07.2";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -228,6 +228,9 @@ export function ensureSchema(db) {
       await addColumn(db, "users", "display_name", "TEXT");
       // 个人主页壁纸:只存图片 key,空 = 没设
       await addColumn(db, "users", "wallpaper_key", "TEXT");
+      // 班级信息:年级(高一 / 高二 / 高三)+ 班号。两个都填了才算「登记过」
+      await addColumn(db, "users", "grade", "TEXT");
+      await addColumn(db, "users", "class_no", "INTEGER");
 
       // ---- 个人主页点赞:一人对一人只能点一次,靠联合主键去重 ----
       await db
@@ -578,6 +581,45 @@ export function readCookie(request, name) {
 /* 用户名规则:2~16 位,中文 / 字母 / 数字 / 下划线 */
 export const USERNAME_RE = /^[\u4e00-\u9fa5A-Za-z0-9_]{2,16}$/;
 
+/* ============================================================
+   班级信息(年级 + 班号)
+   注册时必填;老账号也得补上。没登记的账号只能看、不能写,
+   和游客一个待遇 —— 见 classGate。
+   ============================================================ */
+
+export const GRADES = ["高一", "高二", "高三"];
+
+/* 班号:1~99 的整数,存 INTEGER 列 */
+export function classNo(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 && n <= 99 ? n : 0;
+}
+
+/* 年级 + 班号 → 「高一(3)班」。缺一个就返回空串 */
+export function classLabel(grade, no) {
+  const g = String(grade == null ? "" : grade).trim();
+  const n = classNo(no);
+  return GRADES.indexOf(g) >= 0 && n ? `${g}(${n})班` : "";
+}
+
+/* 这行 users 记录登记过班级没有 */
+export function classReady(row) {
+  return !!classLabel(row && row.grade, row && row.class_no);
+}
+
+/* 没登记班级的账号一律按游客对待:只能看,不能发。
+   服主 / 管理员豁免 —— 他们本来就该能管事,别把人锁在门外(自己那份班级信息
+   在个人中心照样能补)。
+   放行返回 null,拦下来返回一个 403 响应,直接 return 出去就行 */
+export function classGate(me) {
+  if (!me) return fail("登录后才能操作", 401);
+  if (me.role === "owner" || me.role === "admin") return null;
+  if (!me.classed) {
+    return fail("先把班级信息补上：你是几年级几班的？在个人中心填一下就能发了", 403);
+  }
+  return null;
+}
+
 /* 一行 users 记录 → 前端能用的样子(绝不外泄 salt / pass_hash)。
    这个函数只用在「返回给本人」的接口上(登录 / 注册 / 我),
    所以真名一并带上没问题 —— 自己当然看得到自己的真名 */
@@ -596,6 +638,11 @@ export function publicUser(row) {
     display_name: String(row.display_name == null ? "" : row.display_name).trim(),
     // 个人主页壁纸 key:自己看自己时带上,方便个人中心回显 / 清除
     wallpaper_key: row.wallpaper_key || "",
+    // 班级信息:年级 + 班号,两个都填了 classed 才是 true
+    grade: String(row.grade == null ? "" : row.grade).trim(),
+    class_no: classNo(row.class_no),
+    class_label: classLabel(row.grade, row.class_no),
+    classed: classReady(row) ? 1 : 0,
     // 官方认证头衔:公开信息,自己当然也看得到
     cert_title: String(row.cert_title == null ? "" : row.cert_title).trim(),
     cert_level: certLevel(row.cert_level),
@@ -667,7 +714,7 @@ export async function currentUser(request, env) {
 
   const row = await env.DB.prepare(
     `SELECT u.id, u.username, u.role, u.avatar_key, u.signature, u.banned,
-            u.real_name, u.verified, u.display_name, u.wallpaper_key,
+            u.real_name, u.verified, u.display_name, u.wallpaper_key, u.grade, u.class_no,
             u.cert_title, u.cert_level, u.photos, s.expires_at, s.last_seen
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ?`

@@ -16,6 +16,7 @@ import {
   notReady,
   ensureSchema,
   currentUser,
+  classGate,
   toPost,
   loadThread,
   IMAGE_KEY_RE,
@@ -251,7 +252,8 @@ export async function onRequestPost({ request, env }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("登录后才能发言", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   let payload;
   try {

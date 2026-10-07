@@ -21,6 +21,7 @@ import {
   putSetting,
   delSetting,
 } from "./_utils.js";
+import { b2Config, s3Usage } from "./_b2.js";
 
 const DAYS = 30;
 /* 用户的 Cloudflare 账号(2026-10-01 新建那个)。没单独配就用它 */
@@ -145,6 +146,7 @@ export async function onRequestGet({ request, env }) {
   // Cloudflare 那几块只查一次,官方用量和免费额度对照共用同一份结果
   const cloudflare = await cloudflareUsage(env.DB);
   const d1Bytes = await d1SelfSize(env.DB);
+  const b2 = await b2Usage(env);
 
   return json({
     ok: true,
@@ -155,8 +157,51 @@ export async function onRequestGet({ request, env }) {
     totals,
     accounts: await accountStats(env.DB),
     cloudflare: cloudflare,
-    quota: quotaGroups(cloudflare, d1Bytes, totals.galleryBytes, totals.galleryCount),
+    b2: b2,
+    quota: quotaGroups(cloudflare, d1Bytes, totals.galleryBytes, totals.galleryCount, b2),
   });
+}
+
+/* B2 存储用量。B2 不是 Cloudflare 的资源,官方用量接口里没有,
+   只能拿 SigV4 去把桶列一遍。接不上 / 列不动就返回原因,不抛错——
+   看板宁可少一块数据,也不该整页打不开 */
+async function b2Usage(env) {
+  const cfg = await b2Config(env, env.DB).catch(() => null);
+  const blank = {
+    ok: false,
+    ready: false,
+    reason: "还没接上：到「B2 配置」页签填专用密钥",
+    bucket: (cfg && cfg.bucket) || "",
+    endpoint: "",
+    objects: null,
+    bytes: null,
+    videos: null,
+    images: null,
+    truncated: false,
+  };
+  if (!cfg || !cfg.ready) return blank;
+
+  try {
+    const u = await s3Usage(cfg);
+    return {
+      ok: true,
+      ready: true,
+      reason: u.truncated ? "对象太多，只数了前 1 万个" : "",
+      bucket: cfg.bucket,
+      endpoint: String(cfg.endpoint).replace(/^https?:\/\//i, ""),
+      objects: u.objects,
+      bytes: u.bytes,
+      videos: (u.byPrefix.video && u.byPrefix.video.bytes) || 0,
+      images: (u.byPrefix.img && u.byPrefix.img.bytes) || 0,
+      truncated: !!u.truncated,
+    };
+  } catch (e) {
+    return Object.assign({}, blank, {
+      ready: true,
+      reason: e.message || "列桶失败",
+      endpoint: String(cfg.endpoint).replace(/^https?:\/\//i, ""),
+    });
+  }
 }
 
 /* ============================================================
@@ -236,6 +281,7 @@ const FREE = {
   kvWrite: 1000,                       // KV:写 / 天
   kvDelete: 1000,                      // KV:删 / 天
   kvList: 1000,                        // KV:列举 / 天
+  b2Store: 10 * 1024 * 1024 * 1024,    // B2:免费额度 10 GB 存储(下载流量免费)
   builds: 500,                         // Pages:构建次数 / 月
   files: 20000,                        // Pages:站点文件数
   fileSize: 25 * 1024 * 1024,          // Pages:单个文件 25 MiB
@@ -466,13 +512,15 @@ function quotaItem(label, used, limit, fmt, hint) {
   return { label: label, used: used == null ? null : used, limit: limit, fmt: fmt, percent: pct, hint: hint || "" };
 }
 
-function quotaGroups(cf, selfBytes, galleryBytes, galleryCount) {
+function quotaGroups(cf, selfBytes, galleryBytes, galleryCount, b2) {
   const d1 = (cf && cf.d1) || {};
   const kv = (cf && cf.kv) || {};
   const cfOk = !!(cf && cf.ok);
   const cfWhy = (cf && cf.reason) || "还没配置 API Token";
   // 已经配了 Token 却读不到,才值得把原因亮出来;一个字都没配就统一在上面提示
   const warnOn = !!(cf && cf.configured);
+  const b2x = b2 || { ok: false, ready: false, reason: "还没接上 B2 存储" };
+  const b2Why = b2x.reason || "";
 
   // D1 占用优先用 D1 自己报的那个数(不需要 Token、随时都准),没有再退回官方接口
   const d1Bytes = selfBytes != null ? selfBytes : (d1.ok ? d1.bytes : null);
@@ -514,6 +562,26 @@ function quotaGroups(cf, selfBytes, galleryBytes, galleryCount) {
         quotaItem("今日删次数", kv.ok ? kv.deletes : null, FREE.kvDelete, "int", kv.ok ? "" : kv.reason),
         quotaItem("今日列举次数", kv.ok ? kv.lists : null, FREE.kvList, "int", kv.ok ? "" : kv.reason),
         quotaItem("存储占用（官方）", kv.ok ? kv.bytes : null, FREE.kvStore, "bytes", kv.ok ? "" : kv.reason),
+      ],
+    },
+    {
+      name: "B2 对象存储",
+      note:
+        "视频和超过 KV 上限的原图都存这儿。" +
+        "免费额度 10 GB 存储、下载流量免费（B2 是 Cloudflare Bandwidth Alliance 成员，回源这段不计费）。" +
+        (b2x.bucket ? "当前桶：" + b2x.bucket : ""),
+      warn: b2x.ready && !b2x.ok ? b2Why : "",
+      items: [
+        quotaItem(
+          "已用存储",
+          b2x.ok ? b2x.bytes : null,
+          FREE.b2Store,
+          "bytes",
+          b2x.ok ? "共 " + b2x.objects + " 个文件" + (b2x.truncated ? "（是前 1 万个的合计）" : "") : b2Why
+        ),
+        quotaItem("其中视频", b2x.ok ? b2x.videos : null, FREE.b2Store, "bytes", b2x.ok ? "" : b2Why),
+        quotaItem("其中图片", b2x.ok ? b2x.images : null, FREE.b2Store, "bytes", b2x.ok ? "" : b2Why),
+        quotaItem("文件总数", b2x.ok ? b2x.objects : null, 0, "int", b2x.ok ? "" : b2Why),
       ],
     },
     {

@@ -16,6 +16,8 @@ import {
   sessionCookie,
   SESSION_TTL_MS,
   publicUser,
+  GRADES,
+  classNo,
 } from "../_utils.js";
 
 const MIN_PASSWORD = 6;
@@ -36,12 +38,17 @@ export async function onRequestPost({ request, env }) {
   const username = String(payload.username || "").trim();
   const password = String(payload.password || "");
   const cid = String(payload.cid || "").slice(0, 64);
+  // 班级信息:注册时就登记,老账号后面自己去个人中心补
+  const grade = String(payload.grade || "").trim();
+  const cno = classNo(payload.classNo);
 
   if (!USERNAME_RE.test(username)) {
     return fail("用户名 2~16 位，中文、字母、数字、下划线都可以");
   }
   if (password.length < MIN_PASSWORD) return fail(`密码至少 ${MIN_PASSWORD} 位`);
   if (password.length > MAX_PASSWORD) return fail("密码太长了，换短一点的");
+  if (GRADES.indexOf(grade) < 0) return fail("选一下自己是几年级的");
+  if (!cno) return fail("班号填 1~99 之间的数字");
 
   const exists = await env.DB.prepare("SELECT id FROM users WHERE username = ?")
     .bind(username)
@@ -65,10 +72,10 @@ export async function onRequestPost({ request, env }) {
   let res;
   try {
     res = await env.DB.prepare(
-      `INSERT INTO users (username, salt, pass_hash, avatar_key, signature, role, cid, created_at)
-       VALUES (?, ?, ?, NULL, '', 'member', ?, ?)`
+      `INSERT INTO users (username, salt, pass_hash, avatar_key, signature, role, cid, created_at, grade, class_no)
+       VALUES (?, ?, ?, NULL, '', 'member', ?, ?, ?, ?)`
     )
-      .bind(username, salt, await hashPassword(password, salt), cid, now)
+      .bind(username, salt, await hashPassword(password, salt), cid, now, grade, cno)
       .run();
   } catch (e) {
     // 同名的两个请求同时进来时,唯一索引会挡下后一个
@@ -84,7 +91,7 @@ export async function onRequestPost({ request, env }) {
     .run();
 
   return jsonWith(
-    { ok: true, user: publicUser({ id, username, role: "member", avatar_key: "", signature: "" }) },
+    { ok: true, user: publicUser({ id, username, role: "member", avatar_key: "", signature: "", grade, class_no: cno }) },
     { "set-cookie": sessionCookie(token, Math.floor(SESSION_TTL_MS / 1000)) }
   );
 }

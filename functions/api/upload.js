@@ -4,7 +4,7 @@
    返回 { ok, key },发帖时把 key 放进 images 数组
    ============================================================ */
 
-import { json, fail, notReady, randomHex, ensureSchema, currentUser } from "./_utils.js";
+import { json, fail, notReady, randomHex, ensureSchema, currentUser, classGate } from "./_utils.js";
 
 const TYPES = {
   "image/jpeg": "jpg",
@@ -21,7 +21,8 @@ export async function onRequestPost({ request, env }) {
 
   // 登录了才能传图,不然会被人当免费图床刷
   const me = await currentUser(request, env);
-  if (!me) return fail("登录后才能上传图片", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   const type = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
   const ext = TYPES[type];

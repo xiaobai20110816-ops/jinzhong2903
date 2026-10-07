@@ -5,7 +5,17 @@
    头像和壁纸都先走 /api/upload 拿到 key 再传进来
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, IMAGE_KEY_RE } from "./_utils.js";
+import {
+  json,
+  fail,
+  notReady,
+  ensureSchema,
+  currentUser,
+  IMAGE_KEY_RE,
+  GRADES,
+  classNo,
+  classLabel,
+} from "./_utils.js";
 
 const MAX_SIGNATURE = 40;
 const MAX_DISPLAY_NAME = 16;
@@ -29,6 +39,22 @@ export async function onRequestPost({ request, env }) {
     payload = await request.json();
   } catch (e) {
     return fail("提交的内容读不出来，请刷新页面重试");
+  }
+
+  /* 只改班级信息。个人中心那个「补登记」的弹窗走这条路,
+     免得只填个班号,却把签名 / 昵称 / 头像一起覆盖成空 */
+  if (payload.action === "class") {
+    const grade = String(payload.grade || "").trim();
+    const cno = classNo(payload.classNo);
+    if (GRADES.indexOf(grade) < 0) return fail("选一下自己是几年级的");
+    if (!cno) return fail("班号填 1~99 之间的数字");
+    await env.DB.prepare("UPDATE users SET grade = ?, class_no = ? WHERE id = ?")
+      .bind(grade, cno, me.id)
+      .run();
+    return json({
+      ok: true,
+      user: { ...me, grade, class_no: cno, class_label: classLabel(grade, cno), classed: 1 },
+    });
   }
 
   const signature = String(payload.signature ?? "").trim().slice(0, MAX_SIGNATURE);

@@ -270,6 +270,51 @@ export async function s3Probe(cfg) {
   return { objects: n };
 }
 
+/* 数一数桶里存了多少、占多大。分页翻到翻完为止(最多 10 页 = 1 万个对象,
+   这个量级的班级站点早就超了,再多也没必要为了看板把接口拖慢)。
+   顺便按前缀把「视频 / 图片」分开算,看板上好一眼看出空间都花在哪 */
+export async function s3Usage(cfg, maxPages = 10) {
+  let token = "";
+  let objects = 0;
+  let bytes = 0;
+  let pages = 0;
+  let truncated = false;
+  const byPrefix = {};
+
+  for (let i = 0; i < maxPages; i++) {
+    const query = { "list-type": "2", "max-keys": "1000" };
+    if (token) query["continuation-token"] = token;
+
+    const res = await s3Request(cfg, { method: "GET", query });
+    if (!res.ok) throw new Error(await s3Error(res));
+    const text = await res.text();
+    pages++;
+
+    // 一条对象长这样:<Contents><Key>video/x.mp4</Key>…<Size>123</Size></Contents>
+    for (const block of text.split("<Contents>").slice(1)) {
+      const key = (block.match(/<Key>([\s\S]*?)<\/Key>/) || [])[1] || "";
+      const size = parseInt((block.match(/<Size>(\d+)<\/Size>/) || [])[1], 10) || 0;
+      objects++;
+      bytes += size;
+      const dir = key.indexOf("video/") === 0 ? "video" : key.indexOf("img/") === 0 ? "img" : "other";
+      if (!byPrefix[dir]) byPrefix[dir] = { objects: 0, bytes: 0 };
+      byPrefix[dir].objects++;
+      byPrefix[dir].bytes += size;
+    }
+
+    truncated = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(text);
+    if (!truncated) break;
+    token =
+      (text.match(/<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/) || [])[1] || "";
+    if (!token) {
+      truncated = false;
+      break;
+    }
+  }
+
+  return { objects, bytes, pages, truncated, byPrefix };
+}
+
 /* ---------- 原生 B2 API(授权 / 列桶) ---------- */
 
 const API_ROOT = "https://api.backblazeb2.com";

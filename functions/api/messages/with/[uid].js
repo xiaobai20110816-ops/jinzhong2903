@@ -7,7 +7,7 @@
    私聊允许多行,所以清洗正文时只剔除控制字符、保留换行。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, namedUser } from "../../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, classGate, namedUser } from "../../_utils.js";
 
 const PAGE = 50;
 const MAX_BODY = 500;
@@ -85,7 +85,8 @@ export async function onRequestPost({ request, env, params }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("请先登录", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   const uid = parseInt(params.uid, 10);
   if (!uid || uid === me.id) return fail("不能和自己私聊");

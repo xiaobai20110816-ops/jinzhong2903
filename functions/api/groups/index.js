@@ -9,7 +9,7 @@
    前端把两边合并成一条「会话列表」显示,所以顺序交给前端排。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, namedUser, loadAuthors } from "../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, classGate, namedUser, loadAuthors } from "../_utils.js";
 
 const MAX_NAME = 20;
 const MAX_MEMBERS = 30;
@@ -106,7 +106,8 @@ export async function onRequestPost({ request, env }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("登录后才能建群", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   let payload;
   try {

@@ -294,6 +294,15 @@
       word-break: break-word;
     }
     .member .m-meta { font-size: 0.72rem; color: var(--faint); margin-top: 4px; letter-spacing: 0.4px; }
+    /* 还没补班级信息的老账号:标红,方便服主一眼看出谁没对齐 */
+    .member .m-noclass {
+      font-style: normal;
+      padding: 1px 7px;
+      border-radius: 999px;
+      color: #ff9d9d;
+      background: rgba(200, 60, 60, 0.18);
+      border: 1px solid rgba(200, 60, 60, 0.4);
+    }
     /* 操作区:按钮多,窄屏让它整行换下去,别挤成一条 */
     .member .m-right {
       margin-left: auto; display: flex; align-items: center; justify-content: flex-end;
@@ -1389,7 +1398,9 @@
               ${banTag}
             </div>
             <div class="m-sub">${esc(u.signature || "（还没写个性签名）")}</div>
-            <div class="m-meta">注册于 ${esc(fmtDate(u.created_at))} · 已发 ${Number(u.posts) || 0} 条</div>
+            <div class="m-meta">注册于 ${esc(fmtDate(u.created_at))} · 已发 ${Number(u.posts) || 0} 条 · ${
+              u.class_label ? esc(u.class_label) : '<em class="m-noclass">未登记班级</em>'
+            }</div>
           </div>
           <div class="m-right"></div>`;
         // 只有服主能看到操作按钮;自己那一行只留「改名 / 重置密码」
@@ -1568,10 +1579,11 @@
         const p = it.percent;
         const lv = p == null ? "none" : p >= 90 ? "bad" : p >= 70 ? "warn" : "ok";
         const used = it.used == null ? "—" : fmtBy(it.fmt, it.used);
-        const limit = fmtBy(it.fmt, it.limit);
+        // limit 传 0 = 这项只报数、不跟额度比(比如 B2 的文件总数)
+        const limit = it.limit ? " / " + fmtBy(it.fmt, it.limit) : "";
         const w = p == null ? 0 : Math.max(it.used > 0 ? 2 : 0, Math.min(100, Math.round(p * 10) / 10));
         return `<div class="use-bar q-bar lv-${lv}">
-          <span class="p">${esc(it.label)}<em class="q-sub">${esc(used)} / ${esc(limit)}</em></span>
+          <span class="p">${esc(it.label)}<em class="q-sub">${esc(used + limit)}</em></span>
           <span class="t" title="${esc(it.hint || "")}"><i style="width:${w}%"></i></span>
           <span class="n">${pctText(p)}</span>
         </div>`;
@@ -1760,14 +1772,14 @@
       /* 每次更新代码后,由开发者手动把这里改成最新统计(和开屏公告一起更新)。
          统计口径:html / css / js / json 四类文件的行数,不含空仓库配置。 */
       const CODE_STATS = {
-        total: 21593,
+        total: 21937,
         files: 75,
         updated: "2026-10-07",
         parts: [
-          { name: "页面 HTML", lines: 7153 },
+          { name: "页面 HTML", lines: 7281 },
           { name: "样式 CSS", lines: 4812 },
-          { name: "前端 JS", lines: 3927 },
-          { name: "后端 Functions", lines: 5696 },
+          { name: "前端 JS", lines: 3935 },
+          { name: "后端 Functions", lines: 5904 },
           { name: "配置 JSON", lines: 5 },
         ],
       };

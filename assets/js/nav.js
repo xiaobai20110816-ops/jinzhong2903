@@ -391,11 +391,18 @@ const C103Auth = {
     return this.user;
   },
 
-  async register(username, password) {
+  async register(username, password, grade, classNo) {
     const d = await apiFetch(API + "/auth/register", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: username, password: password, cid: deviceId() }),
+      body: JSON.stringify({
+        username: username,
+        password: password,
+        cid: deviceId(),
+        // 班级信息:注册时就得登记,老账号在个人中心补
+        grade: grade || "",
+        classNo: classNo || "",
+      }),
     });
     this.user = d.user;
     writeAuthCache(this.user);
@@ -1207,15 +1214,16 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-07-3";
+const SPLASH_VERSION = "2026-10-07-4";
 const SPLASH_DATE = "2026.10.07";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "视频现在能删了：自己发的片子，本人和服主 / 管理员都能删。";
+const SPLASH_LEAD = "注册要填「几年级几班」了：老账号也得补上，不然只能看不能发。";
 const SPLASH_NOTES = [
-  "全屏看视频那一页，右侧多了一个「删除」——本人和服主 / 管理员才看得到",
-  "视频卡片左上角也多了一个小「×」，在视频页和首页的信息流里都能直接删",
-  "删之前会问一句：视频、评论、点赞收藏会一起清掉，删了找不回来",
-  "删完卡片就地消失，不用整页刷新",
+  "注册时多了一项：选年级（高一 / 高二 / 高三）+ 填班号，为了把全站账号对齐",
+  "已经注册过的老账号，去个人中心「班级信息」那一栏补一下；补完才能正常发帖评论",
+  "没补的话，发帖、评论、点赞、传图、私信都发不出去，和没登录一个待遇（服主和管理员不受影响）",
+  "管理后台的「成员权限」列表里，每个人后面都会显示班级，没登记的标红，一眼看得出谁还没补",
+  "用量看板多了一块「B2 对象存储」：桶里存了多少、视频占多少、图片占多少，一目了然",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

@@ -7,7 +7,16 @@
    全部仅服主可用,这里只读。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, isStaff } from "./_utils.js";
+import {
+  json,
+  fail,
+  notReady,
+  ensureSchema,
+  currentUser,
+  isStaff,
+  classNo,
+  classLabel,
+} from "./_utils.js";
 
 export async function onRequestGet({ request, env }) {
   if (!env.DB) return notReady("数据库");
@@ -17,7 +26,7 @@ export async function onRequestGet({ request, env }) {
   if (!isStaff(me)) return fail("只有服主和管理员能看成员列表", 403);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, username, role, avatar_key, signature, banned, real_name, verified, display_name, cert_title, cert_level, created_at
+    `SELECT id, username, role, avatar_key, signature, banned, real_name, verified, display_name, cert_title, cert_level, created_at, grade, class_no
        FROM users
       ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, id ASC`
   ).all();
@@ -44,6 +53,10 @@ export async function onRequestGet({ request, env }) {
     cert_level: String(u.cert_level == null ? "" : u.cert_level).trim(),
     created_at: u.created_at,
     posts: counts.get(u.id) || 0,
+    // 班级信息:用来一眼看出谁还没补登记
+    grade: String(u.grade == null ? "" : u.grade).trim(),
+    class_no: classNo(u.class_no),
+    class_label: classLabel(u.grade, u.class_no),
   }));
 
   return json({ ok: true, users, me: me.id });

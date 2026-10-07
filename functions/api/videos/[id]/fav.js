@@ -6,14 +6,15 @@
    收藏不发通知 —— 自己悄悄存起来的东西,没必要惊动作者。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser } from "../../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, classGate } from "../../_utils.js";
 
 export async function onRequestPost({ request, env, params }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("登录后才能收藏", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   const id = parseInt(params.id, 10);
   if (!id) return fail("视频编号不对");

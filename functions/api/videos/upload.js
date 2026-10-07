@@ -17,6 +17,7 @@ import {
   notReady,
   ensureSchema,
   currentUser,
+  classGate,
   isStaff,
   randomHex,
   IMAGE_KEY_RE,
@@ -42,7 +43,8 @@ export async function onRequestPost({ request, env }) {
     return fail("视频要存到 B2，请先在管理后台「B2 配置」里接上再传", 503);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("登录后才能上传视频", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
   if (!isStaff(me) && me.verified !== 1)
     return fail("实名认证通过的同学、管理员、服主才能上传视频", 403);
 

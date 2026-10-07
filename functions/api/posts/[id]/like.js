@@ -6,14 +6,15 @@
    一人对一帖只有一条记录,靠 (post_id, user_id) 联合主键去重。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, notify } from "../../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, classGate, notify } from "../../_utils.js";
 
 export async function onRequestPost({ request, env, params }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("登录后才能点赞", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   const id = parseInt(params.id, 10);
   if (!id) return fail("帖子编号不对");

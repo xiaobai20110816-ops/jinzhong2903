@@ -7,7 +7,7 @@
    先按 id 倒序取再翻成正序,和一对一私信一个套路。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, namedUser } from "../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, classGate, namedUser } from "../_utils.js";
 
 const PAGE = 50;
 const MAX_BODY = 500;
@@ -106,7 +106,8 @@ export async function onRequestPost({ request, env, params }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("请先登录", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
 
   const gid = parseInt(params.id, 10);
   if (!gid) return fail("找不到这个群", 404);

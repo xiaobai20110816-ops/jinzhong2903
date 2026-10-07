@@ -8,7 +8,7 @@
    正文里出现 [emoji:名字] 就渲染成这张图。
    ============================================================ */
 
-import { json, fail, notReady, ensureSchema, currentUser, isStaff, IMAGE_KEY_RE } from "../_utils.js";
+import { json, fail, notReady, ensureSchema, currentUser, classGate, isStaff, IMAGE_KEY_RE } from "../_utils.js";
 
 const MAX_NAME = 12;
 const MAX_TOTAL = 300; // 全班合起来最多这么多张,防着被当免费图床
@@ -72,7 +72,8 @@ export async function onRequestPost({ request, env }) {
   await ensureSchema(env.DB);
 
   const me = await currentUser(request, env);
-  if (!me) return fail("登录后才能上传表情", 401);
+  const gate = classGate(me);
+  if (gate) return gate;
   // 和传图库照片一个门槛:实名过的同学才给传,免得被人乱塞
   if (!isStaff(me) && Number(me.verified) !== 1) {
     return fail("实名认证通过后才能上传自制表情", 403);

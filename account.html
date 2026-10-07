@@ -144,6 +144,49 @@
     .acc-nick-row input[type="text"] { flex: 1; min-width: 0; }
     .acc-nick-row .submit-btn { flex: none; padding: 11px 18px; }
 
+    /* ---- 年级 + 班号 ---- */
+    .class-pick { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+    .class-pick select,
+    .class-pick input {
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      color: var(--text);
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 14px;
+      outline: none;
+      transition: background-color 0.4s ease, border-color 0.3s ease, color 0.6s ease;
+    }
+    .class-pick select { flex: none; width: 104px; cursor: pointer; }
+    .class-pick input { width: 100%; min-width: 0; }
+    .class-pick em { font-style: normal; font-size: 0.86rem; color: var(--muted); flex: none; }
+    .class-pick select:focus,
+    .class-pick input:focus { border-color: var(--gold-line); background: var(--gold-soft); }
+    .field-tip {
+      display: block;
+      margin-top: 8px;
+      font-style: normal;
+      font-size: 0.74rem;
+      color: var(--faint);
+    }
+    /* 没登记班级的老账号:资料卡顶上挂一条提醒 */
+    .acc-need-class {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 20px;
+      padding: 13px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--gold-line);
+      background: var(--gold-soft);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .acc-need-class[hidden] { display: none; }
+    .acc-need-class b { color: var(--gold); font-weight: 600; }
+
     /* ---- 一次性激活口令 ---- */
     .acc-activate { margin-bottom: 20px; }
     .acc-activate[hidden] { display: none; }
@@ -237,6 +280,20 @@
               <span>再输一次密码</span>
               <input id="reg-pass2" type="password" maxlength="64" autocomplete="new-password" placeholder="确认一下">
             </label>
+            <div class="field">
+              <span>你是几年级几班的</span>
+              <div class="class-pick">
+                <select id="reg-grade" aria-label="年级">
+                  <option value="">年级</option>
+                  <option value="高一">高一</option>
+                  <option value="高二">高二</option>
+                  <option value="高三">高三</option>
+                </select>
+                <input id="reg-classno" type="number" min="1" max="99" inputmode="numeric" placeholder="班号，如 3">
+                <em>班</em>
+              </div>
+              <em class="field-tip">填完才算是本班成员，别人才知道你是谁班的</em>
+            </div>
             <p class="form-msg" id="reg-msg"></p>
             <button class="submit-btn wide" type="submit">注册并登录</button>
           </form>
@@ -250,6 +307,12 @@
               <p class="acc-name" id="acc-name"></p>
               <p class="acc-role" id="acc-role"></p>
             </div>
+          </div>
+
+          <!-- 没登记年级班级的老账号:顶上挂一条,提醒去下面补 -->
+          <div class="acc-need-class" id="acc-need-class" hidden>
+            <b>还差班级信息</b>
+            <span>补完之前只能看、不能发帖评论 —— 和游客一个待遇。就在下面「班级信息」那一栏填。</span>
           </div>
 
           <div class="acc-block">
@@ -270,6 +333,25 @@
               <input id="acc-nick" type="text" maxlength="16" placeholder="全站显示的名字，留空就用账号名">
               <button class="submit-btn" type="button" id="acc-nick-save">保存昵称</button>
             </div>
+          </div>
+
+          <div class="acc-block">
+            <p class="acc-label">班级信息</p>
+            <div class="acc-nick-row">
+              <div class="class-pick">
+                <select id="acc-grade" aria-label="年级">
+                  <option value="">年级</option>
+                  <option value="高一">高一</option>
+                  <option value="高二">高二</option>
+                  <option value="高三">高三</option>
+                </select>
+                <input id="acc-classno" type="number" min="1" max="99" inputmode="numeric" placeholder="班号，如 3">
+                <em>班</em>
+              </div>
+              <button class="submit-btn" type="button" id="acc-class-save">保存班级</button>
+            </div>
+            <em class="field-tip">年级 + 班号，用来对齐所有账号</em>
+            <p class="form-msg" id="acc-class-msg"></p>
           </div>
 
           <div class="acc-block">
@@ -381,7 +463,42 @@
         } else {
           note.hidden = true;
         }
+
+        // 班级信息:回显 + 没登记就把提醒条挂出来
+        const need = $("#acc-need-class");
+        if (need) need.hidden = !!user.classed;
+        const gSel = $("#acc-grade");
+        if (gSel) gSel.value = user.grade || "";
+        const cInp = $("#acc-classno");
+        if (cInp) cInp.value = user.class_no || "";
       }
+
+      /* ---- 保存班级信息 ---- */
+      on($("#acc-class-save"), "click", async () => {
+        const msg = $("#acc-class-msg");
+        const btn = $("#acc-class-save");
+        const grade = $("#acc-grade").value;
+        const classNo = $("#acc-classno").value;
+        if (!grade) { say(msg, "选一下自己是几年级的", "err"); return; }
+        const n = parseInt(classNo, 10);
+        if (!(n >= 1 && n <= 99)) { say(msg, "班号填 1~99 之间的数字", "err"); return; }
+
+        btn.disabled = true;
+        btn.textContent = "保存中";
+        try {
+          // 走 saveProfile:它会顺手更新本地缓存并通知全站
+          const user = await A.saveProfile({ action: "class", grade: grade, classNo: n });
+          current = user;
+          say(msg, "班级信息已保存：" + (user.class_label || ""), "ok");
+          const need = $("#acc-need-class");
+          if (need) need.hidden = true;
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "保存班级";
+        }
+      });
 
       /* ---- 页签切换 ---- */
       document.querySelectorAll(".acc-tab").forEach((tab) => {
@@ -426,13 +543,18 @@
         const name = $("#reg-name").value.trim();
         const pass = $("#reg-pass").value;
         const pass2 = $("#reg-pass2").value;
+        const grade = $("#reg-grade").value;
+        const classNo = $("#reg-classno").value;
         if (!name || !pass) { say(msg, "用户名和密码都要填", "err"); return; }
         if (pass !== pass2) { say(msg, "两次输入的密码不一样", "err"); return; }
+        if (!grade) { say(msg, "选一下自己是几年级的", "err"); return; }
+        const cno = parseInt(classNo, 10);
+        if (!(cno >= 1 && cno <= 99)) { say(msg, "班号填 1~99 之间的数字", "err"); return; }
 
         btn.disabled = true;
         btn.textContent = "注册中";
         try {
-          await A.register(name, pass);
+          await A.register(name, pass, grade, cno);
           say(msg, "", "");
           render(A.user);
           window.scrollTo({ top: 0, behavior: "smooth" });
