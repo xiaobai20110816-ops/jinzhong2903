@@ -30,7 +30,11 @@
     if (el) el.addEventListener(ev, fn);
   };
 
-  const state = { page: 1, totalPages: 1, images: [], busy: false, user: null, openReply: 0, visibility: "public", liking: 0 };
+  const state = {
+    page: 1, totalPages: 1, images: [], busy: false, user: null, openReply: 0, visibility: "public", liking: 0,
+    items: [],        // 首页那一页的合并流(帖子 + 视频),切换筛子时在本地过滤
+    filter: "all",    // all / post / video
+  };
   const els = {};
   // 每个内联回复框自己的待传图片:form 元素 → [ {blob,url} ]
   const replyImages = new Map();
@@ -316,6 +320,25 @@
     </article>`;
   }
 
+  /* ---------- 首页混排:图文和视频同一条流,顶上一排筛子 ---------- */
+
+  function cardOf(it) {
+    if (!it) return "";
+    return it.type === "video" ? videoCardHTML(it.video) : cardHTML(it.post);
+  }
+
+  // 只在本地过滤,不再为切筛子多跑一趟接口
+  function renderCards() {
+    if (!els.list) return;
+    const all = state.items || [];
+    const list = state.filter === "all" ? all : all.filter((it) => it.type === state.filter);
+    if (!list.length) {
+      els.list.innerHTML = `<div class="notice"><b>这类还没有</b>换个筛子看看，或者你去发第一条。</div>`;
+      return;
+    }
+    els.list.innerHTML = list.map(cardOf).join("");
+  }
+
   function renderPager(total) {
     if (!els.pager) return;
     // 只要有人写过就把分页条亮出来(和隔壁一样「第 1 / 1 页」),
@@ -529,13 +552,11 @@
         const data = await api(API + "/feed?page=" + page);
         state.page = data.page;
         state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
-        const items = data.items || [];
+        state.items = data.items || [];
         if (!data.total) {
           notice("还没有人写下第一句", "<br>第一行字，等你来落笔。");
-        } else if (els.list) {
-          els.list.innerHTML = items
-            .map((it) => (it.type === "video" ? videoCardHTML(it.video) : cardHTML(it.post)))
-            .join("");
+        } else {
+          renderCards();
         }
         renderPager(data.total);
         return;
@@ -863,6 +884,21 @@
     els.meAvatar = $("#me-avatar");
     els.meSig = $("#me-sig");
     els.visPick = $("#vis-pick");
+    els.tabs = $("#feed-tabs");
+
+    // 首页那排筛子:图文 / 视频混在一起,想单看一类就在本地过一下
+    if (els.tabs && MODE === "cards") {
+      els.tabs.hidden = false;
+      els.tabs.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-feed]");
+        if (!btn) return;
+        state.filter = btn.getAttribute("data-feed") || "all";
+        els.tabs
+          .querySelectorAll("[data-feed]")
+          .forEach((b) => b.classList.toggle("active", b === btn));
+        renderCards();
+      });
+    }
 
     on(els.form, "submit", onSubmit);
     on(els.pickBtn, "click", () => els.file && els.file.click());
@@ -974,6 +1010,22 @@
       focusDeepLink().then((hit) => {
         if (!hit) goto(1);
       });
+
+      // 从底部那个「＋」跳过来的:等发帖框亮出来,直接送到位并聚焦
+      if (new URLSearchParams(location.search).get("post")) {
+        const jump = () => {
+          if (!els.form || els.form.hidden) return false;
+          els.form.scrollIntoView({ behavior: "smooth", block: "center" });
+          if (els.body) els.body.focus();
+          return true;
+        };
+        if (!jump()) {
+          let n = 0;
+          const t = setInterval(() => {
+            if (jump() || ++n > 20) clearInterval(t);
+          }, 200);
+        }
+      }
     });
   });
 })();

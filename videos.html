@@ -46,17 +46,24 @@
         <div class="v-up" id="video-upload" hidden>
           <div class="v-up-head">
             <span class="v-up-title">发视频</span>
-            <span class="v-up-hint">MP4 / WebM / MOV，单个不超过 80MB</span>
+            <span class="v-up-hint">MP4 / WebM / MOV，发布前会在本地压一遍再传</span>
           </div>
 
           <div class="v-drop" id="v-drop">
             <b>＋ 选一个视频</b>
-            <span>封面会自动从画面里截一张，不用自己准备</span>
+            <span>封面会自动从画面里截一张；手机拍的片子会先压缩，省流量也省时间</span>
             <input type="file" id="v-file" accept="video/*">
           </div>
 
           <video class="v-preview" id="v-preview" controls muted playsinline hidden></video>
           <div class="v-meta-row" id="v-meta-row"></div>
+
+          <!-- 压到多清:默认按原片的清晰度自己挑一档,不想压就选「原画质」 -->
+          <div class="v-level" id="v-level" hidden>
+            <span class="v-level-lb">上传画质</span>
+            <div class="v-level-row" id="v-level-row"></div>
+            <p class="v-level-note" id="v-level-note"></p>
+          </div>
 
           <label class="field">
             <span>标题</span>

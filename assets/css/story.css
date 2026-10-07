@@ -767,6 +767,33 @@
 /* 「读取中」/「还没有人写」这类提示占满整行,别挤在左边半格里 */
 .card-grid > .notice { grid-column: 1 / -1; }
 
+/* 首页那排筛子:图文和视频混在一条流里,想单看一类就点一下。
+   纯本地过滤,不重跑接口,所以点起来是立刻的 */
+.feed-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.feed-tabs[hidden] { display: none; }
+.feed-tab {
+  padding: 7px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-brd);
+  background: var(--glass-bg);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 0.25s ease, border-color 0.25s ease, background-color 0.3s ease;
+}
+.feed-tab:hover { color: var(--gold-2); border-color: var(--gold-line); }
+.feed-tab.active {
+  color: var(--gold);
+  border-color: var(--gold-line);
+  background: var(--gold-soft);
+}
+
 /* 卡片本体:比列表版更瘦,内边距压到最小,让封面占满卡宽 */
 .xhs-card {
   position: relative;

@@ -1207,16 +1207,16 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-07-1";
+const SPLASH_VERSION = "2026-10-07-2";
 const SPLASH_DATE = "2026.10.07";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "能发能聊了：自制表情、群聊、还有「你可能认识的人」——顺手也把首页加载调快了一档。";
+const SPLASH_LEAD = "首页变成了一个真正的社区：帖子和视频混在一条流里，底下一个加号就能发。";
 const SPLASH_NOTES = [
-  "全站能用表情了：留言板、视频评论、私信都多了一个 😊 按钮，60 个默认表情随手插",
-  "实名认证过的同学还能上传图片做「自制表情」，收藏起来常用的一排，也会记最近用过的",
-  "私信页能建群聊了：起个群名、勾几个同学就成，群里有头像有名字，未读也带小红点",
-  "私信页新增「你可能认识的人」：和你有共同好友的同学排在前面，点一下就能开聊",
-  "首页接口加了缓存，游客第一次打开之后的翻页明显轻快，新域名上也顺了",
+  "首页改成「班级社区」：图文和视频混在同一条流里往下铺，置顶的照样浮在最前面",
+  "顶上多了一排「全部 / 图文 / 视频」，想单看哪一类点一下就行，切换是立刻的",
+  "底下正中间加了一个「＋」：点开就是「发帖子」和「发视频」，在哪一页都能发",
+  "发视频不用再自己压片子了：选完片按「720p / 1080p / 480p」在手机或电脑上先压一遍再传，手机拍的大片子也能传得上去",
+  "视频页的上传区会按原片大小自动推荐一档画质，不想压就选「原画质」",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -1415,6 +1415,129 @@ document.addEventListener("DOMContentLoaded", () => {
   renderFooter();
   C103Content.onChange(renderFooter);
   C103Content.load();
+
+  // ---- 底部中间的「＋」:发帖子 / 发视频(小红书那个位置) ----
+  //   全站都在,只有「自己本来就有输入区」的页面(私信、后台、个人中心)
+  //   和全屏播放页不挂 —— 那儿再飘一个加号会挡住输入框。
+  (function fab() {
+    const page = location.pathname.split("/").pop() || "index.html";
+    if (["messages.html", "admin.html", "account.html", "video.html"].indexOf(page) >= 0) return;
+    if (document.body.classList.contains("video-page")) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "fab-wrap";
+    wrap.innerHTML = `
+      <div class="fab-pop" id="fab-pop" hidden>
+        <p class="fab-pop-title">发点什么</p>
+        <button class="fab-opt" type="button" data-fab="post">
+          <i class="fab-ico">✎</i>
+          <span><b>发帖子</b><em>写两句，配几张图</em></span>
+        </button>
+        <button class="fab-opt" type="button" data-fab="video">
+          <i class="fab-ico">▶</i>
+          <span><b>发视频</b><em>本地先压一遍再传，更省流量</em></span>
+        </button>
+      </div>
+      <button class="fab" id="fab-btn" type="button" aria-label="发布内容" aria-expanded="false" aria-haspopup="true">＋</button>`;
+    document.body.appendChild(wrap);
+
+    const pop = wrap.querySelector("#fab-pop");
+    const btn = wrap.querySelector("#fab-btn");
+
+    // 一句轻提示:飘在加号上方,两秒后自己消失
+    function tip(text) {
+      const t = document.createElement("div");
+      t.className = "c103-toast";
+      t.textContent = text;
+      document.body.appendChild(t);
+      requestAnimationFrame(() => t.classList.add("in"));
+      setTimeout(() => {
+        t.classList.remove("in");
+        setTimeout(() => t.remove(), 300);
+      }, 2200);
+    }
+
+    const open = () => {
+      pop.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      wrap.classList.add("open");
+      requestAnimationFrame(() => pop.classList.add("in"));
+    };
+    const close = () => {
+      pop.classList.remove("in");
+      wrap.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+      setTimeout(() => { pop.hidden = true; }, 200);
+    };
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (pop.hidden) open(); else close();
+    });
+    document.addEventListener("click", (e) => {
+      if (pop.hidden) return;
+      if (wrap.contains(e.target)) return;
+      close();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !pop.hidden) close();
+    });
+
+    // 发帖子:本页有发帖框就地滚过去;没有就去 103 纪事页,带上 ?post=1 让它自己聚焦
+    function goPost() {
+      const box = document.getElementById("composer");
+      if (box) {
+        close();
+        box.scrollIntoView({ behavior: "smooth", block: "center" });
+        const area = document.getElementById("f-body");
+        if (area) setTimeout(() => area.focus(), 420);
+        return;
+      }
+      location.href = "story.html?post=1";
+    }
+
+    wrap.addEventListener("click", (e) => {
+      const opt = e.target.closest("[data-fab]");
+      if (!opt) return;
+      const kind = opt.getAttribute("data-fab");
+      const me = C103Auth.user;
+
+      if (!me) {
+        tip("先用账号登录，再发内容");
+        setTimeout(() => { location.href = "account.html"; }, 400);
+        return;
+      }
+
+      if (kind === "post") {
+        goPost();
+        return;
+      }
+
+      // 发视频和视频页一样有门槛:实名过的同学 / 管理员 / 服主
+      if (me.role !== "owner" && me.role !== "admin" && me.verified !== 1) {
+        tip("实名认证通过后才能发视频");
+        setTimeout(() => { location.href = "account.html"; }, 700);
+        return;
+      }
+      location.href = "videos.html?post=1";
+    });
+
+    // 快滚到第一屏时先把加号藏起来,别压在海报上
+    const poster = document.getElementById("poster");
+    if (poster) {
+      const sync = () => {
+        const y = window.pageYOffset || document.documentElement.scrollTop || 0;
+        wrap.classList.toggle("is-off", y < poster.offsetHeight * 0.6);
+      };
+      let ticking = false;
+      addEventListener("scroll", () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { ticking = false; sync(); });
+      }, { passive: true });
+      sync();
+    }
+  })();
 
   // ---- 账号:先按未登录渲染,再问服务器要真实状态 ----
   renderAccount();

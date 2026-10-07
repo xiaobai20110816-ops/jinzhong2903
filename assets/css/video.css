@@ -148,6 +148,55 @@
   color: var(--muted);
 }
 
+/* 上传画质:原画质 / 1080p / 720p / 480p,选中那档描金 */
+.v-level {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.v-level[hidden] { display: none; }
+.v-level-lb {
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.v-level-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.v-level-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 13px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--muted);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.25s ease, border-color 0.25s ease, background-color 0.3s ease;
+}
+.v-level-opt:hover { border-color: var(--gold-line); }
+.v-level-opt:disabled { opacity: 0.4; cursor: not-allowed; }
+.v-level-opt b { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.5px; }
+.v-level-opt em { font-style: normal; font-size: 0.66rem; color: var(--faint); }
+.v-level-opt.active {
+  color: var(--gold);
+  border-color: var(--gold-line);
+  background: var(--gold-soft);
+}
+.v-level-opt.active b { color: var(--gold); }
+.v-level-note {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.7;
+  color: var(--faint);
+}
+
 /* 上传进度条 */
 .v-progress {
   height: 6px;

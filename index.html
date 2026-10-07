@@ -61,13 +61,13 @@
       </button>
     </section>
 
-    <!-- ========== 留言板:全班都能写,还能在评论下面继续回复 ========== -->
-    <section class="showcase board-section" id="board" aria-label="留言板">
+    <!-- ========== 班级社区:帖子和视频混在一条流里(小红书那种) ========== -->
+    <section class="showcase board-section" id="board" aria-label="班级社区">
       <div class="container">
         <div class="showcase-head" data-io>
           <span class="no">NEW</span>
-          <h2>留言板</h2>
-          <span class="en">MESSAGE BOARD</span>
+          <h2>班级社区</h2>
+          <span class="en">COMMUNITY</span>
           <a class="more" href="story.html" data-veil>进入 103 纪事<i>→</i></a>
         </div>
 
@@ -110,6 +110,12 @@
             <p class="gate-title">登录后才能发言</p>
             <p class="gate-sub">用账号署名，头像和个性签名会一起显示在留言上。</p>
             <a class="gate-btn" href="account.html">去登录 / 注册 →</a>
+          </div>
+
+          <div class="feed-tabs" id="feed-tabs" hidden>
+            <button type="button" class="feed-tab active" data-feed="all">全部</button>
+            <button type="button" class="feed-tab" data-feed="post">图文</button>
+            <button type="button" class="feed-tab" data-feed="video">视频</button>
           </div>
 
           <div class="story-list card-grid" id="story-list"></div>

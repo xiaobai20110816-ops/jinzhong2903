@@ -14,8 +14,19 @@
   "use strict";
 
   const API = "api";
-  const MAX_BYTES = 80 * 1024 * 1024;
+  const MAX_SRC = 500 * 1024 * 1024;   // 选片上限:再大浏览器自己也扛不住
+  const MAX_OUT = 80 * 1024 * 1024;    // 传上去的上限,和后端保持一致
   const PAGE_SIZE = 20;
+
+  /* 上传画质档位。原画质 = 不压,直接传原文件;
+     其余三档都是「在本地把画面重画到指定高度,再录一遍」。
+     kbps 是目标视频码率,只用来估个大小和喂给编码器。 */
+  const LEVELS = [
+    { id: "orig", name: "原画质", note: "不压缩", maxH: 0, kbps: 0 },
+    { id: "hd", name: "1080p", note: "清晰优先", maxH: 1080, kbps: 4000 },
+    { id: "sd", name: "720p", note: "推荐", maxH: 720, kbps: 1800 },
+    { id: "low", name: "480p", note: "最省流量", maxH: 480, kbps: 900 },
+  ];
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -193,6 +204,179 @@
     });
   }
 
+  /* ---------- 本地压缩 ----------
+     浏览器里能通用的一条路只有「canvas 重画 + MediaRecorder 录」:
+     把原片静音播一遍,按目标分辨率逐帧画到 canvas 上,画面和原片的音轨
+     一起录成一段新视频。代价是录制走真实时间 —— 1 分钟的视频就要等 1 分钟,
+     所以进度按播放进度走,过程中不能切走标签页(切走后浏览器会降帧)。 */
+
+  function pickMime() {
+    if (typeof MediaRecorder === "undefined") return "";
+    const list = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "video/mp4",
+    ];
+    for (const m of list) {
+      try {
+        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+      } catch (e) {
+        /* 个别浏览器 isTypeSupported 会抛,跳过这档继续试 */
+      }
+    }
+    return "";
+  }
+
+  function compressVideo(file, level, onProgress) {
+    return new Promise((resolve, reject) => {
+      const mime = pickMime();
+      if (!mime) {
+        reject(new Error("这个浏览器不能在本地压缩，换 Chrome / Edge，或选「原画质」直接传"));
+        return;
+      }
+
+      const url = URL.createObjectURL(file);
+      const v = document.createElement("video");
+      let ac = null;
+      let raf = 0;
+      let done = false;
+
+      const clean = () => {
+        cancelAnimationFrame(raf);
+        try { v.pause(); } catch (e) {}
+        v.removeAttribute("src");
+        v.load();
+        URL.revokeObjectURL(url);
+        if (v.parentNode) v.parentNode.removeChild(v);
+        if (ac && ac.close) { try { ac.close(); } catch (e) {} }
+      };
+      const die = (err) => {
+        if (done) return;
+        done = true;
+        clean();
+        reject(err);
+      };
+
+      v.preload = "auto";
+      v.playsInline = true;
+      v.setAttribute("playsinline", "");
+      v.style.cssText = "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+      document.body.appendChild(v);
+      v.src = url;
+
+      v.onerror = () => die(new Error("这个视频浏览器打不开，换成 MP4 再试"));
+
+      v.onloadedmetadata = () => {
+        const dur = Number(v.duration) || 0;
+        if (!dur) {
+          die(new Error("读不出这段视频的时长，选「原画质」直接传吧"));
+          return;
+        }
+
+        const w0 = v.videoWidth || 720;
+        const h0 = v.videoHeight || 1280;
+        const scale = Math.min(1, level.maxH / h0);
+        // 编码器要求宽高是偶数,不然个别浏览器直接失败
+        const cw = Math.max(2, Math.round((w0 * scale) / 2) * 2);
+        const chh = Math.max(2, Math.round((h0 * scale) / 2) * 2);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = cw;
+        canvas.height = chh;
+        const ctx = canvas.getContext("2d");
+
+        let stream;
+        try {
+          stream = canvas.captureStream(30);
+        } catch (e) {
+          die(new Error("这个浏览器抓不了画面，选「原画质」直接传吧"));
+          return;
+        }
+
+        // 声音从原片接过来,并且只接到录制目标 —— 所以压缩过程是静音的
+        let hasAudio = false;
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) {
+            ac = new AC();
+            if (ac.resume) ac.resume();
+            const node = ac.createMediaElementSource(v);
+            const dest = ac.createMediaStreamDestination();
+            node.connect(dest);
+            const tracks = dest.stream.getAudioTracks();
+            if (tracks.length) {
+              stream.addTrack(tracks[0]);
+              hasAudio = true;
+            }
+          }
+        } catch (e) {
+          hasAudio = false;
+        }
+        // 接不上音轨就静音播,免得压的时候外放吵人
+        v.muted = !hasAudio;
+
+        let recorder;
+        try {
+          recorder = new MediaRecorder(stream, {
+            mimeType: mime,
+            videoBitsPerSecond: level.kbps * 1000,
+            audioBitsPerSecond: 96000,
+          });
+        } catch (e) {
+          die(new Error("这台设备没法压缩，选「原画质」直接传吧"));
+          return;
+        }
+
+        const chunks = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size) chunks.push(e.data);
+        };
+        recorder.onerror = () => die(new Error("压缩中断了，重试一次"));
+        recorder.onstop = () => {
+          if (done) return;
+          const type = (mime.split(";")[0] || "video/webm").trim();
+          const blob = new Blob(chunks, { type: type });
+          if (!blob.size) {
+            die(new Error("压出来是空的，选「原画质」直接传吧"));
+            return;
+          }
+          done = true;
+          clean();
+          resolve(blob);
+        };
+
+        // 一直画到录完为止:play() 是异步的,所以循环不能因为「还没开始播」就退出
+        const draw = () => {
+          if (done) return;
+          if (!v.paused && !v.ended) {
+            ctx.drawImage(v, 0, 0, cw, chh);
+            if (onProgress) onProgress(Math.min(1, v.currentTime / dur));
+          }
+          raf = requestAnimationFrame(draw);
+        };
+
+        v.onended = () => {
+          try { ctx.drawImage(v, 0, 0, cw, chh); } catch (e) {}
+          if (recorder.state !== "inactive") recorder.stop();
+        };
+
+        recorder.start(400);
+        const p = v.play();
+        if (p && p.catch) {
+          p.catch((err) => {
+            die(new Error(
+              err && err.name === "NotAllowedError"
+                ? "浏览器拦下了自动播放，点一下页面再点发布"
+                : "这个视频播不起来，选「原画质」直接传吧"
+            ));
+          });
+        }
+        draw();
+      };
+    });
+  }
+
   function mountUpload() {
     const box = $("#video-upload");
     if (!box) return;
@@ -208,8 +392,15 @@
     const bar = box.querySelector("#v-progress i");
     const msg = box.querySelector("#v-msg");
     const submit = box.querySelector("#v-submit");
+    const levelBox = box.querySelector("#v-level");
+    const levelRow = box.querySelector("#v-level-row");
+    const levelNote = box.querySelector("#v-level-note");
 
-    const state = { file: null, cover: null, duration: 0, width: 0, height: 0, busy: false };
+    const state = {
+      file: null, cover: null, duration: 0, width: 0, height: 0, busy: false,
+      level: "orig",
+      canCompress: !!pickMime(),
+    };
 
     const say = (text, kind) => {
       msg.textContent = text || "";
@@ -222,15 +413,57 @@
       state.duration = 0;
       state.width = 0;
       state.height = 0;
+      state.level = "orig";
       if (preview) {
         preview.hidden = true;
         preview.removeAttribute("src");
       }
       if (metaRow) metaRow.innerHTML = "";
+      if (levelBox) levelBox.hidden = true;
       drop.hidden = false;
     }
 
+    /* 画质档位:没选片时整块藏起来;选完按原片的清晰度和体积挑一个默认档 */
+    function paintLevels() {
+      if (!levelBox || !levelRow) return;
+      if (!state.file) {
+        levelBox.hidden = true;
+        return;
+      }
+      levelBox.hidden = false;
+      levelRow.innerHTML = LEVELS.map((lv) => {
+        const off = lv.id !== "orig" && !state.canCompress;
+        return `<button type="button" class="v-level-opt${state.level === lv.id ? " active" : ""}" data-level="${lv.id}"${off ? " disabled" : ""}>
+          <b>${lv.name}</b><em>${lv.note}</em>
+        </button>`;
+      }).join("");
+
+      const lv = LEVELS.filter((x) => x.id === state.level)[0] || LEVELS[0];
+      if (levelNote) {
+        if (lv.id === "orig") {
+          levelNote.textContent = state.canCompress
+            ? `原文件 ${fmtSize(state.file.size)}，原样上传，最清楚也最占流量`
+            : `原文件 ${fmtSize(state.file.size)}，原样上传`;
+        } else {
+          const est = (lv.kbps * 1000 * state.duration) / 8;
+          const save = state.file.size > 0 ? Math.max(0, 1 - est / state.file.size) : 0;
+          levelNote.textContent =
+            `压到 ${lv.maxH}p 大约 ${fmtSize(est)}` +
+            (save > 0.05 ? `，比原片小 ${Math.round(save * 100)}%` : "") +
+            `；压缩要按片长实时走一遍（这段约 ${Math.ceil(state.duration)} 秒），过程中别关页面`;
+        }
+      }
+    }
+
     drop.addEventListener("click", () => file.click());
+    if (levelRow) {
+      levelRow.addEventListener("click", (e) => {
+        const opt = e.target.closest("[data-level]");
+        if (!opt || opt.disabled) return;
+        state.level = opt.getAttribute("data-level") || "orig";
+        paintLevels();
+      });
+    }
 
     file.addEventListener("change", async () => {
       const f = (file.files || [])[0];
@@ -242,8 +475,12 @@
         say("只收 MP4 / WebM / MOV 视频", "err");
         return;
       }
-      if (f.size > MAX_BYTES) {
-        say("视频超过 " + Math.round(MAX_BYTES / 1048576) + "MB，先剪短或压一下再传", "err");
+      if (f.size > MAX_SRC) {
+        say(
+          "这个视频有 " + fmtSize(f.size) + "，太大了，先剪短一点（上限 " +
+            Math.round(MAX_SRC / 1048576) + "MB）",
+          "err"
+        );
         return;
       }
 
@@ -269,6 +506,10 @@
             (state.width ? `<span class="v-tag">${state.width}×${state.height}</span>` : "") +
             `<span class="v-tag">封面已自动截好</span>`;
         }
+        // 手机拍的片子默认压一档;本来就是小片子就原样传,省得白等
+        const big = info.height > 720 || f.size > 24 * 1024 * 1024;
+        state.level = big && state.canCompress ? "sd" : "orig";
+        paintLevels();
         say("好了，起个标题就能发", "ok");
       } catch (err) {
         say(err.message, "err");
@@ -301,9 +542,10 @@
 
       state.busy = true;
       submit.disabled = true;
-      submit.textContent = "上传中";
+      submit.textContent = "准备中";
       progress.hidden = false;
       bar.style.width = "0%";
+      if (levelRow) levelRow.querySelectorAll(".v-level-opt").forEach((b) => (b.disabled = true));
 
       try {
         // 封面先走普通的图片上传(小图进 KV),再把 key 跟着视频一起提交
@@ -321,6 +563,38 @@
           coverKey = d.key;
         }
 
+        // 要压就先在本地压一遍,压完才上传 —— 大文件全靠这一步才传得上去
+        const lv = LEVELS.filter((x) => x.id === state.level)[0] || LEVELS[0];
+        let out = state.file;
+        if (lv.id !== "orig") {
+          if (!state.canCompress) {
+            say("这个浏览器压不了，换 Chrome / Edge，或把画质改成「原画质」", "err");
+            return;
+          }
+          submit.textContent = "压缩中";
+          bar.style.width = "0%";
+          say("正在压缩，别关页面、别切走标签页…（0%）");
+          const blob = await compressVideo(state.file, lv, (p) => {
+            const pct = Math.round(p * 100);
+            bar.style.width = pct + "%";
+            say(`正在压缩，别关页面、别切走标签页…（${pct}%）`);
+          });
+          const ext = blob.type.indexOf("mp4") >= 0 ? "mp4" : "webm";
+          out = new File([blob], "clip." + ext, { type: blob.type });
+          const cut = 1 - out.size / state.file.size;
+          say(
+            `压好了：${fmtSize(state.file.size)} → ${fmtSize(out.size)}` +
+              (cut > 0.03 ? `（小了 ${Math.round(cut * 100)}%）` : "") +
+              "，开始上传…",
+            "ok"
+          );
+        }
+
+        if (out.size > MAX_OUT) {
+          say(`还是 ${fmtSize(out.size)}，超过 80MB，换更低一档再试`, "err");
+          return;
+        }
+
         const q = new URLSearchParams({
           title,
           body: bodyEl.value.trim().slice(0, 2000),
@@ -331,8 +605,10 @@
           vis: visibility,
         });
 
+        submit.textContent = "上传中";
+        bar.style.width = "0%";
         say("正在上传视频，别关页面…（0%）");
-        await putVideo(state.file, q.toString(), (p) => {
+        await putVideo(out, q.toString(), (p) => {
           const pct = Math.round(p * 100);
           bar.style.width = pct + "%";
           say(`正在上传视频，别关页面…（${pct}%）`);
@@ -352,6 +628,7 @@
         state.busy = false;
         submit.disabled = false;
         submit.textContent = "发布视频";
+        if (state.file) paintLevels();
       }
     });
 
@@ -363,6 +640,21 @@
       }
       box.hidden = false;
     });
+
+    // 从底部那个「＋」跳过来的:等上传区亮出来,直接滚到位
+    if (new URLSearchParams(location.search).get("post")) {
+      const jump = () => {
+        if (box.hidden) return false;
+        box.scrollIntoView({ behavior: "smooth", block: "start" });
+        return true;
+      };
+      if (!jump()) {
+        let n = 0;
+        const t = setInterval(() => {
+          if (jump() || ++n > 25) clearInterval(t);
+        }, 200);
+      }
+    }
   }
 
   /* ============================================================
