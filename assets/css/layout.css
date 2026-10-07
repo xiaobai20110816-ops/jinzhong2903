@@ -871,3 +871,165 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
 }
 .md-btn:hover { color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }
 .md-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ============================================================
+   表情包:正文里的表情图 + 全站共用的选择面板
+   ============================================================ */
+
+/* 正文里内嵌的表情图:跟着行高走,不撑破排版 */
+.c103-emoji {
+  display: inline-block;
+  width: 1.5em;
+  height: 1.5em;
+  margin: -0.25em 0.08em 0;
+  vertical-align: middle;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+/* 触发按钮:和「＋ 加图」那排小药丸一个长相 */
+.emoji-btn {
+  flex: none;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: color 0.25s ease, border-color 0.3s ease, background-color 0.4s ease;
+}
+.emoji-btn:hover { color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }
+
+.emoji-pop {
+  position: fixed;
+  z-index: 620;
+  width: 320px;
+  max-width: calc(100vw - 20px);
+  padding: 10px 10px 12px;
+  border-radius: 18px;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim), 0 18px 46px rgba(0, 0, 0, 0.42);
+  animation: emoji-in 0.18s ease both;
+}
+@keyframes emoji-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.emoji-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.emoji-tab {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.76rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.3s ease;
+}
+.emoji-tab:hover { color: var(--gold); }
+.emoji-tab.active { color: #0b0f1a; background: linear-gradient(120deg, var(--gold), var(--gold-2)); }
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  max-height: 214px;
+  margin-top: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.emoji-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 1.22rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
+}
+.emoji-cell:hover { background: var(--gold-soft); border-color: var(--gold-line); transform: translateY(-1px); }
+.emoji-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.emoji-add {
+  color: var(--gold);
+  font-size: 1.3rem;
+  font-weight: 900;
+  border: 1px dashed var(--gold-line);
+}
+.emoji-star {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--glass-surface);
+  color: var(--faint);
+  font-style: normal;
+  font-size: 0.62rem;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: auto;
+}
+.emoji-star.on { color: var(--gold); }
+.emoji-empty {
+  grid-column: 1 / -1;
+  margin: 18px 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--faint);
+}
+
+/* 轻提示:nav.js 里的表情面板用它,不依赖 story.css */
+.c103-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  z-index: 660;
+  transform: translate(-50%, 14px);
+  max-width: 82vw;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.c103-toast.in { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 480px) {
+  .emoji-pop { width: calc(100vw - 20px); }
+  .emoji-grid { grid-template-columns: repeat(7, 1fr); }
+}

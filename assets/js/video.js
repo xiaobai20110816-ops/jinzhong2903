@@ -88,6 +88,16 @@
     return !!u && (u.role === "owner" || u.role === "admin");
   }
 
+  /* 评论 / 视频简介里的正文:转义 + 把 [emoji:名字] 换成表情图 */
+  function richText(s) {
+    return window.C103Emoji ? window.C103Emoji.render(s) : esc(s);
+  }
+
+  function emojiReady() {
+    if (!window.C103Emoji) return Promise.resolve();
+    return window.C103Emoji.load().catch(() => {});
+  }
+
   /* ============================================================
      一、发布视频(videos.html)
      ============================================================ */
@@ -409,7 +419,7 @@
         <div class="v-meta">
           ${face}${avatarHTML(v.author)}${name}${faceEnd}
           <p class="v-title">${esc(v.title || "视频")}</p>
-          ${v.body ? `<p class="v-body">${esc(v.body)}</p>` : ""}
+          ${v.body ? `<p class="v-body">${richText(v.body)}</p>` : ""}
           <p class="v-dateline">${esc(fmtTime(v.created_at))}</p>
         </div>
       </section>`;
@@ -434,6 +444,7 @@
       if (page > state.totalPages && page !== 1) return;
       state.loading = true;
       try {
+        await emojiReady();
         const d = await api(API + "/videos?page=" + page + "&size=" + PAGE_SIZE);
         state.page = d.page;
         state.totalPages = Math.max(1, Math.ceil(d.total / d.size));
@@ -648,7 +659,7 @@
         <div class="v-cmt-main">
           <div class="v-cmt-head">${name}<span class="v-cmt-time">${esc(fmtTime(c.created_at))}</span></div>
           ${to}
-          ${c.body ? `<p class="v-cmt-body">${esc(c.body)}</p>` : ""}
+          ${c.body ? `<p class="v-cmt-body">${richText(c.body)}</p>` : ""}
           <div class="v-cmt-foot"><button class="v-cmt-btn" type="button" data-reply="${c.id}" data-name="${esc(
         C103Person.name(c.author)
       )}">回复</button></div>
@@ -676,6 +687,7 @@
       const v = byId.get(videoId);
       state.replyTo = null;
       setReplyBar("");
+      await emojiReady();
       drawerCount.textContent = "…";
       drawerList.innerHTML = '<p class="v-cmt-empty">读取中…</p>';
       drawer.classList.add("open");
@@ -809,6 +821,11 @@
       area.placeholder = "回复 @" + state.replyTo.name + "…";
       area.focus();
     });
+
+    // 评论框的表情按钮
+    if (window.C103Emoji) {
+      window.C103Emoji.mount(drawer.querySelector("#v-cmt-emoji"), drawer.querySelector("#v-cmt-text"));
+    }
 
     drawer.querySelector("#v-cmt-send").addEventListener("click", sendComment);
     drawer.querySelector("#v-cmt-text").addEventListener("keydown", (e) => {

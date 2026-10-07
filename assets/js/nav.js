@@ -431,6 +431,376 @@ const C103Auth = {
 window.C103Auth = C103Auth;
 
 /* ============================================================
+   表情包:全站共用同一个选择面板
+   ------------------------------------------------------------
+   · 默认表情 = unicode 字符,点一下直接把字符插进输入框
+   · 自制表情 = 图片,存在 KV;正文里用 [emoji:名字] 当占位符,
+     渲染时由 render() 换成 <img>,所以在哪都能显示
+   用法:
+     C103Emoji.load()          载入表情列表(返回 Promise,可重复 await)
+     C103Emoji.render(text)    转义 + 把 [emoji:xx] 换成图 —— 正文渲染用它
+     C103Emoji.plain(text)     纯文本版(摘要 / 列表预览用),占位符换成 :名字:
+     C103Emoji.mount(btn, ta)  把一个按钮接到某个 textarea 上
+   ============================================================ */
+
+const DEFAULT_EMOJIS = [
+  "😀", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "🙂", "😉",
+  "😍", "🥰", "😘", "😜", "🤪", "🤗", "🤔", "🤨", "😐", "😴",
+  "🥱", "😪", "😢", "😭", "🥺", "😤", "😡", "😱", "🤯", "😳",
+  "🙃", "😎", "🤓", "🥳", "😇", "🙏", "👍", "👎", "👏", "🤝",
+  "✌️", "💪", "🎉", "🔥", "💯", "✨", "⭐", "❤️", "💔", "🌹",
+  "🎵", "🎶", "📸", "⚽", "🏀", "🍚", "🍜", "🍦", "☕", "🌙",
+];
+
+const EMOJI_RE = /\[emoji:([^\]\n]{1,24})\]/g;
+
+window.C103Emoji = (function () {
+  const state = {
+    list: [],
+    favs: new Set(),
+    recent: [],
+    map: new Map(),   // 名字 → 表情,渲染时用
+    me: null,
+    ready: null,
+    tab: "default",
+  };
+
+  let pop = null;       // 选择面板
+  let ownerBtn = null;  // 面板正挂在哪颗按钮上
+  let ownerTa = null;   // 面板往哪个输入框里插
+
+  function rebuildMap() {
+    state.map = new Map(state.list.map((e) => [e.name, e]));
+  }
+
+  function toast(text) {
+    const t = document.createElement("div");
+    t.className = "c103-toast";
+    t.textContent = text;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add("in"));
+    setTimeout(() => {
+      t.classList.remove("in");
+      setTimeout(() => t.remove(), 300);
+    }, 2200);
+  }
+
+  /* 载入表情列表;登录状态一变就作废重拉(收藏 / 最近使用是各人各一份) */
+  function load() {
+    if (state.ready) return state.ready;
+    state.ready = apiFetch(API + "/emojis")
+      .then((d) => {
+        state.list = d.list || [];
+        state.favs = new Set(d.favs || []);
+        state.recent = d.recent || [];
+        rebuildMap();
+        if (pop) renderPanel();
+        return state;
+      })
+      .catch(() => {
+        // 拉不到就退回只有默认表情,页面照常能用
+        state.list = [];
+        state.favs = new Set();
+        state.recent = [];
+        state.ready = null; // 下次再试
+        return state;
+      });
+    return state.ready;
+  }
+
+  /* ---------- 正文渲染 ---------- */
+
+  // 整段转义后,把 [emoji:名字] 换成对应的图;认不出的名字原样留着
+  function render(text) {
+    const s = esc(text == null ? "" : text);
+    if (!s || !s.indexOf("[emoji:")) return s;
+    return s.replace(EMOJI_RE, (m, name) => {
+      const e = state.map.get(name);
+      if (!e) return m;
+      return (
+        '<img class="c103-emoji" src="' + API + "/img/" + e.key +
+        '" alt=":' + name + ':" title=":' + name + ':" loading="lazy">'
+      );
+    });
+  }
+
+  // 纯文本:去掉标记,占位符换成 :名字: —— 摘要、列表预览用它
+  function plain(text) {
+    return String(text == null ? "" : text).replace(EMOJI_RE, (m, name) => ":" + name + ":");
+  }
+
+  /* ---------- 选面板 ---------- */
+
+  function cellDefault(ch) {
+    return `<button class="emoji-cell" type="button" data-ch="${ch}">${ch}</button>`;
+  }
+
+  function cellCustom(e, withStar) {
+    const on = state.favs.has(e.id);
+    const star = withStar && state.me
+      ? `<i class="emoji-star${on ? " on" : ""}" data-fav="${e.id}" title="${on ? "取消收藏" : "收藏这个表情"}">★</i>`
+      : "";
+    return `<button class="emoji-cell emoji-pic" type="button" data-emid="${e.id}" data-name="${esc(e.name)}" title=":${esc(e.name)}:">
+      <img src="${API}/img/${esc(e.key)}" alt="${esc(e.name)}" loading="lazy">${star}</button>`;
+  }
+
+  function gridHTML() {
+    if (state.tab === "default") {
+      return DEFAULT_EMOJIS.map(cellDefault).join("");
+    }
+    if (state.tab === "custom") {
+      const add = state.me
+        ? `<button class="emoji-cell emoji-add" type="button" data-upload="1" title="上传自制表情">＋</button>`
+        : "";
+      const list = state.list.map((e) => cellCustom(e, true)).join("");
+      return list + add || '<p class="emoji-empty">还没有自制表情</p>';
+    }
+    if (state.tab === "fav") {
+      const list = state.list.filter((e) => state.favs.has(e.id));
+      return list.length ? list.map((e) => cellCustom(e, true)).join("") : '<p class="emoji-empty">还没收藏过表情</p>';
+    }
+    return state.recent.length
+      ? state.recent.map((e) => cellCustom(e, false)).join("")
+      : '<p class="emoji-empty">还没用过自制表情</p>';
+  }
+
+  const TABS = [
+    { id: "default", label: "默认" },
+    { id: "custom", label: "自制" },
+    { id: "fav", label: "收藏" },
+    { id: "recent", label: "最近" },
+  ];
+
+  function renderPanel() {
+    if (!pop) return;
+    pop.innerHTML = `<div class="emoji-tabs">${TABS.map(
+      (t) => `<button class="emoji-tab${state.tab === t.id ? " active" : ""}" type="button" data-tab="${t.id}">${t.label}</button>`
+    ).join("")}</div><div class="emoji-grid">${gridHTML()}</div>`;
+  }
+
+  function place() {
+    if (!pop || !ownerBtn) return;
+    const r = ownerBtn.getBoundingClientRect();
+    const pw = pop.offsetWidth || 300;
+    const ph = pop.offsetHeight || 260;
+    let left = Math.max(10, Math.min(r.left + r.width / 2 - pw / 2, innerWidth - pw - 10));
+    let top = r.top - ph - 10;
+    if (top < 10) top = Math.min(innerHeight - ph - 10, r.bottom + 10);
+    pop.style.left = left + "px";
+    pop.style.top = Math.max(10, top) + "px";
+  }
+
+  // 把文字插进输入框光标处,并把光标移到后面
+  function insertText(ta, text) {
+    ta.focus();
+    const s = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+    const e = ta.selectionEnd == null ? s : ta.selectionEnd;
+    if (typeof ta.setRangeText === "function") ta.setRangeText(text, s, e, "end");
+    else {
+      ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+      ta.setSelectionRange(s + text.length, s + text.length);
+    }
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function markUsed(id) {
+    const e = state.list.find((x) => x.id === id);
+    if (e) state.recent = [e].concat(state.recent.filter((x) => x.id !== id)).slice(0, 12);
+    if (state.me) apiFetch(API + "/emojis/" + id + "/use", { method: "POST" }).catch(() => {});
+  }
+
+  async function toggleFav(id) {
+    if (!state.me) {
+      toast("登录后才能收藏表情");
+      return;
+    }
+    try {
+      const d = await apiFetch(API + "/emojis/" + id + "/fav", { method: "POST" });
+      if (d.faved) state.favs.add(id);
+      else state.favs.delete(id);
+      renderPanel();
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
+  /* 自制表情图:缩到 240px 以内,坚持用 PNG 保住透明底 */
+  function shrinkEmoji(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const max = 240;
+        const w0 = img.width || 1;
+        const h0 = img.height || 1;
+        const fit = Math.min(1, max / Math.max(w0, h0));
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(w0 * fit));
+        c.height = Math.max(1, Math.round(h0 * fit));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob((b) => (b ? resolve(b) : reject(new Error("表情处理失败，换一张试试"))), "image/png");
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("这张图浏览器读不出来，换一张试试"));
+      };
+      img.src = url;
+    });
+  }
+
+  async function uploadEmoji(file) {
+    if (!state.me) {
+      toast("登录后才能上传表情");
+      return;
+    }
+    const raw = window.prompt("给这个表情起个名字（最多 12 字，插入时显示 :名字:）", "");
+    if (raw === null) return;
+    const name = String(raw)
+      .replace(/[\r\n\t]/g, " ")
+      .replace(/[[\]:'"<>&]/g, "")
+      .trim()
+      .slice(0, 12);
+    if (!name) {
+      toast("名字不能是空的");
+      return;
+    }
+    try {
+      const blob = await shrinkEmoji(file);
+      const up = await apiFetch(API + "/upload", {
+        method: "POST",
+        headers: { "content-type": blob.type || "image/png" },
+        body: blob,
+      });
+      const d = await apiFetch(API + "/emojis", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name, key: up.key }),
+      });
+      state.list.push(d.emoji);
+      state.tab = "custom";
+      rebuildMap();
+      renderPanel();
+      place();
+      toast("表情已加进「自制」里");
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
+  let file = null;
+
+  function onPopClick(e) {
+    const tab = e.target.closest("[data-tab]");
+    if (tab) {
+      state.tab = tab.getAttribute("data-tab");
+      renderPanel();
+      place();
+      return;
+    }
+    const star = e.target.closest("[data-fav]");
+    if (star) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFav(parseInt(star.getAttribute("data-fav"), 10) || 0);
+      return;
+    }
+    const up = e.target.closest("[data-upload]");
+    if (up) {
+      e.preventDefault();
+      if (file) file.click();
+      return;
+    }
+    const cell = e.target.closest(".emoji-cell");
+    if (!cell) return;
+    e.preventDefault();
+    const ch = cell.getAttribute("data-ch");
+    if (ch) {
+      if (ownerTa) insertText(ownerTa, ch);
+      return;
+    }
+    const id = parseInt(cell.getAttribute("data-emid"), 10) || 0;
+    const name = cell.getAttribute("data-name") || "";
+    if (!id || !name) return;
+    if (ownerTa) insertText(ownerTa, "[emoji:" + name + "]");
+    markUsed(id);
+  }
+
+  function onDocClick(e) {
+    if (!pop || pop.hidden) return;
+    if (pop.contains(e.target)) return;
+    if (ownerBtn && ownerBtn.contains(e.target)) return;
+    closePop();
+  }
+
+  function onKey(e) {
+    if (e.key === "Escape" && pop && !pop.hidden) closePop();
+  }
+
+  function closePop() {
+    if (!pop) return;
+    pop.hidden = true;
+    ownerBtn = null;
+    ownerTa = null;
+  }
+
+  function openPop(btn, ta) {
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.className = "emoji-pop";
+      pop.hidden = true;
+      pop.addEventListener("click", onPopClick);
+      document.body.appendChild(pop);
+      file = document.createElement("input");
+      file.type = "file";
+      file.accept = "image/*";
+      file.hidden = true;
+      file.addEventListener("change", () => {
+        const f = file.files && file.files[0];
+        file.value = "";
+        if (f) uploadEmoji(f);
+      });
+      pop.appendChild(file);
+      document.addEventListener("click", onDocClick);
+      document.addEventListener("keydown", onKey);
+      addEventListener("resize", closePop, { passive: true });
+    }
+    ownerBtn = btn;
+    ownerTa = ta;
+    // 点开就顺手把最新的一份拉回来(第一次会真发请求,之后走缓存)
+    load();
+    renderPanel();
+    pop.hidden = false;
+    place();
+  }
+
+  /* 把一个按钮接到某个输入框上;同一个按钮只接一次 */
+  function mount(btn, ta) {
+    if (!btn || !ta || btn.dataset.emojiOn) return;
+    btn.dataset.emojiOn = "1";
+    btn.setAttribute("aria-label", "插入表情");
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (pop && !pop.hidden && ownerBtn === btn) closePop();
+      else openPop(btn, ta);
+    });
+  }
+
+  // 登录状态一变,收藏 / 最近使用就得重拉
+  C103Auth.onChange((u) => {
+    state.me = u;
+    state.ready = null;
+    state.favs = new Set();
+    state.recent = [];
+    if (u) load();
+    else if (pop) renderPanel();
+  });
+
+  return { load: load, render: render, plain: plain, mount: mount, close: closePop, state: state };
+})();
+
+/* ============================================================
    站点内容:全站文案 / 公告 / 学生 / 宿舍 / 高光都从这里取
    拉一次缓存在内存里,所有页面共用;后端没接上就返回 null,
    页面各自保留一份写死的兜底样子,永远不会空白。
@@ -837,16 +1207,16 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-06-6";
-const SPLASH_DATE = "2026.10.06";
+const SPLASH_VERSION = "2026-10-07-1";
+const SPLASH_DATE = "2026.10.07";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "视频来了：全班的片子都能传能看，点开就是全屏，上下滑接着刷。";
+const SPLASH_LEAD = "能发能聊了：自制表情、群聊、还有「你可能认识的人」——顺手也把首页加载调快了一档。";
 const SPLASH_NOTES = [
-  "新增「视频」页：实名认证过的同学 / 管理员 / 服主都能传片子，封面自动从画面里截一张",
-  "视频全屏播放页：上下滑切换，右侧点赞、评论、收藏、分享，点画面暂停 / 继续，键盘 ↑↓ 也能换片",
-  "首页卡片流现在是帖子和视频混着排的，视频卡片中间有播放键、右上角显示时长",
-  "视频下面的评论、回复和帖子一样，点铃铛里的「评论了你的视频」直接跳到那条评论",
-  "视频存在 B2 云存储，站内只存地址，拖进度条也没问题",
+  "全站能用表情了：留言板、视频评论、私信都多了一个 😊 按钮，60 个默认表情随手插",
+  "实名认证过的同学还能上传图片做「自制表情」，收藏起来常用的一排，也会记最近用过的",
+  "私信页能建群聊了：起个群名、勾几个同学就成，群里有头像有名字，未读也带小红点",
+  "私信页新增「你可能认识的人」：和你有共同好友的同学排在前面，点一下就能开聊",
+  "首页接口加了缓存，游客第一次打开之后的翻页明显轻快，新域名上也顺了",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 

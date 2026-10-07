@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="103班 · 私信">
+  <meta name="description" content="103班 · 私信与群聊">
   <title>私信 · 103班 音乐领军班</title>
   <meta name="view-transition" content="same-origin">
   <meta name="theme-color" content="#070b14">
@@ -46,11 +46,78 @@
     .dm-list {
       display: flex;
       flex-direction: column;
-      gap: 4px;
       padding: 8px;
       border-radius: 20px;
-      overflow-y: auto;
+      overflow: hidden;
     }
+    .dm-list-head {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 6px 9px;
+    }
+    .dm-list-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.86rem;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+    .dm-new {
+      margin-left: auto;
+      flex: none;
+      padding: 6px 13px;
+      border-radius: 999px;
+      border: 1px solid var(--gold-line);
+      background: var(--gold-soft);
+      color: var(--gold);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.76rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: background-color 0.25s ease, color 0.25s ease, transform 0.2s ease;
+    }
+    .dm-new:hover { transform: translateY(-1px); background: var(--gold); color: #0b0f1a; }
+
+    /* 「你可能认识的人」:横着滑一行头像 */
+    .dm-sugg { flex: none; padding: 0 4px 9px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+    .dm-sugg-label { padding: 0 2px 6px; font-size: 0.68rem; letter-spacing: 1px; color: var(--faint); }
+    .dm-sugg-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .dm-sugg-row::-webkit-scrollbar { display: none; }
+    .sugg-item {
+      flex: none;
+      width: 54px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sugg-item .dm-face { width: 42px; height: 42px; transition: transform 0.25s ease; }
+    .sugg-item:hover .dm-face { transform: scale(1.07); }
+    .sugg-name {
+      max-width: 54px;
+      font-size: 0.66rem;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dm-items { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
     .dm-item {
       display: flex;
       align-items: center;
@@ -81,6 +148,12 @@
       font-size: 1rem;
       color: #0b0f1a;
       background: linear-gradient(135deg, var(--gold), var(--gold-2));
+    }
+    /* 群头像:圆角方块 + 蓝色系,和一对一的气泡一眼分开 */
+    .dm-face-group {
+      border-radius: 13px;
+      color: #fff;
+      background: linear-gradient(135deg, #4c6ef5, #7c8cff);
     }
     .dm-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .dm-item-top { display: flex; align-items: center; gap: 6px; }
@@ -130,6 +203,7 @@
       padding: 13px 18px;
       border-bottom: 1px solid var(--line);
     }
+    .dm-head-face { width: 34px; height: 34px; font-size: 0.86rem; }
     .dm-back {
       display: none;
       align-items: center;
@@ -153,7 +227,11 @@
       font-weight: 700;
       font-size: 0.98rem;
       color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
+    .dm-chat-sub { flex: none; margin-left: auto; font-size: 0.7rem; color: var(--faint); }
     .dm-body {
       flex: 1;
       display: flex;
@@ -177,6 +255,14 @@
     .dm-msg { display: flex; flex-direction: column; gap: 3px; max-width: 76%; }
     .dm-msg.them { align-self: flex-start; align-items: flex-start; }
     .dm-msg.mine { align-self: flex-end; align-items: flex-end; }
+    /* 群聊:头像 + 气泡横着排,自己发的靠右 */
+    .dm-line { display: flex; gap: 9px; max-width: 84%; }
+    .dm-line.them { align-self: flex-start; }
+    .dm-line.mine { align-self: flex-end; flex-direction: row-reverse; }
+    .dm-line .dm-face { width: 30px; height: 30px; font-size: 0.76rem; margin-top: 3px; }
+    .dm-line .dm-msg { max-width: 100%; align-items: flex-start; }
+    .dm-line.mine .dm-msg { align-items: flex-end; }
+    .dm-from { font-size: 0.68rem; color: var(--faint); }
     .dm-bubble {
       padding: 9px 13px;
       border-radius: 14px;
@@ -257,13 +343,106 @@
     .dm-notice p { margin-top: 12px; font-size: 0.9rem; line-height: 1.9; color: var(--muted); }
     .dm-link { color: var(--gold); border-bottom: 1px solid var(--gold-line); }
 
+    /* ---- 建群弹窗 ---- */
+    .dm-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 600;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(4, 8, 16, 0.55);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .dm-modal[hidden] { display: none; }
+    .dm-modal-card {
+      width: min(440px, 100%);
+      max-height: min(78vh, 620px);
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      padding: 20px;
+      border-radius: 22px;
+    }
+    .dm-modal-card h3 {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.05rem;
+      letter-spacing: 3px;
+      color: var(--text);
+    }
+    .dm-modal-card .dm-input { min-height: 42px; width: 100%; }
+    .dm-pick {
+      flex: 1;
+      min-height: 120px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 4px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+    }
+    .dm-pick-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 9px;
+      border: none;
+      border-radius: 11px;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      font-family: var(--font-body);
+      font-size: 0.86rem;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background-color 0.2s ease;
+    }
+    .dm-pick-item:hover { background: var(--chip); }
+    .dm-pick-item.on { background: var(--gold-soft); }
+    .dm-pick-item .dm-face { width: 34px; height: 34px; font-size: 0.84rem; }
+    .dm-pick-name {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+    .dm-pick-tick { flex: none; color: var(--gold); font-weight: 900; opacity: 0; }
+    .dm-pick-item.on .dm-pick-tick { opacity: 1; }
+    .dm-modal-foot { display: flex; gap: 10px; justify-content: flex-end; }
+    .dm-btn {
+      padding: 9px 20px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: 1px;
+      color: #0b0f1a;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.3s ease;
+    }
+    .dm-btn:hover { transform: translateY(-1px); }
+    .dm-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+    .dm-btn.ghost { background: var(--chip); border-color: var(--line); color: var(--muted); }
+
     /* 轻提示 */
     .dm-toast {
       position: fixed;
       left: 50%;
       bottom: 84px;
       transform: translate(-50%, 12px);
-      z-index: 500;
+      z-index: 700;
       padding: 11px 22px;
       border-radius: 999px;
       background: var(--glass-surface);
@@ -283,7 +462,7 @@
     /* 窄屏:单列,默认只看会话列表,点了会话再切到对话窗 */
     @media (max-width: 720px) {
       .dm-app { grid-template-columns: 1fr; height: auto; min-height: 0; }
-      .dm-list { display: flex; height: min(72vh, 560px); }
+      .dm-list { height: min(72vh, 560px); }
       .dm-chat { display: none; height: min(72vh, 560px); }
       .dm-app.show-chat .dm-list { display: none; }
       .dm-app.show-chat .dm-chat { display: flex; }
@@ -302,7 +481,7 @@
 
   <section class="section">
     <div class="container">
-      <p class="dm-tip">温馨提示：本站服主可查看私聊记录。</p>
+      <p class="dm-tip">温馨提示：本站服主可查看私聊记录（群聊同样）。</p>
       <!-- 会话列表与对话窗都由下面的脚本渲染 -->
       <div id="dm-root">
         <p class="glass dm-empty">正在读取…</p>
@@ -312,8 +491,10 @@
 
   <script src="assets/js/nav.js"></script>
   <script>
-    // 私信页:左侧会话列表 + 右侧对话窗,全部走 /api/messages 系列接口
-    // ?to=<uid> 可以直接打开和某人的对话(个人主页的「发私信」按钮会这么跳)
+    /* 私信页:左侧会话列表(一对一会话 + 群聊 + 你可能认识的人)+ 右侧对话窗。
+       一对一会话走 /api/messages 系列,群聊走 /api/groups 系列,
+       两边在前端合并成一条按最后活跃时间倒序的列表。
+       ?to=<uid> 直接打开和某人的对话;?g=<群id> 直接打开某个群。 */
     (function () {
       "use strict";
 
@@ -326,24 +507,39 @@
       const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
       const img = window.C103Img || ((v) => v);
 
+      // 表情:有 C103Emoji 就用它渲染/取纯文本,没有就退回转义
+      const emo = () => window.C103Emoji || null;
+
       const root = $("#dm-root");
       const POLL_MS = 10000; // 进入会话后每 10 秒拉一次新消息
 
       const state = {
-        chats: [],
+        chats: [],    // 一对一会话
+        groups: [],   // 群聊
+        convos: [],   // 合并后的会话列表
+        sugg: [],     // 你可能认识的人
+        students: [], // 建群时可选的同学
+        kind: "",     // "dm" | "group"
+        id: 0,        // 对端 uid 或群 id
         peer: null,
+        group: null,
+        members: [],
         items: [],
         hasMore: false,
         sending: false,
         loadingEarlier: false,
         poll: 0,
+        pick: new Set(),
       };
+
+      const meId = () => (window.C103Auth && window.C103Auth.user ? window.C103Auth.user.id : 0);
 
       // ---------- 小工具 ----------
       const pad = (n) => String(n).padStart(2, "0");
 
       function fmtRel(ms) {
         const t = Number(ms) || 0;
+        if (!t) return "";
         const diff = Date.now() - t;
         if (diff < 60000) return "刚刚";
         if (diff < 3600000) return Math.floor(diff / 60000) + " 分钟前";
@@ -358,6 +554,9 @@
         if (!res.ok || !data.ok) throw new Error(data.error || "网络不太顺，稍后再试");
         return data;
       }
+
+      // 失败的请求不抛出,直接给个兜底 —— 群列表挂了也不能挡住私聊
+      const soft = (p, fallback) => p.catch(() => fallback);
 
       let toastTimer = 0;
       function toast(text) {
@@ -382,14 +581,30 @@
         return `<span class="${c}">${esc(ch)}</span>`;
       }
 
+      function groupFace(g, cls) {
+        const c = (cls || "dm-face") + " dm-face-group";
+        return `<span class="${c}">${esc(String((g && g.name) || "群").slice(0, 1))}</span>`;
+      }
+
+      // 正文:表情渲染(内部已转义);列表预览:把表情占位符换成 :名字:
+      function rich(text) {
+        const e = emo();
+        return e ? e.render(text) : esc(text);
+      }
+      function plain(text) {
+        const e = emo();
+        const s = e ? e.plain(text) : String(text == null ? "" : text);
+        return s.replace(/\n/g, " ");
+      }
+
       // ---------- 未登录 ----------
       function renderLogin() {
         stopPoll();
-        state.peer = null;
+        state.kind = "";
         state.items = [];
         root.innerHTML = `<div class="glass dm-notice">
           <b>登录后才能私聊</b>
-          <p>登录之后就能和同学一对一聊天啦。</p>
+          <p>登录之后就能和同学一对一聊天，也能建个小组群。</p>
           <p><a class="dm-link" href="account.html">去个人中心登录</a></p>
         </div>`;
       }
@@ -398,64 +613,122 @@
       function renderApp() {
         root.innerHTML = `
           <div class="dm-app" id="dm-app">
-            <aside class="glass dm-list" id="dm-list"><p class="dm-empty">正在读取会话…</p></aside>
+            <aside class="glass dm-list" id="dm-list">
+              <div class="dm-list-head">
+                <span class="dm-list-title">会话</span>
+                <button class="dm-new" type="button" id="dm-new">＋ 建群</button>
+              </div>
+              <div class="dm-sugg" id="dm-sugg" hidden>
+                <div class="dm-sugg-label">你可能认识的人</div>
+                <div class="dm-sugg-row" id="dm-sugg-row"></div>
+              </div>
+              <div class="dm-items" id="dm-items"><p class="dm-empty">正在读取会话…</p></div>
+            </aside>
             <section class="glass dm-chat" id="dm-chat">
               <div class="dm-chat-empty">从左边选一位同学开始聊天</div>
             </section>
           </div>`;
-        on($("#dm-list"), "click", onListClick);
+        on($("#dm-new"), "click", openModal);
+        on($("#dm-items"), "click", onListClick);
+        on($("#dm-sugg-row"), "click", onSuggClick);
         initApp();
       }
 
       async function initApp() {
-        await loadChats();
-        // URL 带 ?to=<uid> 就直接打开这段对话
-        const to = parseInt(new URLSearchParams(location.search).get("to") || "0", 10) || 0;
-        if (to) openChat(to);
+        await loadAll();
+        // URL 带 ?to=<uid> 或 ?g=<群id> 就直接打开那个会话
+        const q = new URLSearchParams(location.search);
+        const to = parseInt(q.get("to") || "0", 10) || 0;
+        const g = parseInt(q.get("g") || "0", 10) || 0;
+        if (g) openConvo("group", g);
+        else if (to) openConvo("dm", to);
       }
 
       function onListClick(e) {
         const item = e.target.closest(".dm-item");
         if (!item) return;
+        const id = parseInt(item.dataset.id, 10) || 0;
+        if (id) openConvo(item.dataset.kind, id);
+      }
+
+      function onSuggClick(e) {
+        const item = e.target.closest(".sugg-item");
+        if (!item) return;
         const uid = parseInt(item.dataset.uid, 10) || 0;
-        if (uid) openChat(uid);
+        if (uid) openConvo("dm", uid);
       }
 
-      // ---------- 会话列表 ----------
+      // ---------- 读会话 ----------
+      async function loadAll() {
+        await Promise.all([loadChats(), loadGroups(), loadSugg()]);
+        paintConvos();
+        paintSugg();
+      }
+
       async function loadChats() {
-        try {
-          const d = await api(API + "/messages");
-          state.chats = d.chats || [];
-          paintChats();
-        } catch (err) {
-          const box = $("#dm-list");
-          if (box) box.innerHTML = `<p class="dm-empty">${esc(err.message)}</p>`;
-        }
+        const d = await soft(api(API + "/messages"), { chats: [] });
+        state.chats = d.chats || [];
       }
 
-      function paintChats() {
-        const box = $("#dm-list");
+      async function loadGroups() {
+        const d = await soft(api(API + "/groups"), { groups: [] });
+        state.groups = d.groups || [];
+      }
+
+      async function loadSugg() {
+        const d = await soft(api(API + "/messages/suggest"), { list: [] });
+        state.sugg = d.list || [];
+      }
+
+      // 一对一会话 + 群聊合并成一条列表,按最后活跃时间倒序
+      function paintConvos() {
+        const box = $("#dm-items");
         if (!box) return;
-        const list = state.chats || [];
-        if (!list.length) {
-          box.innerHTML = `<p class="dm-empty">还没有任何会话。<br>去同学的个人主页点「发私信」开始吧。</p>`;
+        const convos = [];
+        for (const c of state.chats || []) {
+          const p = c.peer || {};
+          if (!p.id) continue;
+          convos.push({
+            kind: "dm", id: p.id, person: p,
+            last: c.last || null, unread: c.unread || 0,
+            time: (c.last && c.last.created_at) || 0,
+          });
+        }
+        for (const g of state.groups || []) {
+          convos.push({
+            kind: "group", id: g.id, group: g,
+            last: g.last || null, unread: g.unread || 0,
+            time: (g.last && g.last.created_at) || 0,
+          });
+        }
+        convos.sort((a, b) => b.time - a.time);
+        state.convos = convos;
+
+        if (!convos.length) {
+          box.innerHTML = `<p class="dm-empty">还没有任何会话。<br>点上面推荐的同学，或者去同学的个人主页点「发私信」开始吧。</p>`;
           return;
         }
-        const activeId = state.peer ? state.peer.id : 0;
-        box.innerHTML = list
+
+        box.innerHTML = convos
           .map((c) => {
-            const p = c.peer || {};
+            const active = c.kind === state.kind && c.id === state.id;
             const last = c.last || {};
-            // 换行在列表里折成空格,只留一行摘要
-            const preview = (last.mine ? "我：" : "") + String(last.body || "").replace(/\n/g, " ");
-            return `<button class="dm-item${p.id === activeId ? " active" : ""}" type="button" data-uid="${p.id}">
-              ${face(p)}
+            const preview = (last.mine ? "我：" : "") + plain(last.body || "");
+            const nameHTML = c.kind === "group"
+              ? esc(c.group.name || "群聊")
+              : window.C103Person.html(c.person);
+            const tail = c.kind === "group"
+              ? `${(c.group.memberCount || 0)} 人`
+              : esc(fmtRel(last.created_at));
+            return `<button class="dm-item${active ? " active" : ""}" type="button"
+                      data-kind="${c.kind}" data-id="${c.id}">
+              ${c.kind === "group" ? groupFace(c.group) : face(c.person)}
               <span class="dm-item-main">
                 <span class="dm-item-top">
-                  <span class="dm-item-name">${window.C103Person.html(p)}</span>
-                  <span class="dm-item-time">${esc(fmtRel(last.created_at))}</span>
+                  <span class="dm-item-name">${nameHTML}</span>
+                  <span class="dm-item-time">${tail}</span>
                 </span>
-                <span class="dm-item-last">${esc(preview)}</span>
+                <span class="dm-item-last">${esc(preview || (c.kind === "group" ? "群聊已建好，说句话吧" : ""))}</span>
               </span>
               ${c.unread > 0 ? `<i class="dm-unread">${c.unread > 99 ? "99+" : c.unread}</i>` : ""}
             </button>`;
@@ -463,45 +736,94 @@
           .join("");
       }
 
-      // ---------- 打开一段对话 ----------
-      async function openChat(uid) {
-        if (!uid) return;
+      function paintSugg() {
+        const wrap = $("#dm-sugg");
+        const row = $("#dm-sugg-row");
+        if (!wrap || !row) return;
+        const list = state.sugg || [];
+        if (!list.length) { wrap.hidden = true; return; }
+        wrap.hidden = false;
+        row.innerHTML = list
+          .map(
+            (u) => `<button class="sugg-item" type="button" data-uid="${u.id}" title="${esc(u.reason || "")}">
+              ${face(u)}
+              <span class="sugg-name">${esc(window.C103Person.name(u))}</span>
+            </button>`
+          )
+          .join("");
+      }
+
+      // ---------- 打开一个会话 ----------
+      async function openConvo(kind, id) {
+        if (!kind || !id) return;
         const app = $("#dm-app");
-        if (state.peer && state.peer.id === uid) {
+        if (state.kind === kind && state.id === id) {
           // 已经是这个会话,不用重复拉
           if (app) app.classList.add("show-chat");
           return;
         }
         stopPoll();
+        state.kind = kind;
+        state.id = id;
+        state.items = [];
+        state.hasMore = false;
+        state.peer = null;
+        state.group = null;
+        state.members = [];
+
         const chat = $("#dm-chat");
         if (chat) chat.innerHTML = `<div class="dm-chat-empty">正在读取对话…</div>`;
         if (app) app.classList.add("show-chat");
+        paintConvos(); // 立刻刷出选中态
+
         try {
-          const d = await api(API + "/messages/with/" + uid);
-          state.peer = d.peer;
+          const d = kind === "group"
+            ? await api(API + "/groups/" + id)
+            : await api(API + "/messages/with/" + id);
+          if (kind === "group") {
+            state.group = d.group || null;
+            state.members = Array.isArray(d.members) ? d.members : [];
+          } else {
+            state.peer = d.peer;
+          }
           state.items = Array.isArray(d.items) ? d.items : [];
           state.hasMore = !!d.hasMore;
-          paintChats(); // 刷出选中态
           renderChat();
           scrollBottom();
           startPoll();
-          loadChats(); // 切会话时把列表刷一次(顺带更新未读)
+          if (kind === "dm") loadChats().then(paintConvos); // 顺带把未读抹掉
+          else loadGroups().then(paintConvos);
         } catch (err) {
           if (chat) chat.innerHTML = `<div class="dm-chat-empty">${esc(err.message)}</div>`;
           toast(err.message);
         }
       }
 
+      function memberOf(uid) {
+        return state.members.find((m) => m.id === uid) || null;
+      }
+
+      function chatTitle() {
+        if (state.kind === "group") return esc((state.group && state.group.name) || "群聊");
+        return window.C103Person.html(state.peer);
+      }
+
       function renderChat() {
         const chat = $("#dm-chat");
-        if (!chat || !state.peer) return;
+        if (!chat) return;
+        if (state.kind === "group" && !state.group) return;
+        if (state.kind === "dm" && !state.peer) return;
+        const isGroup = state.kind === "group";
         chat.innerHTML = `
           <div class="dm-chat-head">
             <button class="dm-back" type="button" id="dm-back">‹ 返回</button>
-            <span class="dm-chat-name">${window.C103Person.html(state.peer)}</span>
+            ${isGroup ? groupFace(state.group, "dm-face dm-head-face") : face(state.peer, "dm-face dm-head-face")}
+            <span class="dm-chat-name">${chatTitle()}</span>
+            ${isGroup ? `<span class="dm-chat-sub">${state.members.length} 人</span>` : ""}
           </div>
           <div class="dm-body" id="dm-body">${bodyHtml()}</div>
           <div class="dm-composer">
+            <button class="emoji-btn" type="button" id="dm-emoji" title="插入表情">😊</button>
             <textarea class="dm-input" id="dm-input" rows="2" maxlength="500" placeholder="说点什么…"></textarea>
             <button class="dm-send" type="button" id="dm-send">发送</button>
           </div>`;
@@ -509,23 +831,39 @@
         on($("#dm-send"), "click", send);
         on($("#dm-input"), "keydown", onInputKey);
         on(chat.querySelector(".dm-earlier"), "click", loadEarlier);
+        const e = emo();
+        if (e) e.mount($("#dm-emoji"), $("#dm-input"));
+      }
+
+      function msgHTML(m) {
+        if (state.kind !== "group") {
+          return `<div class="dm-msg ${m.mine ? "mine" : "them"}">
+            <span class="dm-bubble">${rich(m.body)}</span>
+            <span class="dm-time">${esc(fmtRel(m.created_at))}</span>
+          </div>`;
+        }
+        // 群聊:别人的消息带一张小头像 + 名字,自己的靠右不带
+        const who = m.mine ? null : memberOf(m.from_id);
+        const nameHTML = who ? window.C103Person.html(who) : (m.mine ? "" : "某位同学");
+        return `<div class="dm-line ${m.mine ? "mine" : "them"}">
+          ${m.mine ? "" : face(who)}
+          <div class="dm-msg ${m.mine ? "mine" : "them"}">
+            ${m.mine ? "" : `<span class="dm-from">${nameHTML}</span>`}
+            <span class="dm-bubble">${rich(m.body)}</span>
+            <span class="dm-time">${esc(fmtRel(m.created_at))}</span>
+          </div>
+        </div>`;
       }
 
       function bodyHtml() {
         const items = state.items || [];
         const earlier = state.hasMore ? `<button class="dm-earlier" type="button">看更早的</button>` : "";
-        if (!items.length) return earlier + `<div class="dm-chat-empty">还没有消息，打个招呼吧。</div>`;
-        return (
-          earlier +
-          items
-            .map(
-              (m) => `<div class="dm-msg ${m.mine ? "mine" : "them"}">
-                <span class="dm-bubble">${esc(m.body)}</span>
-                <span class="dm-time">${esc(fmtRel(m.created_at))}</span>
-              </div>`
-            )
-            .join("")
-        );
+        if (!items.length) {
+          return earlier + `<div class="dm-chat-empty">${
+            state.kind === "group" ? "群里还没有人说话，你来开个头吧。" : "还没有消息，打个招呼吧。"
+          }</div>`;
+        }
+        return earlier + items.map(msgHTML).join("");
       }
 
       function renderBody() {
@@ -545,15 +883,20 @@
         if (app) app.classList.remove("show-chat");
       }
 
+      const convoUrl = (before) =>
+        state.kind === "group"
+          ? API + "/groups/" + state.id + (before ? "?before=" + before : "")
+          : API + "/messages/with/" + state.id + (before ? "?before=" + before : "");
+
       // ---------- 看更早的 ----------
       async function loadEarlier() {
-        if (state.loadingEarlier || !state.hasMore || !state.peer || !state.items.length) return;
+        if (state.loadingEarlier || !state.hasMore || !state.items.length) return;
         state.loadingEarlier = true;
         const body = $("#dm-body");
         const prevH = body ? body.scrollHeight : 0;
         const prevTop = body ? body.scrollTop : 0;
         try {
-          const d = await api(API + "/messages/with/" + state.peer.id + "?before=" + state.items[0].id);
+          const d = await api(convoUrl(state.items[0].id));
           state.items = (d.items || []).concat(state.items);
           state.hasMore = !!d.hasMore;
           renderBody();
@@ -574,7 +917,7 @@
       }
 
       async function send() {
-        if (state.sending || !state.peer) return;
+        if (state.sending || !state.id) return;
         const ta = $("#dm-input");
         if (!ta) return;
         const body = ta.value.trim();
@@ -584,7 +927,7 @@
         const btn = $("#dm-send");
         if (btn) btn.disabled = true;
         try {
-          const d = await api(API + "/messages/with/" + state.peer.id, {
+          const d = await api(convoUrl(0), {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ body: body }),
@@ -593,7 +936,9 @@
           ta.value = "";
           renderBody();
           scrollBottom();
-          loadChats(); // 让这条对话冒到列表最上面
+          // 让这条会话冒到列表最上面
+          if (state.kind === "group") loadGroups().then(paintConvos);
+          else loadChats().then(paintConvos);
         } catch (err) {
           toast(err.message);
         } finally {
@@ -616,11 +961,15 @@
       async function pollNew() {
         // 切到后台标签页就不发请求(和全站「后台停帧」的约定一致)
         if (document.visibilityState !== "visible") return;
-        if (!state.peer) return;
+        if (!state.id) return;
         try {
-          const d = await api(API + "/messages/with/" + state.peer.id);
+          const d = await api(convoUrl(0));
           const items = Array.isArray(d.items) ? d.items : [];
           const maxId = state.items.length ? state.items[state.items.length - 1].id : 0;
+          // 换人/换群之后这次请求的结果可能已经过期,直接丢掉
+          if (state.kind === "group") {
+            if (!state.group || d.group.id !== state.group.id) return;
+          } else if (!state.peer || d.peer.id !== state.peer.id) return;
           const fresh = items.filter((m) => m.id > maxId);
           if (fresh.length) {
             state.items = state.items.concat(fresh);
@@ -635,6 +984,117 @@
       // 回到前台立刻补一次
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") pollNew();
+      });
+
+      // ---------- 建群 ----------
+      function poolUsers() {
+        const map = new Map();
+        const add = (u) => { if (u && u.id && u.id !== meId()) map.set(u.id, u); };
+        for (const u of state.students || []) add(u);
+        for (const u of state.sugg || []) add(u);
+        for (const c of state.chats || []) add(c.peer);
+        return [...map.values()];
+      }
+
+      async function openModal() {
+        state.pick = new Set();
+        let modal = $("#dm-modal");
+        if (!modal) {
+          modal = document.createElement("div");
+          modal.id = "dm-modal";
+          modal.className = "dm-modal";
+          modal.innerHTML = `<div class="glass dm-modal-card">
+            <h3>发起群聊</h3>
+            <input class="dm-input" id="g-name" maxlength="20" placeholder="群名称，比如「周四值日组」">
+            <input class="dm-input" id="g-search" placeholder="搜名字…">
+            <div class="dm-pick" id="g-pick"><p class="dm-empty">正在读取同学名单…</p></div>
+            <div class="dm-modal-foot">
+              <button class="dm-btn ghost" type="button" id="g-cancel">取消</button>
+              <button class="dm-btn" type="button" id="g-create">创建</button>
+            </div>
+          </div>`;
+          document.body.appendChild(modal);
+          on(modal, "click", (e) => { if (e.target === modal) closeModal(); });
+          on($("#g-cancel"), "click", closeModal);
+          on($("#g-create"), "click", createGroup);
+          on($("#g-search"), "input", paintPick);
+          on($("#g-pick"), "click", (e) => {
+            const item = e.target.closest(".dm-pick-item");
+            if (!item) return;
+            const uid = parseInt(item.dataset.uid, 10) || 0;
+            if (!uid) return;
+            if (state.pick.has(uid)) state.pick.delete(uid);
+            else state.pick.add(uid);
+            item.classList.toggle("on", state.pick.has(uid));
+          });
+        }
+        modal.hidden = false;
+        $("#g-name").value = "";
+        $("#g-search").value = "";
+        $("#g-pick").innerHTML = `<p class="dm-empty">正在读取同学名单…</p>`;
+        // 名单:已实名同学 + 推荐 + 聊过的人,去重
+        const d = await soft(api(API + "/students"), { students: [] });
+        state.students = d.students || [];
+        paintPick();
+        $("#g-name").focus();
+      }
+
+      function paintPick() {
+        const box = $("#g-pick");
+        if (!box) return;
+        const kw = String($("#g-search") ? $("#g-search").value : "").trim().toLowerCase();
+        const list = poolUsers().filter((u) => {
+          if (!kw) return true;
+          const n = (window.C103Person.name(u) + " " + (u.real_name || "") + " " + u.name).toLowerCase();
+          return n.indexOf(kw) >= 0;
+        });
+        if (!list.length) {
+          box.innerHTML = `<p class="dm-empty">${
+            kw ? "没有匹配的同学" : "还没有可以邀请的同学。<br>同学完成实名审核后就能在这里选到。"
+          }</p>`;
+          return;
+        }
+        box.innerHTML = list
+          .map(
+            (u) => `<button class="dm-pick-item${state.pick.has(u.id) ? " on" : ""}" type="button" data-uid="${u.id}">
+              ${face(u)}
+              <span class="dm-pick-name">${window.C103Person.html(u)}</span>
+              <i class="dm-pick-tick">✓</i>
+            </button>`
+          )
+          .join("");
+      }
+
+      function closeModal() {
+        const modal = $("#dm-modal");
+        if (modal) modal.hidden = true;
+      }
+
+      async function createGroup() {
+        const name = String($("#g-name") ? $("#g-name").value : "").trim();
+        if (!name) { toast("给这个群起个名字吧"); return; }
+        const btn = $("#g-create");
+        if (btn) btn.disabled = true;
+        try {
+          const d = await api(API + "/groups", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: name, members: [...state.pick] }),
+          });
+          closeModal();
+          await loadGroups();
+          paintConvos();
+          toast("群建好了");
+          openConvo("group", d.group.id);
+        } catch (err) {
+          toast(err.message);
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
       });
 
       // ---------- 启动 ----------

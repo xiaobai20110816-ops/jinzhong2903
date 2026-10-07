@@ -88,7 +88,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-06.2";
+const SCHEMA_VERSION = "2026-10-07.1";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -440,6 +440,93 @@ export function ensureSchema(db) {
         .run();
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_videofavs_video ON video_favs(video_id)`)
+        .run();
+
+      // ---- 表情包:默认表情是 unicode 字符,不入库;
+      //      班级自制 / 同学上传的那批是图片,key 指向 KV 里的图(走 /api/img) ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS emojis (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             name TEXT NOT NULL UNIQUE,
+             key TEXT NOT NULL,
+             uploader_id INTEGER,
+             created_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_emojis_created ON emojis(created_at DESC)`).run();
+
+      // 收藏的表情:一人一表情一条
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS emoji_favs (
+             user_id INTEGER NOT NULL,
+             emoji_id INTEGER NOT NULL,
+             created_at INTEGER NOT NULL,
+             PRIMARY KEY (user_id, emoji_id)
+           )`
+        )
+        .run();
+
+      // 最近使用:一行 = 「某人对某表情」,重用时更新 last_used / uses
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS emoji_usage (
+             user_id INTEGER NOT NULL,
+             emoji_id INTEGER NOT NULL,
+             uses INTEGER NOT NULL DEFAULT 0,
+             last_used INTEGER NOT NULL,
+             PRIMARY KEY (user_id, emoji_id)
+           )`
+        )
+        .run();
+
+      // ---- 群聊:建个群,拉几个人,TEXT 消息全挂在组里 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS groups (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             name TEXT NOT NULL,
+             owner_id INTEGER NOT NULL,
+             created_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+
+      // 群成员:一人一群一条。last_read_id 记住「这个人读到哪条了」,
+      // 群消息没有逐条已读标记,靠它算未读数
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS group_members (
+             group_id INTEGER NOT NULL,
+             user_id INTEGER NOT NULL,
+             last_read_id INTEGER NOT NULL DEFAULT 0,
+             created_at INTEGER NOT NULL,
+             PRIMARY KEY (group_id, user_id)
+           )`
+        )
+        .run();
+      await addColumn(db, "group_members", "last_read_id", "INTEGER DEFAULT 0");
+      // 查「我加入了哪些群」按 user_id 走这个索引
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_gmembers_user ON group_members(user_id, group_id)`)
+        .run();
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS group_messages (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             group_id INTEGER NOT NULL,
+             from_id INTEGER NOT NULL,
+             body TEXT NOT NULL,
+             created_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+      // 取「某个群的一段消息」按 group_id + id 找
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_gmsg_group ON group_messages(group_id, id)`)
         .run();
 
       // 顺手做一次性的脏数据修复(settings 表已经建好,标记写在里面)

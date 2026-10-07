@@ -126,6 +126,23 @@
     return "";
   }
 
+  /* 正文渲染:交给 C103Emoji 转义,顺便把 [emoji:名字] 换成表情图。
+     nav.js 没加载出来就退回普通转义,不至于白屏 */
+  function richText(s) {
+    return window.C103Emoji ? window.C103Emoji.render(s) : esc(s);
+  }
+
+  /* 摘要 / 标题里的纯文本版:占位符换成 :名字: */
+  function plainText(s) {
+    return window.C103Emoji ? window.C103Emoji.plain(s) : String(s == null ? "" : s);
+  }
+
+  /* 渲染前先把表情列表拿到手,否则正文里的自制表情会显示成 [emoji:xx] */
+  function emojiReady() {
+    if (!window.C103Emoji) return Promise.resolve();
+    return window.C103Emoji.load().catch(() => {});
+  }
+
   // 头像外面套一层,好在右下角挂「在线」小绿点。
   // author.online 只有卡片流 / 详情接口才给,列表页拿不到就不显示点
   function faceHTML(author, cls) {
@@ -157,7 +174,7 @@
   }
 
   function bodyHTML(p) {
-    const body = p.body ? `<p class="story-body">${esc(p.body)}</p>` : "";
+    const body = p.body ? `<p class="story-body">${richText(p.body)}</p>` : "";
     const imgs = p.images.length
       ? `<div class="story-imgs">${p.images
           .map((k) => `<img src="${API}/img/${k}" alt="纪事配图" loading="lazy">`)
@@ -231,7 +248,7 @@
 
   // 卡片上放不下整篇正文,取正文压成一行当「标题」;纯图片帖给个占位说法
   function titleOf(p) {
-    const t = String(p.body || "").replace(/\s+/g, " ").trim();
+    const t = plainText(p.body || "").replace(/\s+/g, " ").trim();
     return t || "图片";
   }
 
@@ -363,6 +380,7 @@
       <div class="inline-row">
         <input type="file" accept="image/*" multiple hidden>
         <button type="button" class="pick-btn sm">＋ 加图</button>
+        <button type="button" class="emoji-btn" title="插入表情">😊</button>
         <div class="thumbs sm"></div>
       </div>
       <div class="inline-foot">
@@ -380,6 +398,11 @@
     const pick = form.querySelector(".pick-btn");
     const thumbs = form.querySelector(".thumbs");
     const msg = form.querySelector(".form-msg");
+
+    // 回复框也能插表情:把「😊」接到这个 textarea 上
+    if (window.C103Emoji) {
+      window.C103Emoji.mount(form.querySelector(".emoji-btn"), form.querySelector("textarea"));
+    }
 
     const say = (text, kind) => {
       msg.textContent = text || "";
@@ -482,6 +505,7 @@
   async function goto(page) {
     if (page < 1) return;
     if (MODE === "single") return loadPost();
+    await emojiReady();
     notice("读取中", "<br>正在翻开 103 的纪事…");
     if (els.pager) els.pager.hidden = true;
     try {
@@ -552,6 +576,7 @@
       return;
     }
 
+    await emojiReady();
     notice("读取中", "<br>正在打开这一条…");
     try {
       const data = await api(API + "/posts/" + id);
@@ -842,6 +867,16 @@
     on(els.form, "submit", onSubmit);
     on(els.pickBtn, "click", () => els.file && els.file.click());
     on(els.file, "change", onPick);
+    // 表情按钮插在「＋ 加图片」旁边,点了往正文里插
+    if (window.C103Emoji && els.pickBtn && els.body) {
+      const eb = document.createElement("button");
+      eb.type = "button";
+      eb.className = "emoji-btn";
+      eb.title = "插入表情";
+      eb.textContent = "😊";
+      els.pickBtn.parentNode.insertBefore(eb, els.pickBtn.nextSibling);
+      window.C103Emoji.mount(eb, els.body);
+    }
     // 可见性切换:全部可见 / 仅本班可见(登录的人才能发,所以不担心游客乱选)
     on(els.visPick, "click", (e) => {
       const opt = e.target.closest("[data-vis]");

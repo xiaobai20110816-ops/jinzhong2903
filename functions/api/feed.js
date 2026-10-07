@@ -11,7 +11,6 @@
    ============================================================ */
 
 import {
-  json,
   notReady,
   ensureSchema,
   currentUser,
@@ -26,7 +25,25 @@ import { decorateVideos } from "./_videos.js";
 
 const WINDOW = 400;
 
-export async function onRequestGet({ request, env }) {
+/* 游客那一份「合并流」在半小时内对谁都一样:不带个人点赞 / 收藏状态,
+   可见性只出 public —— 所以可以整份丢进 KV 缓存 30 秒。
+   首页是全班点得最多的一个接口,每次都要两条 LIMIT 400 的查询 + 一轮
+   内存合并 + 一轮批量补资料;缓存住之后,并发进来的游客只读一次库。
+   登录的人不看缓存(他们的点赞状态是个人的,不能串)。 */
+const GUEST_TTL = 30;
+
+function jsonNoStore(body, extra) {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      ...(extra || {}),
+    },
+  });
+}
+
+export async function onRequestGet({ request, env, waitUntil }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
 
@@ -38,6 +55,13 @@ export async function onRequestGet({ request, env }) {
   );
 
   const me = await currentUser(request, env);
+
+  // 游客:先看缓存里有没有现成的一份
+  const guestKey = me ? "" : `feed:guest:${page}:${size}`;
+  if (guestKey && env.STORY_KV) {
+    const hit = await env.STORY_KV.get(guestKey, "text").catch(() => null);
+    if (hit) return jsonNoStore(hit, { "x-feed-cache": "hit" });
+  }
   // 「仅本班可见」的东西游客直接看不到,帖子和视频口径一致
   const postVis = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
   const videoVis = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
@@ -113,7 +137,7 @@ export async function onRequestGet({ request, env }) {
       : { type: "video", video: videoById.get(x.row.id) }
   );
 
-  return json({
+  const body = JSON.stringify({
     ok: true,
     page,
     size,
@@ -121,4 +145,14 @@ export async function onRequestGet({ request, env }) {
     feed: "mixed",
     items,
   });
+
+  // 游客这一份顺手写回缓存:接下来的 30 秒里别人再进来直接读 KV,不碰数据库。
+  // 用 waitUntil 在后台写,不占这次请求的响应时间
+  if (guestKey && env.STORY_KV) {
+    const put = env.STORY_KV.put(guestKey, body, { expirationTtl: GUEST_TTL }).catch(() => {});
+    if (waitUntil) waitUntil(put);
+    else await put;
+  }
+
+  return jsonNoStore(body, guestKey ? { "x-feed-cache": "miss" } : undefined);
 }
