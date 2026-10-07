@@ -309,6 +309,7 @@
         ${cover}
         <span class="v-play" aria-hidden="true"></span>
         ${dur ? `<span class="card-count">${dur}</span>` : ""}
+        <button class="card-del" type="button" data-vdel="${v.id}" hidden aria-label="删除这条视频">×</button>
       </div>
       <div class="card-info">
         <p class="card-title">${esc(v.title || "视频")}</p>
@@ -337,6 +338,45 @@
       return;
     }
     els.list.innerHTML = list.map(cardOf).join("");
+    paintCardDel();
+  }
+
+  /* 「删视频」只给视频本人和服主 / 管理员。后端才是真正把关的那道,
+     前端只是按身份把叉号亮出来 */
+  function canDelVideo(v) {
+    if (!state.user || !v) return false;
+    if (state.user.role === "owner" || state.user.role === "admin") return true;
+    return !!(v.author && v.author.id === state.user.id);
+  }
+
+  function paintCardDel() {
+    if (!els.list) return;
+    els.list.querySelectorAll(".v-card").forEach((card) => {
+      const id = parseInt(card.getAttribute("data-id"), 10) || 0;
+      const hit = (state.items || []).filter((x) => x.type === "video" && x.video && x.video.id === id)[0];
+      const btn = card.querySelector("[data-vdel]");
+      if (btn) btn.hidden = !canDelVideo(hit && hit.video);
+    });
+  }
+
+  async function delVideoCard(id) {
+    const hit = (state.items || []).filter((x) => x.type === "video" && x.video && x.video.id === id)[0];
+    const v = hit && hit.video;
+    if (!v) return;
+    const title = String(v.title || "这条视频").slice(0, 20);
+    if (!confirm(`删除「${title}」？\n下面的评论、点赞、收藏会一起删掉，删了找不回来。`)) return;
+    try {
+      await api(API + "/videos/" + id, { method: "DELETE" });
+    } catch (err) {
+      toast(err.message);
+      return;
+    }
+    // 卡片就地抽掉,不整页重跑
+    const card = els.list.querySelector(`.v-card[data-id="${id}"]`);
+    if (card) card.remove();
+    const i = state.items.indexOf(hit);
+    if (i >= 0) state.items.splice(i, 1);
+    toast("删掉了");
   }
 
   function renderPager(total) {
@@ -537,11 +577,13 @@
         const data = await api(API + "/videos?page=" + page);
         state.page = data.page;
         state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
-        const items = data.items || [];
+        // 存成和首页同一套形状,删卡片时好按 id 找回来
+        state.items = (data.items || []).map((v) => ({ type: "video", video: v }));
         if (!data.total) {
           notice("还没有人发视频", "<br>第一个片子，等你来拍。");
         } else if (els.list) {
-          els.list.innerHTML = items.map(videoCardHTML).join("");
+          els.list.innerHTML = state.items.map(cardOf).join("");
+          paintCardDel();
         }
         renderPager(data.total);
         return;
@@ -926,6 +968,14 @@
     on(els.next, "click", () => goto(state.page + 1));
 
     on(els.list, "click", (e) => {
+      // 卡片角上的叉号:压在整卡链接之上,先拦下来免得跳进播放页
+      const vdel = e.target.closest("[data-vdel]");
+      if (vdel) {
+        e.preventDefault();
+        e.stopPropagation();
+        delVideoCard(parseInt(vdel.getAttribute("data-vdel"), 10) || 0);
+        return;
+      }
       // 点赞最优先:卡片里的按钮压在整卡链接之上,但保险起见还是先拦一下
       const vlike = e.target.closest("[data-vlike]");
       if (vlike) {
@@ -1000,10 +1050,12 @@
     ready.then((user) => {
       state.user = user;
       renderComposer();
+      paintCardDel();
       if (window.C103Auth) {
         window.C103Auth.onChange((u) => {
           state.user = u;
           renderComposer();
+          paintCardDel();
         });
       }
       // 带 ?p= / ?r= 就是从通知点进来的,直接翻到那一条;否则从第一页看起

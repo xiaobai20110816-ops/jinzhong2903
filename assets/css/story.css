@@ -882,6 +882,33 @@
   pointer-events: none;
 }
 
+/* 左上角的「×」:只有视频本人和服主 / 管理员看得到。
+   压在整卡链接之上,点了就是删这条视频 */
+.card-del {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(8, 11, 20, 0.6);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #ffb0b0;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+.card-del[hidden] { display: none; }
+.card-del:hover { background: rgba(200, 60, 60, 0.8); color: #fff; }
+
 .xhs-card .card-info {
   padding: 10px 12px 12px;
   display: flex;

@@ -707,6 +707,7 @@
           <button class="v-act v-cmt" type="button" data-comment="${v.id}"><i>💬</i><span>${v.comments || 0}</span></button>
           <button class="v-act v-fav${v.faved ? " on" : ""}" type="button" data-vfav="${v.id}" data-on="${v.faved ? 1 : 0}"><i>★</i><span>${v.favs || 0}</span></button>
           <button class="v-act v-share" type="button" data-share="${v.id}"><i>↗</i><span>分享</span></button>
+          <button class="v-act v-del" type="button" data-vdel="${v.id}" hidden><i>🗑</i><span>删除</span></button>
         </div>
         <div class="v-meta">
           ${face}${avatarHTML(v.author)}${name}${faceEnd}
@@ -727,6 +728,23 @@
         })
         .join("");
       if (html) scroll.insertAdjacentHTML("beforeend", html);
+      paintRails();
+    }
+
+    /* 「删除」只给视频本人和服主 / 管理员看。
+       权限是后端说了算,前端只是把按钮亮出来 */
+    function canDelete(v) {
+      if (!state.me || !v) return false;
+      if (state.me.role === "owner" || state.me.role === "admin") return true;
+      return !!(v.author && v.author.id === state.me.id);
+    }
+
+    function paintRails() {
+      scroll.querySelectorAll(".player-slide").forEach((sl) => {
+        const v = byId.get(parseInt(sl.getAttribute("data-vid"), 10) || 0);
+        const btn = sl.querySelector("[data-vdel]");
+        if (btn) btn.hidden = !canDelete(v);
+      });
     }
 
     /* ---- 加载 ---- */
@@ -1027,6 +1045,43 @@
       if (fav) paintAct(fav, !!v.faved, v.favs || 0);
     }
 
+    /* 删完把这一屏从 DOM 里摘掉,接着看下一屏;一屏都不剩就回视频页 */
+    function removeSlide(id) {
+      const sl = scroll.querySelector(`.player-slide[data-vid="${id}"]`);
+      const v = byId.get(id);
+      if (v) {
+        const i = state.items.indexOf(v);
+        if (i >= 0) state.items.splice(i, 1);
+        byId.delete(id);
+      }
+      if (!sl) return;
+      const wasCurrent = !!(state.current && state.current.id === id);
+      const next = sl.nextElementSibling || sl.previousElementSibling;
+      sl.remove();
+      if (!scroll.querySelector(".player-slide")) {
+        location.href = "videos.html";
+        return;
+      }
+      if (wasCurrent && next && next.scrollIntoView) {
+        next.scrollIntoView({ block: "start" });
+      }
+    }
+
+    async function deleteVideo(id) {
+      const v = byId.get(id);
+      if (!v) return;
+      const title = String(v.title || "这条视频").slice(0, 20);
+      if (!confirm(`删除「${title}」？\n下面的评论、点赞、收藏会一起删掉，删了找不回来。`)) return;
+      try {
+        await api(API + "/videos/" + id, { method: "DELETE" });
+      } catch (err) {
+        toast(err.message);
+        return;
+      }
+      removeSlide(id);
+      toast("删掉了");
+    }
+
     async function sendComment() {
       if (state.busy) return;
       const area = drawer.querySelector("#v-cmt-text");
@@ -1096,7 +1151,12 @@
         return;
       }
       const sh = e.target.closest("[data-share]");
-      if (sh) share(parseInt(sh.getAttribute("data-share"), 10) || 0);
+      if (sh) {
+        share(parseInt(sh.getAttribute("data-share"), 10) || 0);
+        return;
+      }
+      const del = e.target.closest("[data-vdel]");
+      if (del) deleteVideo(parseInt(del.getAttribute("data-vdel"), 10) || 0);
     });
 
     drawerList.addEventListener("click", (e) => {
@@ -1144,9 +1204,11 @@
     /* ---- 起播 ---- */
     authReady().then((user) => {
       state.me = user;
+      paintRails();
       if (window.C103Auth) {
         window.C103Auth.onChange((u) => {
           state.me = u;
+          paintRails();
         });
       }
       load(1);

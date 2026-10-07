@@ -402,6 +402,11 @@ body.video-page .site-footer { display: none; }
   border-color: transparent;
 }
 .v-act.bump i { animation: v-bump 0.36s cubic-bezier(0.3, 1.6, 0.5, 1); }
+/* .v-act 是 flex,会盖掉 [hidden] 自带的 display:none,得自己补一条 */
+.v-act[hidden] { display: none; }
+/* 删除:只有视频本人和服主 / 管理员看得到,底色调红免得误点 */
+.v-act.v-del i { color: #ff9d9d; }
+.v-act.v-del:hover i { background: rgba(226, 74, 74, 0.32); }
 @keyframes v-bump {
   0% { transform: scale(1); }
   45% { transform: scale(1.2); }
