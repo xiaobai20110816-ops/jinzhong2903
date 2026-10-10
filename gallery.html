@@ -82,6 +82,12 @@
 
   <script src="assets/js/nav.js"></script>
   <script>
+    // 图库板块门禁:未注册 / 未实名的同学不能浏览图库
+    window.C103Auth.ready.then(function () {
+      if (!window.C103Auth.canViewSections()) window.C103Auth.sectionGate("图库");
+    });
+  </script>
+  <script>
     // 班级图库:从 /api/gallery 拉列表,缩略图铺成网格,点开看大图、下载原图。
     // 上传:实名认证过的同学(30MB 额度)、管理员、服主;自己的图能删,管理员/服主能删所有。
     document.addEventListener("DOMContentLoaded", () => {

@@ -808,6 +808,21 @@ export function isStaff(user) {
   return !!user && (user.role === ROLE_OWNER || user.role === ROLE_ADMIN);
 }
 
+/* 「本班实名视线」:看的人是管理员 / 服主,或者已经通过实名。
+   未注册(游客)和登录了但没实名的,在视频 / 图库 / 宿舍风采这些板块
+   都算「看不见的人」,只有被管理员标记为 public 的帖子 / 视频能漏出去 */
+export function canViewClass(me) {
+  return !!me && (isStaff(me) || me.verified === 1);
+}
+
+/* 板块级门禁:整个板块(图库、宿舍数据这种)不给未注册 / 未实名的人看。
+   放行返回 null,拦下来返回 401(没登录) / 403(没实名),直接 return 出去就行 */
+export function sectionGate(me, label) {
+  if (!me) return fail("请先登录再查看" + label, 401);
+  if (!canViewClass(me)) return fail(label + "仅限已实名的本班同学查看，去个人中心完成实名吧", 403);
+  return null;
+}
+
 /* 关联表的两个批量查询:一张表只有两列有意义(对象 id + 用户 id),
    点赞 / 收藏都是这个形状,所以抽出来共用,别为每种动作各写一遍 SQL */
 

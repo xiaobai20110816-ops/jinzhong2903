@@ -41,7 +41,7 @@ const DORMS = [
   { number: "409", nick: "", members: [], photos: [] },
   {
     number: "410",
-    nick: "金楚涵教总部",
+    nick: "",
     members: [],
     photos: [
       "assets/images/dorm/410/1.jpg",
@@ -51,7 +51,7 @@ const DORMS = [
   },
   {
     number: "411",
-    nick: "法兰西室联盟",
+    nick: "",
     members: [],
     photos: [
       "assets/images/dorm/411/1.jpg",
@@ -201,7 +201,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  // load() 失败时 resolve 出 null,render 会退回 DORMS,不会空白
-  if (!window.C103Content) return render(null);
-  C103Content.load().then((content) => render(content && content.dorms));
+  // 门禁裁决:等登录态就绪后,未注册 / 未实名的同学直接不渲染。
+  // 页面上有全屏遮罩,这里是防止写死的 DORMS 兜底数据漏出去
+  const start = () => {
+    if (window.C103_SECTION_OPEN === false) return;
+    // load() 失败时 resolve 出 null,render 会退回 DORMS,不会空白
+    if (!window.C103Content) return render(null);
+    C103Content.load().then((content) => render(content && content.dorms));
+  };
+
+  if (window.C103_SECTION_OPEN === true) start();
+  else document.addEventListener("c103-section-gate", start, { once: true });
 });

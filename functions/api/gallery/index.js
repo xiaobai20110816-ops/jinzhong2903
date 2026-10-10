@@ -1,10 +1,11 @@
 /* ============================================================
    103 纪事 · 班级图库
    POST /api/gallery        上传一张图(原图 + 缩略图,multipart)
-   GET  /api/gallery        图库列表(游客也能看缩略图)
+   GET  /api/gallery        图库列表(只给已实名的本班同学看)
 
    权限:
-   - 实名认证通过的同学(verified=1)每人 30MB 额度,算原图总大小
+   - 看:实名认证通过的同学、管理员、服主;未注册 / 未实名一律拦截
+   - 传:实名认证通过的同学(verified=1)每人 30MB 额度,算原图总大小
    - 服主 / 管理员不限额度
    - 原图基本原样存 KV;缩略图由前端压小,不占额度
    下载走 /api/gallery/img/<key>,删除走 /api/gallery/:id。
@@ -17,6 +18,7 @@ import {
   ensureSchema,
   currentUser,
   classGate,
+  sectionGate,
   isStaff,
   randomHex,
 } from "../_utils.js";
@@ -156,6 +158,11 @@ export async function onRequestGet({ request, env }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
 
+  // 图库板块整体门禁:未注册 / 未实名的同学不能看,连缩略图列表都不给
+  const me = await currentUser(request, env).catch(() => null);
+  const gate = sectionGate(me, "图库");
+  if (gate) return gate;
+
   const { results } = await env.DB.prepare(
     `SELECT g.id, g.title, g.full_key, g.thumb_key, g.full_size, g.upload_level, g.created_at,
             g.uploaded_by, u.username AS by_name, u.display_name AS by_display
@@ -182,7 +189,7 @@ export async function onRequestGet({ request, env }) {
   }));
 
   // 顺手带上「我」的额度信息:前端拿来显示还剩多少,以及哪些图我能删
-  const me = await currentUser(request, env).catch(() => null);
+  // (me 已在门禁处认过一次,直接复用)
   let quota = null;
   if (me && canUpload(me)) {
     if (isStaff(me)) {

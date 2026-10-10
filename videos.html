@@ -107,6 +107,13 @@
     window.CLASS103_BOARD = { mode: "videos" };
   </script>
   <script src="assets/js/nav.js"></script>
+  <script>
+    // 视频板块门禁:未注册 / 未实名的同学不能浏览视频列表。
+    // 被管理员标记为「公开」的单个视频不受影响,游客从首页卡片流点开照样能看
+    window.C103Auth.ready.then(function () {
+      if (!window.C103Auth.canViewSections()) window.C103Auth.sectionGate("班级视频");
+    });
+  </script>
   <script src="assets/js/story.js"></script>
   <script src="assets/js/video.js"></script>
 </body>

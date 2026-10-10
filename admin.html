@@ -634,6 +634,7 @@
             <button class="adm-tab" type="button" data-panel="moments">高光时刻</button>
             <button class="adm-tab" type="button" data-panel="site">首页文案</button>
             <button class="adm-tab" type="button" data-panel="members">成员权限</button>
+            <button class="adm-tab" type="button" data-panel="review">内容审核</button>
             <button class="adm-tab" type="button" data-panel="usage">用量看板</button>
             <button class="adm-tab" type="button" data-panel="accounts">账号统计</button>
             <button class="adm-tab" type="button" data-panel="gallery">图库</button>
@@ -743,6 +744,20 @@
             </div>
             <div class="rows" id="mem-list"></div>
             <p class="msg" id="mem-msg"></p>
+          </div>
+
+          <!-- ========== 内容审核 ========== -->
+          <div class="glass panel" id="panel-review" hidden>
+            <div class="panel-head">
+              <h2>内容审核</h2>
+              <p>未注册或未实名的访客只能看到标着「公开」的帖子 / 视频；标成「仅实名」后，这条内容就会从游客和未实名同学的首页卡片流里消失。视频另有整体门禁：游客本来进不了视频页，标记只决定 TA 能不能从首页点开单个视频。帖子标记最迟半分钟生效（卡片流有 30 秒边缘缓存）。</p>
+            </div>
+            <div class="panel-head"><h2>帖子（主留言板最近 40 条）</h2></div>
+            <div class="rows" id="review-posts"></div>
+            <p class="msg" id="review-posts-msg"></p>
+            <div class="panel-head" style="margin-top:22px"><h2>视频（最近 60 个）</h2></div>
+            <div class="rows" id="review-videos"></div>
+            <p class="msg" id="review-videos-msg"></p>
           </div>
 
           <!-- ========== 用量 ========== -->
@@ -1480,6 +1495,99 @@
         if (saved === "moments") renderMoments();
       }
 
+      /* ============ 内容审核 ============ */
+      /* 帖子和视频的可见性标记:public=未注册/未实名可见,class=仅本班实名可见。
+         后端是 PUT /api/posts/:id 和 PUT /api/videos/:id,都只有服主/管理员能调 */
+      function visBadge(v) {
+        return v === "class"
+          ? '<span class="ver-badge off">仅实名</span>'
+          : '<span class="ver-badge on">公开</span>';
+      }
+
+      function reviewRow(kind, item) {
+        const isPost = kind === "post";
+        const raw = String(isPost ? item.body : item.title || "").trim();
+        const summary = raw
+          ? (raw.length > 24 ? raw.slice(0, 24) + "…" : raw)
+          : (isPost ? "（图片帖）" : "（无标题视频）");
+        const who = item.author && (item.author.display_name || item.author.name) || "";
+        const el = document.createElement("div");
+        el.className = "row member";
+        el.innerHTML = `
+          <div class="m-info">
+            <div class="m-line"><span class="m-name">${esc(summary)}</span>${visBadge(item.visibility)}</div>
+            <div class="m-meta">${esc(who)}${who ? " · " : ""}${esc(fmtDate(item.created_at))}</div>
+          </div>
+          <div class="m-right"></div>`;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "m-btn";
+        btn.textContent = item.visibility === "class" ? "设为公开" : "设为仅实名";
+        btn.addEventListener("click", async () => {
+          const target = item.visibility === "class" ? "public" : "class";
+          const msgId = isPost ? "review-posts-msg" : "review-videos-msg";
+          btn.disabled = true;
+          try {
+            const res = await fetch(API + (isPost ? "/posts/" : "/videos/") + item.id, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ visibility: target }),
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok || !d.ok) throw new Error(d.error || "标记失败了");
+            item.visibility = d.visibility || target;
+            $(".m-line .ver-badge", el).outerHTML = visBadge(item.visibility);
+            btn.textContent = item.visibility === "class" ? "设为公开" : "设为仅实名";
+            say(msgId,
+              isPost
+                ? "已标记，游客的卡片流最迟半分钟内生效"
+                : "已标记，取流缓存已顺手清掉，游客侧立即生效",
+              "ok");
+          } catch (err) {
+            say(msgId, err.message, "err");
+            btn.disabled = false;
+          }
+        });
+        $(".m-right", el).appendChild(btn);
+        return el;
+      }
+
+      async function renderReview() {
+        const pBox = $("#review-posts");
+        const vBox = $("#review-videos");
+        if (!pBox || !vBox) return;
+        say("review-posts-msg", "");
+        say("review-videos-msg", "");
+        pBox.innerHTML = '<p class="msg">正在读取…</p>';
+        vBox.innerHTML = '<p class="msg">正在读取…</p>';
+        try {
+          // 服主/管理员本来就能看到全部内容(含「仅实名」的),直接用前台列表
+          const [p1, p2, vs] = await Promise.all([
+            fetch(API + "/posts?page=1", { credentials: "same-origin" }).then((r) => r.json()),
+            fetch(API + "/posts?page=2", { credentials: "same-origin" }).then((r) => r.json().catch(() => ({}))),
+            fetch(API + "/videos?size=60", { credentials: "same-origin" }).then((r) => r.json()),
+          ]);
+          if (!p1.ok) throw new Error(p1.error || "读不到帖子列表");
+          if (!vs.ok) throw new Error(vs.error || "读不到视频列表");
+
+          const posts = [...(p1.posts || []), ...((p2 && p2.posts) || [])];
+          pBox.innerHTML = "";
+          if (!posts.length) pBox.innerHTML = '<p class="msg">主留言板还没有帖子。</p>';
+          else posts.forEach((p) => pBox.appendChild(reviewRow("post", p)));
+
+          const videos = vs.items || [];
+          vBox.innerHTML = "";
+          if (!videos.length) vBox.innerHTML = '<p class="msg">还没有视频。</p>';
+          else videos.forEach((v) => vBox.appendChild(reviewRow("video", v)));
+        } catch (err) {
+          pBox.innerHTML = "";
+          vBox.innerHTML = "";
+          say("review-posts-msg", err.message, "err");
+        }
+      }
+
       /* ============ 用量看板 ============ */
       /* 折线图:手写 SVG,不引第三方库。颜色全走 CSS 变量,
          深色 / 浅色主题切换时自动跟着变 */
@@ -2066,6 +2174,7 @@
           $$(".panel").forEach((p) => { p.hidden = p.id !== "panel-" + name; });
           if (name === "members") renderMembers();
           if (name === "students") renderVerify();
+          if (name === "review") renderReview();
           if (name === "usage") renderUsage();
           if (name === "accounts") renderAccounts();
           if (name === "gallery") renderGallery();

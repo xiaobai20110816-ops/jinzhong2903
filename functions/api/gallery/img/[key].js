@@ -6,7 +6,7 @@
    每张都是不变量,可以长缓存;顺手写进 caches.default,第二次打开走边缘节点
    ============================================================ */
 
-import { GALLERY_KEY_RE } from "../../_utils.js";
+import { currentUser, sectionGate, GALLERY_KEY_RE } from "../../_utils.js";
 import { b2Config, isB2Key, b2ObjectName, s3Get } from "../../_b2.js";
 
 const CACHE_CTRL = "public, max-age=31536000, immutable";
@@ -64,6 +64,15 @@ async function fromB2(request, env, key, waitUntil) {
 export async function onRequestGet({ request, env, params, waitUntil }) {
   const key = params.key;
   if (!GALLERY_KEY_RE.test(key)) return new Response("Not found", { status: 404 });
+
+  // 图库是实名板块:门禁必须做在所有缓存读取之前,
+  // 不然未注册 / 未实名的人能从边缘缓存里把图捡走。
+  // 缓存只存「内容」,登录态不同的人拿到的字节一样,放行后命中缓存没问题
+  if (env.DB) {
+    const me = await currentUser(request, env).catch(() => null);
+    const gate = sectionGate(me, "图库");
+    if (gate) return gate;
+  }
 
   if (isB2Key(key)) return fromB2(request, env, key, waitUntil);
 

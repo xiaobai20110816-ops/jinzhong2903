@@ -2,6 +2,8 @@
    103 纪事 · 单条帖子
    GET    /api/posts/:id                     帖子详情:正文 + 全部回复 + 点赞数
    PUT    /api/posts/:id   { pinned }        服主/管理员置顶或取消置顶(只对主帖有效)
+                           { visibility }    服主/管理员标记:public=未注册/未实名可见
+                                             class=仅本班实名可见(只对主留言板主帖有效)
                            { body, images }  改正文 / 换图:本人或服主、管理员
    DELETE /api/posts/:id                     本人可删自己的;服主/管理员可删任意一条
                                              删主帖会连带删掉它下面所有回复及图片
@@ -14,6 +16,7 @@ import {
   ensureSchema,
   currentUser,
   isStaff,
+  canViewClass,
   safeParse,
   IMAGE_KEY_RE,
   toPost,
@@ -72,8 +75,9 @@ export async function onRequestGet({ request, env, params }) {
     root = up;
   }
 
-  // 「仅本班可见」的主帖,游客直接看不到(和列表口径一致)
-  if (root.visibility === "class" && !me) return fail("这条内容仅本班同学可见", 403);
+  // 「仅本班可见」的主帖,未注册 / 未实名的普通用户看不到(和列表口径一致)
+  if (root.visibility === "class" && !canViewClass(me))
+    return fail("这条内容仅限已实名的本班同学查看", 403);
 
   const kids = await loadThread(env.DB, [root.id]);
   const rows = [root, ...kids];
@@ -132,7 +136,7 @@ export async function onRequestPut({ request, env, params }) {
   }
 
   const row = await env.DB.prepare(
-    "SELECT id, parent_id, user_id, images FROM posts WHERE id = ?"
+    "SELECT id, parent_id, wall_id, video_id, user_id, images FROM posts WHERE id = ?"
   )
     .bind(id)
     .first();
@@ -148,6 +152,16 @@ export async function onRequestPut({ request, env, params }) {
     if (row.parent_id) return fail("只能置顶主帖");
     sets.push("pinned = ?");
     binds.push(payload.pinned ? 1 : 0);
+  }
+
+  // 可见性标记:服主 / 管理员决定这条主帖给不给未注册 / 未实名的人看。
+  // 只对主留言板的主帖有意义 —— 回复跟随主帖,留言墙和视频评论不在流里
+  if (payload.visibility !== undefined) {
+    if (!isStaff(me)) return fail("只有服主和管理员能改可见性", 403);
+    if (row.parent_id || row.wall_id || row.video_id)
+      return fail("只能标记主留言板里的主帖");
+    sets.push("visibility = ?");
+    binds.push(payload.visibility === "class" ? "class" : "public");
   }
 
   // 改正文 / 换图:本人或服主、管理员
@@ -187,7 +201,7 @@ export async function onRequestPut({ request, env, params }) {
     .bind(...binds)
     .run();
 
-  return json({ ok: true, id });
+  return json({ ok: true, id, visibility: payload.visibility === "class" ? "class" : "public" });
 }
 
 export async function onRequestDelete({ request, env, params }) {

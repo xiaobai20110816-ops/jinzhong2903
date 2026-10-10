@@ -14,6 +14,7 @@ import {
   notReady,
   ensureSchema,
   currentUser,
+  canViewClass,
   toPost,
   POST_COLS,
   loadAuthors,
@@ -73,9 +74,11 @@ export async function onRequestGet({ request, env }) {
       return jsonNoStore(text, { "x-feed-cache": "hit" });
     }
   }
-  // 「仅本班可见」的东西游客直接看不到,帖子和视频口径一致
-  const postVis = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
-  const videoVis = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
+  // 「仅本班可见」的东西未注册 / 未实名的普通用户看不到,帖子和视频口径一致。
+  // 边缘缓存仍然只给真正的游客(没登录)用:未实名的人登录了,
+  // 点赞状态是个人的,不能让他们读游客那一份缓存
+  const postVis = canViewClass(me) ? "" : " AND (visibility IS NULL OR visibility = 'public')";
+  const videoVis = canViewClass(me) ? "" : " AND (visibility IS NULL OR visibility = 'public')";
 
   const [postRes, videoRes] = await Promise.all([
     env.DB.prepare(

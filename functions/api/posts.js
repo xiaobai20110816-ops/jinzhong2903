@@ -17,6 +17,7 @@ import {
   ensureSchema,
   currentUser,
   classGate,
+  canViewClass,
   toPost,
   loadThread,
   IMAGE_KEY_RE,
@@ -95,7 +96,7 @@ export async function onRequestGet({ request, env }) {
     }
 
     // 主留言板:排序是「置顶 → 新 → id」,可见性口径和下面 GET 保持一致
-    const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
+    const visOnly = canViewClass(me) ? "" : " AND (visibility IS NULL OR visibility = 'public')";
     const before = await env.DB.prepare(
       `SELECT COUNT(*) AS n FROM posts
         WHERE parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL ${visOnly}
@@ -146,7 +147,8 @@ export async function onRequestGet({ request, env }) {
 
   // ---- 主留言板 / 某个人的主帖 ----
   // 分页分的是「主帖」,回复跟着主帖一起出来,不会被翻页截断
-  const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
+  // 未注册 / 未实名的普通用户只看得到 public 的主帖(管理员标记过的)
+  const visOnly = canViewClass(me) ? "" : " AND (visibility IS NULL OR visibility = 'public')";
   const where = authorId
     ? "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL AND user_id = ?" + visOnly
     : "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL" + visOnly;
@@ -278,7 +280,8 @@ export async function onRequestPost({ request, env }) {
       .bind(videoId)
       .first();
     if (!v) return fail("这个视频已经不在了，刷新一下再看看", 404);
-    if (v.visibility === "class" && !me) return fail("这条内容仅本班同学可见", 403);
+    if (v.visibility === "class" && !canViewClass(me))
+      return fail("这条内容仅限已实名的本班同学查看", 403);
     videoOwner = v.user_id || 0;
   }
   // 可见性只对「主帖」有意义:回复跟随主帖,留言墙一律公开

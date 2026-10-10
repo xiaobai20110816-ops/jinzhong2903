@@ -7,7 +7,7 @@
    前端拿 file 去 /api/videos/file/<file> 取流。
    ============================================================ */
 
-import { json, notReady, ensureSchema, currentUser } from "../_utils.js";
+import { json, notReady, ensureSchema, currentUser, canViewClass } from "../_utils.js";
 import { decorateVideos } from "../_videos.js";
 
 const PAGE_SIZE = 20;
@@ -26,8 +26,8 @@ export async function onRequestGet({ request, env }) {
   const authorId = parseInt(url.searchParams.get("author") || "0", 10) || 0;
 
   const me = await currentUser(request, env);
-  // 「仅本班可见」的视频,游客直接看不到
-  const visOnly = me ? "" : " AND (visibility IS NULL OR visibility = 'public')";
+  // 「仅本班可见」的视频,未注册 / 未实名的普通用户直接看不到
+  const visOnly = canViewClass(me) ? "" : " AND (visibility IS NULL OR visibility = 'public')";
   const where = (authorId ? "user_id = ?" : "1=1") + visOnly;
   const binds = authorId ? [authorId] : [];
 

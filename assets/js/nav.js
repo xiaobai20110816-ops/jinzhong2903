@@ -433,6 +433,60 @@ const C103Auth = {
     this._emit();
     return this.user;
   },
+
+  /* 「实名视线」:视频 / 图库 / 宿舍风采这些板块只对
+     注册并完成实名的同学(以及管理员、服主)开放。
+     页面在自己初始化前问一句,不达标就把整个页面用遮罩盖住 */
+  canViewSections() {
+    const u = this.user;
+    return !!u && (u.role === "owner" || u.role === "admin" || u.verified === 1);
+  },
+
+  /* 板块门禁遮罩:盖住整页,不给未注册 / 未实名的人看内容。
+     数据层面后端接口同样会拦(401/403),这里是用户体验兜底 */
+  sectionGate(label) {
+    if (document.getElementById("c103-section-gate")) return;
+    const light = document.documentElement.dataset.theme === "light";
+    const ov = document.createElement("div");
+    ov.id = "c103-section-gate";
+    ov.style.cssText =
+      "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;" +
+      "padding:24px;background:" +
+      (light ? "rgba(244,246,250,.94)" : "rgba(7,11,20,.94)") +
+      ";backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)";
+    ov.innerHTML =
+      '<div style="max-width:420px;width:100%;text-align:center;padding:34px 28px;border-radius:20px;' +
+      "border:1px solid " +
+      (light ? "rgba(15,23,42,.12)" : "rgba(255,255,255,.14)") +
+      ";" +
+      "background:" +
+      (light ? "#ffffff" : "rgba(17,24,39,.92)") +
+      ";" +
+      "color:" +
+      (light ? "#0f172a" : "#f4f6fa") +
+      ";box-shadow:0 24px 60px rgba(0,0,0,.35)\">" +
+      '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f0b90b" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:14px">' +
+      '<rect x="4" y="10.5" width="16" height="10" rx="2.5"></rect>' +
+      '<path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path><circle cx="12" cy="15.5" r="1.4"></circle></svg>' +
+      '<h2 style="margin:0 0 10px;font-size:20px;font-weight:700">仅限本班实名同学</h2>' +
+      '<p style="margin:0 0 22px;font-size:14px;line-height:1.8;opacity:.75">' +
+      esc(label || "该板块") +
+      "只对注册并完成实名的同学开放。<br>登录后去个人中心完成实名认证就能看了。</p>" +
+      '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">' +
+      '<a href="account.html" style="text-decoration:none;padding:10px 22px;border-radius:999px;' +
+      "font-size:14px;font-weight:600;color:#111;background:linear-gradient(135deg,#f0b90b,#ff8a00)\">" +
+      "去登录 / 实名</a>" +
+      '<a href="javascript:history.back()" style="text-decoration:none;padding:10px 22px;border-radius:999px;' +
+      "font-size:14px;color:" +
+      (light ? "#0f172a" : "#f4f6fa") +
+      ";border:1px solid " +
+      (light ? "rgba(15,23,42,.2)" : "rgba(255,255,255,.25)") +
+      '">返回上一页</a></div></div>';
+    document.body.appendChild(ov);
+    document.documentElement.style.overflow = "hidden";
+    return ov;
+  },
 };
 
 window.C103Auth = C103Auth;

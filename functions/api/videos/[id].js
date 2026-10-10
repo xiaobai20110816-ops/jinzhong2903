@@ -1,6 +1,7 @@
 /* ============================================================
    103 · 单个视频
    GET    /api/videos/:id   视频本身 + 全部评论(评论挂在 posts 表的 video_id 上)
+   PUT    /api/videos/:id   服主 / 管理员标记可见性 { visibility: public|class }
    DELETE /api/videos/:id   本人或服主 / 管理员:删视频 + 评论 + 点赞收藏 + B2 上的文件
    ============================================================ */
 
@@ -11,6 +12,7 @@ import {
   ensureSchema,
   currentUser,
   isStaff,
+  canViewClass,
   safeParse,
   IMAGE_KEY_RE,
   POST_COLS,
@@ -29,10 +31,13 @@ export async function onRequestGet({ request, env, params }) {
 
   const row = await env.DB.prepare("SELECT * FROM videos WHERE id = ?").bind(id).first();
   if (!row) return fail("这个视频已经不在了", 404);
-  if (row.visibility === "class" && !me) return fail("这条内容仅本班同学可见", 403);
+  if (row.visibility === "class" && !canViewClass(me))
+    return fail("这条内容仅限已实名的本班同学查看", 403);
 
   const [video] = await decorateVideos(env.DB, [row], me);
 
+  // 评论里若有「仅本班可见」的帖子口径由 posts 自身 visibility 控制,
+  // 这里跟随视频本体:视频都看不见了,评论也不给
   const { results } = await env.DB.prepare(
     `SELECT ${POST_COLS} FROM posts WHERE video_id = ? ORDER BY created_at ASC, id ASC`
   )
@@ -42,6 +47,46 @@ export async function onRequestGet({ request, env, params }) {
   const comments = await decorateComments(env.DB, results || [], me);
 
   return json({ ok: true, video, comments });
+}
+
+/* 可见性标记:服主 / 管理员决定这个视频给不给未注册 / 未实名的人看。
+   改成 class 后要顺手清掉文件取流那层的边缘缓存,防止游客在同一个
+   节点上还命中标记前缓存的字节(浏览器本地缓存收不回来,属已知限制) */
+export async function onRequestPut({ request, env, params }) {
+  if (!env.DB) return notReady("数据库");
+  await ensureSchema(env.DB);
+
+  const me = await currentUser(request, env);
+  if (!isStaff(me)) return fail("只有服主和管理员能改可见性", 403);
+
+  const id = parseInt(params.id, 10);
+  if (!id) return fail("视频编号不对");
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (e) {
+    return fail("提交的内容读不出来，请刷新页面重试");
+  }
+  if (payload.visibility === undefined) return fail("没有要改的内容");
+
+  const row = await env.DB.prepare("SELECT id, b2_key FROM videos WHERE id = ?").bind(id).first();
+  if (!row) return fail("这个视频已经不在了", 404);
+
+  const vis = payload.visibility === "class" ? "class" : "public";
+  await env.DB.prepare("UPDATE videos SET visibility = ? WHERE id = ?").bind(vis, id).run();
+
+  // best-effort 清本节点的取流缓存;别的节点最多活到缓存自然过期
+  try {
+    if (typeof caches !== "undefined" && row.b2_key) {
+      const fileUrl = new URL(request.url).origin + "/api/videos/file/" + row.b2_key;
+      await caches.default.delete(new Request(fileUrl, { method: "GET" })).catch(() => {});
+    }
+  } catch (e) {
+    /* 清不掉就算了 */
+  }
+
+  return json({ ok: true, id, visibility: vis });
 }
 
 export async function onRequestDelete({ request, env, params }) {
