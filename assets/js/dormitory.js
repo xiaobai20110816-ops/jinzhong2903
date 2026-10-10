@@ -147,7 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
       rendered.set(String(d.number), photos);
 
       const cover = photos.length
-        ? `<img class="dorm-cover" src="${esc(photos[0])}" alt="宿舍 ${esc(d.number)} 合照">`
+        ? `<img class="dorm-cover" src="${esc(photos[0])}" loading="lazy" decoding="async" alt="宿舍 ${esc(d.number)} 合照">`
         : `<span>宿 舍 ${esc(d.number)} · 合 照</span>`;
 
       const thumbs =
@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ? `<div class="dorm-thumbs">${photos
               .map(
                 (p, i) =>
-                  `<img src="${esc(p)}" data-index="${i}" class="${i === 0 ? "active" : ""}" alt="宿舍 ${esc(d.number)} 照片 ${i + 1}">`
+                  `<img src="${esc(p)}" loading="lazy" decoding="async" data-index="${i}" class="${i === 0 ? "active" : ""}" alt="宿舍 ${esc(d.number)} 照片 ${i + 1}">`
               )
               .join("")}</div>`
           : "";

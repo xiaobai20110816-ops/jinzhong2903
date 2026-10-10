@@ -9,7 +9,9 @@
   gap: 26px;
 }
 
-/* 玻璃卡:外框留 8px 内边距,模糊在合照四周看得见 */
+/* 玻璃卡:外框留 8px 内边距,模糊在合照四周看得见。
+   backdrop-filter 每帧重算很贵:用 translateZ(0) 把卡片提到独立合成层,
+   浏览器会缓存模糊结果,滚动时只移动层,不再每帧糊一遍 */
 .dorm-card {
   padding: 8px;
   background: var(--glass-surface);
@@ -19,6 +21,8 @@
   box-shadow: var(--glass-rim);
   border-radius: var(--radius);
   overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform;
   transition: transform 0.25s, color 0.6s ease,
     background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
 }
