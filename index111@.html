@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 音乐领军班 — 青春交响，永不散场">
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#070b14">
+  <title>103班 · 音乐领军班</title>
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
+    } catch (e) {}
+  </script>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/home.css">
+  <!-- 留言板板块复用 103 纪事 的样式 -->
+  <link rel="stylesheet" href="assets/css/story.css">
+  <!-- 视频卡片(首页合并流里会有视频卡片) -->
+  <link rel="stylesheet" href="assets/css/video.css">
+</head>
+<body class="poster">
+
+  <!-- 背景层:Canvas 粒子(缓慢、克制) -->
+  <canvas id="particles" aria-hidden="true"></canvas>
+
+  <main>
+    <!-- ========== 第一屏:品牌海报(视频封面) ========== -->
+    <section class="poster-screen" id="poster" aria-label="班级主页海报">
+      <video class="poster-video" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+        <source src="assets/videos/cover.mp4" type="video/mp4">
+      </video>
+      <div class="poster-shade" aria-hidden="true"></div>
+      <div class="poster-dissolve" aria-hidden="true"></div>
+      <div class="poster-center">
+        <p class="poster-kicker">Jinhua No.1 High School</p>
+        <!-- 投影交给外层:see home.css .poster-title-wrap -->
+        <div class="poster-title-wrap">
+          <h1 class="poster-title">103<span>班</span></h1>
+        </div>
+        <div class="poster-rule" aria-hidden="true"></div>
+        <p class="poster-tagline">CLASS 103 · MUSICAL VANGUARDS</p>
+        <p class="poster-year">2026</p>
+      </div>
+      <button class="scroll-hint" id="scroll-hint" type="button" aria-label="进入内容">
+        <span>SCROLL</span>
+        <span class="line" aria-hidden="true"></span>
+      </button>
+    </section>
+
+    <!-- ========== 班级社区:帖子和视频混在一条流里(小红书那种) ========== -->
+    <section class="showcase board-section" id="board" aria-label="班级社区">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">NEW</span>
+          <h2>班级社区</h2>
+          <span class="en">COMMUNITY</span>
+          <a class="more" href="story.html" data-veil>进入 103 纪事<i>→</i></a>
+        </div>
+
+        <div class="story-wrap">
+          <form class="composer" id="composer" autocomplete="off" hidden>
+            <div class="composer-me">
+              <span id="me-avatar" class="composer-face"></span>
+              <div class="composer-who">
+                <span class="story-name" id="me-name"></span>
+                <span class="composer-sig" id="me-sig"></span>
+              </div>
+              <a class="composer-center" href="account.html">个人中心 →</a>
+            </div>
+
+            <label class="field">
+              <span>正文</span>
+              <textarea id="f-body" rows="4" maxlength="4000" placeholder="那天发生了什么？写下来，就是 103 的历史。"></textarea>
+            </label>
+
+            <div class="picker">
+              <input id="f-file" type="file" accept="image/*" multiple hidden>
+              <button class="pick-btn" type="button" id="pick-btn">＋ 加图片</button>
+              <span class="pick-hint" id="pick-hint">最多 3 张，上传前自动压到 1MB 以内</span>
+              <div class="thumbs" id="thumbs"></div>
+            </div>
+
+            <div class="vis-pick" id="vis-pick" role="group" aria-label="谁可以看">
+              <span class="vis-lb">谁可以看</span>
+              <button type="button" class="vis-opt active" data-vis="public">全部可见</button>
+              <button type="button" class="vis-opt" data-vis="class">仅本班可见</button>
+            </div>
+
+            <div class="composer-foot">
+              <p class="form-msg" id="form-msg"></p>
+              <button class="submit-btn" type="submit" id="submit-btn">发布</button>
+            </div>
+          </form>
+
+          <div class="login-gate" id="login-gate" hidden>
+            <p class="gate-title">登录后才能发言</p>
+            <p class="gate-sub">用账号署名，头像和个性签名会一起显示在留言上。</p>
+            <a class="gate-btn" href="account.html">去登录 / 注册 →</a>
+          </div>
+
+          <div class="feed-tabs" id="feed-tabs" hidden>
+            <button type="button" class="feed-tab active" data-feed="all">全部</button>
+            <button type="button" class="feed-tab" data-feed="post">图文</button>
+            <button type="button" class="feed-tab" data-feed="video">视频</button>
+          </div>
+
+          <div class="story-list card-grid" id="story-list"></div>
+
+          <!-- 卡片流同样分页,条目多了往下翻 -->
+          <div class="pager" id="pager" hidden>
+            <button type="button" id="prev-btn">‹ 更新的</button>
+            <span id="page-info"></span>
+            <button type="button" id="next-btn">更早的 ›</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 01 学生风采 ========== -->
+    <section class="showcase" id="students" aria-label="学生风采">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">01</span>
+          <h2>学生风采</h2>
+          <span class="en">STUDENTS</span>
+          <a class="more" href="students.html" data-veil>查看全部<i>→</i></a>
+        </div>
+        <div class="showcase-body soon-inline" data-io>
+          <p class="soon-en">COMING SOON</p>
+          <p class="soon-cn">敬请期待</p>
+          <p class="soon-note">名单整理中，即将公布</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 02 宿舍风采 ========== -->
+    <section class="showcase" id="dormitory" aria-label="宿舍风采">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">02</span>
+          <h2>宿舍风采</h2>
+          <span class="en">DORMITORY</span>
+          <a class="more" href="dormitory.html" data-veil>查看全部<i>→</i></a>
+        </div>
+      </div>
+      <div class="rail-wrap" data-io>
+        <button class="rail-btn prev" type="button" aria-label="往前看">‹</button>
+        <div class="showcase-rail" id="dorm-rail">
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/311/1.jpg" alt="311 宿舍"></span>
+            <span class="dorm-mini-body"><b>311</b><em>皇家园区</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/312/1.jpg" alt="312 宿舍"></span>
+            <span class="dorm-mini-body"><b>312</b><em>大诚酒店</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/avatars/avatar-placeholder.svg" alt="409 宿舍"></span>
+            <span class="dorm-mini-body"><b>409</b><em>待补充</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/410/1.jpg" alt="410 宿舍"></span>
+            <span class="dorm-mini-body"><b>410</b><em>金楚涵教总部</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/411/1.jpg" alt="411 宿舍"></span>
+            <span class="dorm-mini-body"><b>411</b><em>法兰西室联盟</em></span>
+          </a>
+          <a class="dorm-mini" href="dormitory.html" data-veil>
+            <span class="dorm-mini-photo"><img src="assets/images/dorm/412/1.jpg" alt="412 宿舍"></span>
+            <span class="dorm-mini-body"><b>412</b><em>待补充</em></span>
+          </a>
+        </div>
+        <button class="rail-btn next" type="button" aria-label="往后看">›</button>
+      </div>
+    </section>
+
+    <!-- ========== 03 高光时刻 ========== -->
+    <section class="showcase" id="moments" aria-label="高光时刻">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">03</span>
+          <h2>高光时刻</h2>
+          <span class="en">MOMENTS</span>
+          <a class="more" href="moments.html" data-veil>查看全部<i>→</i></a>
+        </div>
+      </div>
+      <div class="showcase-grid" data-io>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-01.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-02.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-03.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-04.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-05.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-06.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-07.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-08.jpg" alt="合唱比赛"></a>
+        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-09.jpg" alt="合唱比赛"></a>
+      </div>
+      <div class="container">
+        <p class="showcase-note" data-io>合唱比赛 · 96.95 分 · 位列第一<i>/</i>另有宿舍游行视频</p>
+      </div>
+    </section>
+
+    <!-- ========== 04 班级公告 ========== -->
+    <section class="showcase" id="announcements" aria-label="班级公告">
+      <div class="container">
+        <div class="showcase-head" data-io>
+          <span class="no">04</span>
+          <h2>班级公告</h2>
+          <span class="en">ANNOUNCEMENTS</span>
+          <a class="more" href="announcements.html" data-veil>查看全部<i>→</i></a>
+        </div>
+        <div class="news-list" data-io>
+          <a class="news" href="announcements.html" data-veil>
+            <span class="news-date">2026.10.03<i class="pin">置顶</i></span>
+            <p>103 官网正式成立 —— 自由注册登录、B 站式回复、IP 属地全部上线。</p>
+          </a>
+          <a class="news" href="announcements.html" data-veil>
+            <span class="news-date">2026.09.29<i class="pin">置顶</i></span>
+            <p>合唱比赛获得 96.95 分，位列第一。</p>
+          </a>
+          <a class="news" href="announcements.html" data-veil>
+            <span class="news-date">2026.09.25</span>
+            <p>素养 103 第二帝国建立，何易航政府覆灭，金楚涵皈依第二帝国。</p>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 转场幕布:点击"查看全部"后浮起遮住画面,再跳转 -->
+  <div class="page-veil" id="page-veil" aria-hidden="true"></div>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // ========== 封面视频:加载失败自动隐藏,露出粒子背景;滚出屏幕暂停省电 ==========
+    (function () {
+      const v = document.querySelector(".poster-video");
+      if (!v) return;
+      v.addEventListener("error", () => { v.style.display = "none"; }, true); // capture:捕获 <source> 的加载失败
+      if ("IntersectionObserver" in window) {
+        new IntersectionObserver((es) => {
+          es.forEach((e) => e.isIntersecting ? v.play().catch(() => {}) : v.pause());
+        }, { threshold: 0.1 }).observe(document.getElementById("poster"));
+      }
+    })();
+
+    // ========== 背景粒子:纯 Canvas,数量更多、飘得更快 ==========
+    (function () {
+      const canvas = document.getElementById("particles");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      let W, H, DPR, parts = [], sprites = {}, spriteTheme = "";
+      let running = false, rafId = 0;
+      const mouse = { x: 0.5, y: 0.5 };
+      const R = 34;                 // 光晕雪碧图的半径(px)
+
+      // 光晕粒子用离屏雪碧图:每帧现算径向渐变太贵,一次性画好再缩放贴上去
+      function makeSprite(rgb) {
+        const s = document.createElement("canvas");
+        s.width = s.height = R * 2;
+        const c = s.getContext("2d");
+        const g = c.createRadialGradient(R, R, 0, R, R, R);
+        g.addColorStop(0, "rgba(" + rgb + ",0.55)");
+        g.addColorStop(0.35, "rgba(" + rgb + ",0.16)");
+        g.addColorStop(1, "rgba(" + rgb + ",0)");
+        c.fillStyle = g;
+        c.fillRect(0, 0, R * 2, R * 2);
+        return s;
+      }
+      function buildSprites(theme) {
+        spriteTheme = theme;
+        sprites = theme === "light"
+          ? { gold: makeSprite("179,129,10"), ink: makeSprite("16,19,26") }
+          : { gold: makeSprite("240,185,11"), ink: makeSprite("200,220,255") };
+      }
+
+      function resize() {
+        DPR = Math.min(window.devicePixelRatio || 1, 2);
+        W = innerWidth; H = innerHeight;
+        canvas.width = W * DPR; canvas.height = H * DPR;
+        canvas.style.width = W + "px"; canvas.style.height = H + "px";
+        // 密度翻倍:之前按 18000 铺、上限 90,看起来太稀
+        const count = Math.min(190, Math.max(72, Math.floor((W * H) / 7000)));
+        parts = [];
+        for (let i = 0; i < count; i++) {
+          parts.push({
+            x: Math.random() * W, y: Math.random() * H,
+            r: Math.random() * 1.9 + 0.5,
+            a: Math.random() * 0.5 + 0.16,
+            gold: Math.random() < 0.34,               // 约三分之一金色粒子
+            glow: Math.random() < 0.14,               // 少量大颗带光晕
+            phase: Math.random() * Math.PI * 2,
+            sp: 0.003 + Math.random() * 0.007,        // 摆动快慢错开
+            vx: (Math.random() - 0.5) * 0.36,
+            vy: (Math.random() - 0.5) * 0.36 - 0.05,  // 整体略向上飘
+            ax: 6 + Math.random() * 13,
+            ay: 6 + Math.random() * 13,
+          });
+        }
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.scale(DPR, DPR);
+        const light = document.documentElement.dataset.theme === "light"; // 浅色底下粒子要变深才看得见
+        const theme = light ? "light" : "dark";
+        if (spriteTheme !== theme) buildSprites(theme);
+        const ox = (mouse.x - 0.5) * 30, oy = (mouse.y - 0.5) * 30; // 轻微视差
+        for (const p of parts) {
+          p.phase += p.sp;
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < -14) p.x = W + 14; else if (p.x > W + 14) p.x = -14;
+          if (p.y < -14) p.y = H + 14; else if (p.y > H + 14) p.y = -14;
+
+          const dx = Math.sin(p.phase) * p.ax, dy = Math.cos(p.phase * 0.8) * p.ay;
+          const cx = p.x + dx - ox, cy = p.y + dy - oy;
+          const flicker = 0.68 + 0.32 * Math.sin(p.phase * 2.3);
+
+          if (p.glow) {   // 先铺一层柔光,再叠实心点,粒子就有了"发光"的层次
+            const size = p.r * 16;
+            ctx.globalAlpha = Math.min(1, p.a * flicker * (light ? 0.5 : 0.85));
+            ctx.drawImage(p.gold ? sprites.gold : sprites.ink,
+              cx - size / 2, cy - size / 2, size, size);
+            ctx.globalAlpha = 1;
+          }
+
+          ctx.beginPath();
+          ctx.arc(cx, cy, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = p.gold
+            ? (light ? "rgba(179,129,10," : "rgba(240,185,11,") + (p.a * flicker).toFixed(3) + ")"
+            : (light ? "rgba(16,19,26," : "rgba(255,255,255,") + (p.a * 0.8 * flicker).toFixed(3) + ")";
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function loop() {
+        if (!running) return;
+        render();
+        rafId = requestAnimationFrame(loop);
+      }
+      function start() {
+        if (running || reduceMotion) return;
+        running = true;
+        rafId = requestAnimationFrame(loop);
+      }
+      function stop() {
+        running = false;
+        cancelAnimationFrame(rafId);
+      }
+
+      resize();
+      addEventListener("resize", resize);
+      addEventListener("mousemove", (e) => {
+        mouse.x = e.clientX / innerWidth; mouse.y = e.clientY / innerHeight;
+      }, { passive: true });
+      // 切到别的标签页就停帧,别在后台白烧 CPU
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) stop(); else start();
+      });
+
+      if (reduceMotion) render(); // 尊重"减少动效":只画一帧静态
+      else start();
+    })();
+
+    // ========== 点击海报任意处 / SCROLL → 平滑滚到第一个内容区 ==========
+    (function () {
+      const target = document.getElementById("board") || document.getElementById("students");
+      const go = () => target.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("scroll-hint").addEventListener("click", (e) => {
+        e.stopPropagation(); go();
+      });
+      document.getElementById("poster").addEventListener("click", go);
+    })();
+
+    // ========== 顶部导航:滚动过首屏后由透明变为实底 ==========
+    (function () {
+      const header = document.querySelector(".site-header");
+      const poster = document.getElementById("poster");
+      if (!header || !poster) return;
+      const sync = () => {
+        header.classList.toggle("is-scrolled", scrollY > poster.offsetHeight - 80);
+      };
+      addEventListener("scroll", sync, { passive: true });
+      sync();
+    })();
+
+    // ========== "查看全部"点击:播放平滑转场后再跳转 ==========
+    // 不依赖 View Transitions 特性(file:// 下原生过渡不生效),保证任何环境都顺
+    // 用事件委托:宿舍滑轨后面克隆出来的卡片也能自动生效,不用重新绑定
+    (function () {
+      const veilTime = 380; // 与 CSS 幕布过渡时长一致
+      document.addEventListener("click", (e) => {
+        const a = e.target.closest("[data-veil]");
+        if (!a) return;
+        // 组合键/中键点击交给浏览器(新标签页打开)
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        const href = a.getAttribute("href");
+        document.body.classList.add("leaving");
+        setTimeout(() => { location.href = href; }, veilTime);
+      });
+
+      // 浏览器"后退"用 bfcache 恢复页面时,清掉幕布状态,避免留下黑屏
+      addEventListener("pageshow", () => document.body.classList.remove("leaving"));
+    })();
+
+    // ========== 内容块:进入视口时逐条上浮 ==========
+    (function () {
+      const items = document.querySelectorAll("[data-io]");
+      if (!("IntersectionObserver" in window)) return;
+      items.forEach((el) => el.classList.add("io-rise"));
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((en, i) => {
+          if (en.isIntersecting) {
+            setTimeout(() => en.target.classList.add("in"), i * 90);
+            io.unobserve(en.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      items.forEach((el) => io.observe(el));
+    })();
+
+    // ========== 宿舍滑轨:走—停节奏 + 中间大幅放大 + 无限循环 ==========
+    // 节奏是"转到位 → 停一会儿 → 再转下一张",不是连续匀速转。
+    // 停住的那段时间一帧都不跑,只有 0.76 秒的转动期间才排 rAF——
+    // 老版是常驻 rAF、每帧都写 scrollLeft 和 18 张玻璃卡的缩放,所以显得帧数很低。
+    // 卡片由「站点内容」决定,所以这里包成函数,数据到位后再调用。
+    function initDormRail() {
+      const rail = document.getElementById("dorm-rail");
+      if (!rail) return;
+      const btnPrev = document.querySelector(".rail-btn.prev");
+      const btnNext = document.querySelector(".rail-btn.next");
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const originals = Array.from(rail.querySelectorAll(".dorm-mini"));
+      if (!originals.length) return;
+
+      const MAX_SCALE = 1.28;   // 停在正中那张:放大到 1.28 倍
+      const MIN_SCALE = 0.5;    // 滑到两端:缩掉一半,和中景拉开 2.5 倍差距
+      const TURN = 760;         // 从这张转到下一张用多久
+      const HOLD = 2200;        // 转到位之后停住多久
+      const AFTER_USER = 2800;  // 用户自己拨过之后,隔多久恢复自动转
+
+      let unit = 0;             // 一份卡片的宽度:画面每滚过 unit 就完全重复一次
+      let stride = 0;           // 一张卡宽度 + 间距
+      let cards = [];           // 全部卡片(含克隆出来的)
+      let centers = [];         // 每张卡在"内容坐标"里的中心位置(布局值,不受缩放影响)
+      let scales = [];          // 上一帧写过的缩放值,避免无意义的样式写入
+      let railW = 0;            // 滑轨可视宽度:量一次存着,别在每帧里去读 clientWidth
+
+      let phase = "hold";       // hold:停着不动 | turn:正在转到下一张
+      let hover = false;        // 鼠标停在滑轨上
+      let from = 0, to = 0, t0 = 0;
+      let raf = 0;              // 0 表示"睡着":停住时完全不排动画帧
+      let holdTimer = 0, armed = false, nextHold = HOLD, settleTimer = 0;
+
+      const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+
+      // ---- 铺足份数的克隆卡:一直往右转也不会"转到尽头",这是无限循环的关键 ----
+      function build() {
+        cards.forEach((c) => { if (c.dataset.clone) c.remove(); });
+        const gap = parseFloat(getComputedStyle(rail).columnGap) || 16;
+        stride = originals[0].offsetWidth + gap;
+        unit = originals.length * stride;
+        // 归一化窗口是 [unit, 2*unit],所以右侧至少要留到 2*unit + 视口宽
+        const copies = Math.max(3, Math.ceil(2 + rail.clientWidth / unit));
+        for (let c = 1; c < copies; c++) {
+          originals.forEach((src) => {
+            const node = src.cloneNode(true);
+            node.dataset.clone = "1";           // 克隆卡不进无障碍树
+            node.setAttribute("aria-hidden", "true");
+            node.tabIndex = -1;
+            rail.appendChild(node);
+          });
+        }
+        cards = Array.from(rail.querySelectorAll(".dorm-mini"));
+        scales = cards.map(() => -1);           // -1 保证第一帧把所有卡的样式写一遍
+        measure();
+        rail.scrollLeft = unit;                                             // 先落到"第二份"开头
+        rail.scrollLeft = centers[nearest()] - rail.clientWidth / 2;        // 再让一张卡正好落在正中
+        normalize();
+        applyScale();
+      }
+
+      function measure() {
+        centers = cards.map((c) => c.offsetLeft + c.offsetWidth / 2);
+        railW = rail.clientWidth;
+      }
+
+      // 把 scrollLeft 收进 [unit, 2*unit)。画面每 unit 重复一次,所以这一步视觉上等于没动
+      function normalize() {
+        const x = rail.scrollLeft;
+        const n = unit + (((x - unit) % unit) + unit) % unit;
+        if (Math.abs(n - x) > 0.5) rail.scrollLeft = n;   // 值没变就不写,少一次无谓的滚动写入
+      }
+
+      // 离画面正中最近的是第几张
+      function nearest() {
+        const mid = rail.scrollLeft + railW / 2;
+        let best = 0, bd = Infinity;
+        for (let i = 0; i < centers.length; i++) {
+          const d = Math.abs(centers[i] - mid);
+          if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+      }
+
+      // 越靠中间越大:带宽只有 1.6 个步长,所以相邻那张已经明显小一圈、第三张就缩到底
+      // x:刚写进 scrollLeft 的值。传了就直接用,不再回头读 scrollLeft ——
+      // 写完立刻读会强制浏览器当场重排一次,每帧一次是这个动画最贵的开销
+      function applyScale(x) {
+        const mid = (x === undefined ? rail.scrollLeft : x) + railW / 2;
+        const band = Math.max(stride * 1.6, 300);
+        for (let i = 0; i < cards.length; i++) {
+          const t = Math.max(0, 1 - Math.abs(centers[i] - mid) / band);
+          const e = t * t * (3 - 2 * t);        // smoothstep:两端更扁,过渡更柔
+          const s = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * e;
+          if (Math.abs(s - scales[i]) > 0.0015) {   // 阈值要小,否则最中间那张会一格一格地跳
+            scales[i] = s;
+            cards[i].style.setProperty("--s", s.toFixed(4));
+            cards[i].style.setProperty("--z", String(Math.round(s * 100)));  // 中间那张压在邻居上面
+          }
+        }
+      }
+
+      // ---- 转到第 i 张 ----
+      function turnTo(i) {
+        if (i < 0 || i >= centers.length) return;
+        from = rail.scrollLeft;
+        to = centers[i] - rail.clientWidth / 2;
+        t0 = performance.now();
+        phase = "turn";
+        armed = false;
+        clearTimeout(holdTimer);
+        if (!raf) raf = requestAnimationFrame(frame);
+      }
+      function advance(dir) { turnTo(nearest() + dir); }
+
+      function frame(now) {
+        raf = 0;
+        const p = Math.min(1, (now - t0) / TURN);
+        const x = from + (to - from) * ease(p);
+        rail.scrollLeft = x;
+        applyScale(x);
+        if (p < 1) { raf = requestAnimationFrame(frame); return; }
+        phase = "hold";
+        normalize();
+        applyScale();
+        settle();          // 已经落在正中,这里只负责把"下一次转"排上
+      }
+
+      // 排下一次自动转(停住期间没有任何动画帧在跑)
+      function schedule(ms) {
+        clearTimeout(holdTimer);
+        armed = false;
+        if (reduceMotion || hover || phase === "turn") return;
+        armed = true;
+        holdTimer = setTimeout(() => {
+          armed = false;
+          if (phase !== "hold") return;
+          nextHold = HOLD;
+          advance(1);
+        }, ms);
+      }
+
+      // 停稳了:没对正在中的就吸附过去,已经在正中的就排下一张
+      function settle() {
+        if (phase === "turn" || reduceMotion) return;
+        const i = nearest();
+        const off = centers[i] - (rail.scrollLeft + railW / 2);
+        if (Math.abs(off) > 1.5) { turnTo(i); return; }
+        if (!armed) schedule(nextHold);
+      }
+
+      // ---- 用户自己拨动:手上这张立刻停下(别和手指抢),之后多停一会儿再恢复自动 ----
+      function userTakeOver() {
+        nextHold = AFTER_USER;
+        armed = false;
+        clearTimeout(holdTimer);
+        if (phase === "turn") { rail.scrollLeft = to; phase = "hold"; normalize(); }
+      }
+
+      rail.addEventListener("touchstart", userTakeOver, { passive: true });
+      rail.addEventListener("wheel", userTakeOver, { passive: true });
+      rail.addEventListener("focusin", userTakeOver);
+
+      // 滚动停下来之后(含触屏惯性):对正到最近的一张,再重新计时
+      rail.addEventListener("scroll", () => {
+        if (phase === "turn") return;       // 自己转的时候不用管
+        applyScale();
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(settle, 240);
+      }, { passive: true });
+
+      // ---- 鼠标停上去:转完手上这张就停住,不急着转下一张 ----
+      if (matchMedia("(hover: hover)").matches) {
+        rail.addEventListener("pointerenter", () => {
+          hover = true;
+          armed = false;
+          clearTimeout(holdTimer);
+        });
+        rail.addEventListener("pointerleave", () => {
+          hover = false;
+          if (phase === "hold") schedule(HOLD);
+        });
+      }
+
+      if (btnPrev) btnPrev.addEventListener("click", () => { userTakeOver(); advance(-1); });
+      if (btnNext) btnNext.addEventListener("click", () => { userTakeOver(); advance(1); });
+
+      // ---- 视口尺寸变了:重新量步长,必要时重铺克隆 ----
+      let rzTimer = 0;
+      addEventListener("resize", () => {
+        clearTimeout(rzTimer);
+        rzTimer = setTimeout(() => {
+          const gap = parseFloat(getComputedStyle(rail).columnGap) || 16;
+          if (Math.abs(originals[0].offsetWidth + gap - stride) > 0.5) build();
+          else { measure(); applyScale(); }
+          schedule(1000);
+        }, 220);
+      });
+
+      build();
+      schedule(1000);   // 进来先停一秒,再开始一张一张地转
+    }
+
+    // ========== 站点内容:从后台接口拉一次,各板块用真数据重画 ==========
+    // 拉不到(断网 / 后端没接上)就什么都不做,页面保持上面写死的兜底样子。
+    (function () {
+      const C = window.C103Content;
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const img = window.C103Img || ((v) => v);
+      const PLACEHOLDER = "assets/images/avatars/avatar-placeholder.svg";
+
+      // ---- 第一屏文案 ----
+      function paintHero(site) {
+        const kicker = document.querySelector(".poster-kicker");
+        if (kicker && site.heroKicker) kicker.textContent = site.heroKicker;
+        const title = document.querySelector(".poster-title");
+        if (title && site.heroTitle) {
+          title.innerHTML = esc(site.heroTitle) +
+            (site.heroTitleSuffix ? `<span>${esc(site.heroTitleSuffix)}</span>` : "");
+        }
+        const tagline = document.querySelector(".poster-tagline");
+        if (tagline && site.heroTagline) tagline.textContent = site.heroTagline;
+        const year = document.querySelector(".poster-year");
+        if (year && site.heroYear) year.textContent = site.heroYear;
+      }
+
+      // ---- 01 学生风采:有名单就铺小卡,没名单保留「敬请期待」 ----
+      function paintStudents(list) {
+        const box = document.querySelector("#students .showcase-body");
+        if (!box) return;
+        box.className = "showcase-body stu-panel";
+        box.innerHTML = `<div class="stu-row">${list.slice(0, 12).map((s) => {
+          const face = s.avatar
+            ? `<img src="${esc(img(s.avatar))}" alt="${esc(s.name)}">`
+            : esc(String(s.name || "?").slice(0, 1));
+          return `<figure class="stu-mini">
+              <span class="stu-face">${face}</span>
+              <b>${esc(s.name)}</b>
+              ${s.tag ? `<em>${esc(s.tag)}</em>` : ""}
+            </figure>`;
+        }).join("")}</div>`;
+      }
+
+      // ---- 02 宿舍滑轨 ----
+      function paintRail(dorms) {
+        const rail = document.getElementById("dorm-rail");
+        if (!rail) return;
+        rail.innerHTML = dorms.map((d) => {
+          const photo = (d.photos && d.photos[0]) || PLACEHOLDER;
+          return `<a class="dorm-mini" href="dormitory.html" data-veil>
+              <span class="dorm-mini-photo"><img src="${esc(img(photo))}" alt="${esc(d.number)} 宿舍"></span>
+              <span class="dorm-mini-body"><b>${esc(d.number)}</b><em>${esc(d.nick || "待补充")}</em></span>
+            </a>`;
+        }).join("");
+      }
+
+      // ---- 03 高光时刻:拿第一组的照片铺九宫格 ----
+      function paintMoments(moments, site) {
+        const note = document.querySelector("#moments .showcase-note");
+        if (note && site.momentsNote) {
+          note.innerHTML = String(site.momentsNote).split("/")
+            .map((p) => esc(p.trim())).filter(Boolean).join("<i>/</i>");
+        }
+
+        const grid = document.querySelector("#moments .showcase-grid");
+        const group = moments && (moments.groups || [])[0];
+        const photos = (group && group.photos) || [];
+        if (!grid || !photos.length) return;
+        grid.innerHTML = photos.slice(0, 9).map((p) =>
+          `<a class="ph" href="moments.html" data-veil><img src="${esc(img(p.src))}" alt="${esc(p.caption || group.title)}"></a>`
+        ).join("");
+      }
+
+      // ---- 04 班级公告:最近三条 ----
+      function paintNews(list) {
+        const box = document.querySelector("#announcements .news-list");
+        if (!box || !list.length) return;
+        const digest = (a) => {
+          const raw = String(a.body || "").split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
+          // 摘要去掉 Markdown 标记,别把 ** 或 # 露出来
+          const line = window.C103Markdown ? window.C103Markdown.text(raw) : raw;
+          const text = a.title && line ? a.title + " —— " + line : (a.title || line);
+          return text.length > 62 ? text.slice(0, 62) + "…" : text;
+        };
+        box.innerHTML = list.slice(0, 3).map((a) => `
+          <a class="news" href="announcements.html" data-veil>
+            <span class="news-date">${esc(a.date)}${a.pinned ? '<i class="pin">置顶</i>' : ""}</span>
+            <p>${esc(digest(a))}</p>
+          </a>`).join("");
+      }
+
+      function paint(content) {
+        if (content) {
+          paintHero(content.site || {});
+          if (Array.isArray(content.students) && content.students.length) paintStudents(content.students);
+          if (Array.isArray(content.dorms) && content.dorms.length) paintRail(content.dorms);
+          paintMoments(content.moments, content.site || {});
+          if (Array.isArray(content.announcements)) paintNews(content.announcements);
+        }
+        initDormRail(); // 卡片定下来之后再启动滑轨
+      }
+
+      if (C && C.load) C.load().then(paint);
+      else paint(null);
+    })();
+  </script>
+
+  <!-- 点图看大图 -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <img id="lightbox-img" alt="">
+  </div>
+
+  <!-- 首页留言板:小红书式双列卡片流,卡片只给封面 / 标题 / 发帖人 / 点赞,
+       点进去才到 post.html 看正文、多图和评论 -->
+  <script>window.CLASS103_BOARD = { mode: "cards" };</script>
+  <script src="assets/js/story.js"></script>
+</body>
+</html>
