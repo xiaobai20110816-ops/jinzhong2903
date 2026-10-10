@@ -60,12 +60,17 @@
   <script src="assets/js/nav.js"></script>
   <script>
     // 宿舍风采板块门禁:未注册 / 未实名的同学不能查看。
-    // dormitory.js 会等这面旗帜立起来再决定渲不渲染,防止兜底数据漏出
-    window.C103Auth.ready.then(function () {
-      window.C103_SECTION_OPEN = window.C103Auth.canViewSections();
-      if (!window.C103_SECTION_OPEN) window.C103Auth.sectionGate("宿舍风采");
-      document.dispatchEvent(new CustomEvent("c103-section-gate"));
-    });
+    // dormitory.js 会等这面旗帜立起来再决定渲不渲染,防止兜底数据漏出。
+    // ready 可能还是 null(nav.js 没跑到 refresh),主动调一下兜底
+    (function () {
+      var A = window.C103Auth;
+      var r = A && (A.ready || A.refresh());
+      (r || Promise.resolve()).then(function () {
+        window.C103_SECTION_OPEN = A.canViewSections();
+        if (!window.C103_SECTION_OPEN) A.sectionGate("宿舍风采");
+        document.dispatchEvent(new CustomEvent("c103-section-gate"));
+      });
+    })();
   </script>
   <script src="assets/js/dormitory.js"></script>
 </body>
