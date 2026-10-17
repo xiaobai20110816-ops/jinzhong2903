@@ -21,9 +21,12 @@
       if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
     } catch (e) {}
   </script>
-  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致)
+       media="print" + onload 切换:让字体 CSS 不阻塞首屏渲染,
+       页面先用系统兜底字体绘制(LCP 立刻触发),MiSans 加载完后 display=swap 自动替换 -->
   <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
-  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap"></noscript>
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/layout.css">
   <link rel="stylesheet" href="assets/css/home.css">
@@ -137,12 +140,7 @@
           <span class="no">01</span>
           <h2>学生风采</h2>
           <span class="en">STUDENTS</span>
-          <a class="more" href="students.html" data-veil>查看全部<i>→</i></a>
-        </div>
-        <div class="showcase-body soon-inline" data-io>
-          <p class="soon-en">COMING SOON</p>
-          <p class="soon-cn">敬请期待</p>
-          <p class="soon-note">名单整理中，即将公布</p>
+          <a class="more" href="students.html" data-veil>查看更多<i>→</i></a>
         </div>
       </div>
     </section>
@@ -161,28 +159,22 @@
         <button class="rail-btn prev" type="button" aria-label="往前看">‹</button>
         <div class="showcase-rail" id="dorm-rail">
           <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-photo"><img src="assets/images/dorm/311/1.jpg" alt="311 宿舍"></span>
-            <span class="dorm-mini-body"><b>311</b><em>皇家园区</em></span>
+            <span class="dorm-mini-body"><b>311</b><em>皇家园区</em><i>成员：金楚涵、何易航、李想</i></span>
           </a>
           <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-photo"><img src="assets/images/dorm/312/1.jpg" alt="312 宿舍"></span>
-            <span class="dorm-mini-body"><b>312</b><em>大诚酒店</em></span>
+            <span class="dorm-mini-body"><b>312</b><em>大诚酒店</em><i>成员：大诚、陈诺</i></span>
           </a>
           <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-photo"><img src="assets/images/avatars/avatar-placeholder.svg" alt="409 宿舍"></span>
-            <span class="dorm-mini-body"><b>409</b><em>待补充</em></span>
+            <span class="dorm-mini-body"><b>409</b><em>待补充</em><i>成员：待定</i></span>
           </a>
           <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-photo"><img src="assets/images/dorm/410/1.jpg" alt="410 宿舍"></span>
-            <span class="dorm-mini-body"><b>410</b><em>金楚涵教总部</em></span>
+            <span class="dorm-mini-body"><b>410</b><em>金楚涵教总部</em><i>成员：待定</i></span>
           </a>
           <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-photo"><img src="assets/images/dorm/411/1.jpg" alt="411 宿舍"></span>
-            <span class="dorm-mini-body"><b>411</b><em>法兰西室联盟</em></span>
+            <span class="dorm-mini-body"><b>411</b><em>法兰西室联盟</em><i>成员：待定</i></span>
           </a>
           <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-photo"><img src="assets/images/dorm/412/1.jpg" alt="412 宿舍"></span>
-            <span class="dorm-mini-body"><b>412</b><em>待补充</em></span>
+            <span class="dorm-mini-body"><b>412</b><em>待补充</em><i>成员：待定</i></span>
           </a>
         </div>
         <button class="rail-btn next" type="button" aria-label="往后看">›</button>
@@ -222,21 +214,7 @@
           <span class="no">04</span>
           <h2>班级公告</h2>
           <span class="en">ANNOUNCEMENTS</span>
-          <a class="more" href="announcements.html" data-veil>查看全部<i>→</i></a>
-        </div>
-        <div class="news-list" data-io>
-          <a class="news" href="announcements.html" data-veil>
-            <span class="news-date">2026.10.03<i class="pin">置顶</i></span>
-            <p>103 官网正式成立 —— 自由注册登录、B 站式回复、IP 属地全部上线。</p>
-          </a>
-          <a class="news" href="announcements.html" data-veil>
-            <span class="news-date">2026.09.29<i class="pin">置顶</i></span>
-            <p>合唱比赛获得 96.95 分，位列第一。</p>
-          </a>
-          <a class="news" href="announcements.html" data-veil>
-            <span class="news-date">2026.09.25</span>
-            <p>素养 103 第二帝国建立，何易航政府覆灭，金楚涵皈依第二帝国。</p>
-          </a>
+          <a class="more" href="announcements.html" data-veil>查看更多<i>→</i></a>
         </div>
       </div>
     </section>
@@ -682,20 +660,21 @@
         }).join("")}</div>`;
       }
 
-      // ---- 02 宿舍滑轨 ----
+      // ---- 02 宿舍滑轨:只显示寝室号、成员和寝室名,不显示图片(省流量也更顺) ----
       function paintRail(dorms) {
         const rail = document.getElementById("dorm-rail");
         if (!rail) return;
         rail.innerHTML = dorms.map((d) => {
-          const photo = (d.photos && d.photos[0]) || PLACEHOLDER;
+          const members = (d.members && d.members.length)
+            ? d.members.join("、")
+            : "待定";
           return `<a class="dorm-mini" href="dormitory.html" data-veil>
-              <span class="dorm-mini-photo"><img src="${esc(img(photo))}" alt="${esc(d.number)} 宿舍"></span>
-              <span class="dorm-mini-body"><b>${esc(d.number)}</b><em>${esc(d.nick || "待补充")}</em></span>
+              <span class="dorm-mini-body"><b>${esc(d.number)}</b><em>${esc(d.nick || "待补充")}</em><i>成员：${esc(members)}</i></span>
             </a>`;
         }).join("");
       }
 
-      // ---- 03 高光时刻:拿第一组的照片铺九宫格 ----
+      // ---- 03 高光时刻:每个分组取第一张照片,拼成九宫格 ----
       function paintMoments(moments, site) {
         const note = document.querySelector("#moments .showcase-note");
         if (note && site.momentsNote) {
@@ -704,11 +683,16 @@
         }
 
         const grid = document.querySelector("#moments .showcase-grid");
-        const group = moments && (moments.groups || [])[0];
-        const photos = (group && group.photos) || [];
-        if (!grid || !photos.length) return;
-        grid.innerHTML = photos.slice(0, 9).map((p) =>
-          `<a class="ph" href="moments.html" data-veil><img src="${esc(img(p.src))}" alt="${esc(p.caption || group.title)}"></a>`
+        const groups = (moments && moments.groups) || [];
+        // 每组第一张,作为该组在首页的代表
+        const picks = [];
+        groups.forEach((g) => {
+          const first = g && g.photos && g.photos[0];
+          if (first) picks.push({ src: first.src, caption: first.caption, title: g.title });
+        });
+        if (!grid || !picks.length) return;
+        grid.innerHTML = picks.slice(0, 9).map((p) =>
+          `<a class="ph" href="moments.html" data-veil><img src="${esc(img(p.src))}" alt="${esc(p.caption || p.title)}"></a>`
         ).join("");
       }
 
@@ -753,7 +737,7 @@
 
   <!-- 首页留言板:小红书式双列卡片流,卡片只给封面 / 标题 / 发帖人 / 点赞,
        点进去才到 post.html 看正文、多图和评论 -->
-  <script>window.CLASS103_BOARD = { mode: "cards" };</script>
+  <script>window.CLASS103_BOARD = { mode: "cards", limit: 4, publicOnly: true };</script>
   <script src="assets/js/story.js"></script>
 </body>
 </html>

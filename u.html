@@ -625,9 +625,16 @@
         return fmtDate(t);
       }
 
-      function badge(role) {
+      function badge(u, withCert) {
+        const role = u && u.role;
+        const hasCert = !!(u && String(u.cert_title || "").trim());
         if (role === "owner") return '<em class="pf-badge owner">服主</em>';
-        if (role === "admin") return '<em class="pf-badge admin">管理员</em>';
+        // 有官方认证头衔时头衔药丸优先:帖子列表的名字已带药丸,管理员标记直接隐藏;
+        // 资料卡上没渲染药丸,用头衔补位,免得啥标记都不剩
+        if (role === "admin") {
+          if (!hasCert) return '<em class="pf-badge admin">管理员</em>';
+          return withCert ? window.C103Person.cert(u) : "";
+        }
         return "";
       }
 
@@ -752,7 +759,7 @@
           <article class="glass pf-card">
             <div class="pf-face-wrap">${avatar(u, "pf-face")}</div>
             <div class="pf-info">
-              <h2 class="pf-name">${name}${badge(u.role)}</h2>
+              <h2 class="pf-name">${name}${badge(u, true)}</h2>
               ${window.C103Person.realLine(u)}
               <p class="pf-sig${hasSig ? "" : " empty"}">${sig}</p>
               <div class="pf-meta">
@@ -1063,7 +1070,7 @@
           <div class="pf-post-head">
             ${avatar(author, "pf-mini")}
             <div class="pf-post-who">
-              <span class="pf-post-name">${window.C103Person.html(author, p.name)}${badge(author.role)}</span>
+              <span class="pf-post-name">${window.C103Person.html(author, p.name)}${badge(author)}</span>
               <span class="pf-post-time">${esc(fmtRel(p.created_at))}</span>
             </div>
           </div>

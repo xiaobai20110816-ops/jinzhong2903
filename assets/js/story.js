@@ -126,7 +126,9 @@
   function badgeHTML(author) {
     const role = author && author.role;
     if (role === "owner") return '<em class="role-badge owner">服主</em>';
-    if (role === "admin") return '<em class="role-badge admin">管理员</em>';
+    // 有官方认证头衔时头衔药丸优先(名字后面已带),管理员药丸让位不显示
+    if (role === "admin" && !String((author && author.cert_title) || "").trim())
+      return '<em class="role-badge admin">管理员</em>';
     return "";
   }
 
@@ -594,13 +596,20 @@
         const data = await api(API + "/feed?page=" + page);
         state.page = data.page;
         state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
-        state.items = data.items || [];
-        if (!data.total) {
+        let items = data.items || [];
+        // 首页只展示「全部可见」的内容,被设为「仅本班」的帖子/视频不出现
+        if (CFG.publicOnly) items = items.filter((it) => it.visibility !== "class");
+        // 首页限定条数,限完就不再翻页
+        if (CFG.limit > 0) items = items.slice(0, CFG.limit);
+        state.items = items;
+        if (!items.length) {
           notice("还没有人写下第一句", "<br>第一行字，等你来落笔。");
         } else {
           renderCards();
         }
-        renderPager(data.total);
+        // 限定条数时不显示分页器
+        if (CFG.limit > 0 && els.pager) els.pager.hidden = true;
+        else renderPager(data.total);
         return;
       }
 

@@ -968,7 +968,10 @@ function renderAccount() {
   btn.classList.add("is-in");
   // 自己的真名 / 蓝钩同样按实名规则显示
   const shown = C103Person.name(u);
-  btn.title = shown + (ROLE_LABEL[u.role] ? "（" + ROLE_LABEL[u.role] + "）" : "");
+  // 头衔优先:有认证头衔的管理员,悬浮提示里不再缀「(管理员)」
+  const showRole =
+    u.role === "owner" || (u.role === "admin" && !String(u.cert_title || "").trim());
+  btn.title = shown + (showRole && ROLE_LABEL[u.role] ? "（" + ROLE_LABEL[u.role] + "）" : "");
   const face = u.avatar
     ? `<img class="acc-avatar" src="${API}/img/${esc(u.avatar)}" alt="">`
     : `<span class="acc-avatar acc-letter">${esc(shown.slice(0, 1))}</span>`;

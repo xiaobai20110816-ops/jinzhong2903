@@ -42,9 +42,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const face = s.avatar
           ? `<img src="${esc(img(s.avatar))}" alt="${esc(name)}">`
           : esc(String(name).charAt(0) || "?");
-        const role = ROLE_LABEL[s.role]
-          ? `<em class="student-role ${esc(s.role)}">${ROLE_LABEL[s.role]}</em>`
-          : "";
+        // 有官方认证头衔时头衔药丸优先(名字后面 P.html 已带),管理员药丸让位不显示
+        const role =
+          s.role === "owner" || (s.role === "admin" && !String(s.cert_title || "").trim())
+            ? `<em class="student-role ${esc(s.role)}">${ROLE_LABEL[s.role]}</em>`
+            : "";
         const tag = s.signature ? `<span class="position">${esc(s.signature)}</span>` : "";
         return `
       <a class="student-card" href="u.html?id=${encodeURIComponent(s.id)}">

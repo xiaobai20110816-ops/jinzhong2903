@@ -234,8 +234,11 @@
           ? `<img class="${cls}" src="${API}/img/${esc(p.avatar)}" alt="" loading="lazy">`
           : `<span class="${cls}">${esc((window.C103Person.name(p) || "?").slice(0, 1))}</span>`;
 
+      // 有官方认证头衔时头衔药丸优先(名字后面 C103Person.html 已带),管理员药丸让位不显示
       const roleTag = (p) =>
-        ROLE_LABEL[p.role] ? `<em class="${esc(p.role)}">${ROLE_LABEL[p.role]}</em>` : "";
+        p.role === "owner" || (p.role === "admin" && !String(p.cert_title || "").trim())
+          ? `<em class="${esc(p.role)}">${ROLE_LABEL[p.role]}</em>`
+          : "";
 
       function rows(list, unit) {
         if (!list.length) return '<p class="rk-empty">还没有人上榜，第一个就是你。</p>';

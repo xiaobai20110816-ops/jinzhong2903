@@ -1206,11 +1206,16 @@
         const p = (n) => String(n).padStart(2, "0");
         return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate());
       }
-      /* 角色徽章:服主金色、管理员描金、普通成员中性 */
-      function roleBadge(role) {
+      /* 角色徽章:服主金色、管理员描金、普通成员中性。
+         有官方认证头衔时头衔药丸优先(旁边已单独渲染),管理员药丸让位不显示,
+         也不能落进普通成员分支 */
+      function roleBadge(u) {
+        const role = u && u.role;
         if (role === "owner") return `<span class="badge-pill role-owner">服主</span>`;
-        if (role === "admin") return `<span class="badge-pill role-admin">管理员</span>`;
-        return `<span class="badge-pill role-member">普通成员</span>`;
+        if (role === "member") return `<span class="badge-pill role-member">普通成员</span>`;
+        if (role === "admin" && !String((u && u.cert_title) || "").trim())
+          return `<span class="badge-pill role-admin">管理员</span>`;
+        return ""; // admin + 认证头衔:只留头衔药丸
       }
       /* 改资料:PUT api/users/<id>,失败时把后端的中文错误抛出来 */
       async function patchUser(id, body) {
@@ -1408,7 +1413,7 @@
           <div class="m-info">
             <div class="m-line">
               <span class="m-name">${esc(u.name)}</span>
-              ${roleBadge(u.role)}
+              ${roleBadge(u)}
               ${window.C103Person ? window.C103Person.cert(u) : ""}
               ${banTag}
             </div>

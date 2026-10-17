@@ -68,7 +68,9 @@
   function badgeHTML(author) {
     const role = author && author.role;
     if (role === "owner") return '<em class="role-badge owner">服主</em>';
-    if (role === "admin") return '<em class="role-badge admin">管理员</em>';
+    // 有官方认证头衔时头衔药丸优先(名字后面已带),管理员药丸让位不显示
+    if (role === "admin" && !String((author && author.cert_title) || "").trim())
+      return '<em class="role-badge admin">管理员</em>';
     return "";
   }
 
