@@ -1,78 +1,12 @@
 /* ============================================================
    103班：音乐领军班 · 宿舍数据与渲染
-   数据来自 GET /api/content 的 dorms 板块,以后改宿舍信息去「管理后台」,
-   不用再改这个文件;下面这份 DORMS 仅在接口拿不到内容时兜底。
+   数据完全来自 GET /api/content 的 dorms 板块,改宿舍信息去「管理后台」。
+   接口拿不到就显示空态,不再退回写死的硬编码。
    - nick    宿舍昵称,留空显示「昵称待补充」
    - members 成员昵称列表,留空显示占位
    - photos  照片数组,第一张作为合照大图,其余作为缩略图
              点击大图可在灯箱里查看完整原图(竖拍照片不裁切)
    ============================================================ */
-
-// 兜底数据:接口拿不到内容时用它,保持页面和以前一模一样
-const DORMS = [
-  {
-    number: "311",
-    nick: "皇家园区",
-    members: [],
-    photos: [
-      "assets/images/dorm/311/1.jpg",
-      "assets/images/dorm/311/2.jpg",
-      "assets/images/dorm/311/3.jpg",
-      "assets/images/dorm/311/4.jpg",
-      "assets/images/dorm/311/5.jpg",
-      "assets/images/dorm/311/6.jpg",
-      "assets/images/dorm/311/7.jpg",
-      "assets/images/dorm/311/8.jpg",
-      "assets/images/dorm/311/9.jpg",
-      "assets/images/dorm/311/10.jpg",
-      "assets/images/dorm/311/11.jpg",
-      "assets/images/dorm/311/12.jpg",
-    ],
-  },
-  {
-    number: "312",
-    nick: "大诚酒店",
-    members: [],
-    photos: [
-      "assets/images/dorm/312/1.jpg",
-      "assets/images/dorm/312/2.jpg",
-    ],
-  },
-  { number: "409", nick: "", members: [], photos: [] },
-  {
-    number: "410",
-    nick: "",
-    members: [],
-    photos: [
-      "assets/images/dorm/410/1.jpg",
-      "assets/images/dorm/410/2.jpg",
-      "assets/images/dorm/410/3.jpg",
-    ],
-  },
-  {
-    number: "411",
-    nick: "",
-    members: [],
-    photos: [
-      "assets/images/dorm/411/1.jpg",
-      "assets/images/dorm/411/2.jpg",
-      "assets/images/dorm/411/3.jpg",
-      "assets/images/dorm/411/4.jpg",
-    ],
-  },
-  {
-    number: "412",
-    nick: "",
-    members: [],
-    photos: [
-      "assets/images/dorm/412/1.jpg",
-      "assets/images/dorm/412/2.jpg",
-      "assets/images/dorm/412/3.jpg",
-      "assets/images/dorm/412/4.jpg",
-      "assets/images/dorm/412/5.jpg",
-    ],
-  },
-];
 
 document.addEventListener("DOMContentLoaded", () => {
   const grid = document.getElementById("dorm-grid");
@@ -138,8 +72,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ---------- 渲染卡片 ----------
   const render = (list) => {
-    // 加载失败 / 列表为空都退回写死的 DORMS
-    const dorms = Array.isArray(list) && list.length ? list : DORMS;
+    // 接口给什么渲染什么;没有就显示空态,不再退回写死的数据
+    const dorms = Array.isArray(list) ? list : [];
+    if (!dorms.length) {
+      grid.innerHTML = `<p class="dorm-empty">宿舍信息还没录入，去「管理后台 → 宿舍风采」加一组。</p>`;
+      return;
+    }
     const rendered = new Map(); // 本次实际渲染用的照片数组,缩略图切换和灯箱都从这里取
 
     grid.innerHTML = dorms.map((d) => {
@@ -201,11 +139,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  // 门禁裁决:等登录态就绪后,未注册 / 未实名的同学直接不渲染。
-  // 页面上有全屏遮罩,这里是防止写死的 DORMS 兜底数据漏出去
+  // 门禁裁决:等登录态就绪后,未注册 / 未实名的同学直接不渲染(页面上有全屏遮罩)
   const start = () => {
     if (window.C103_SECTION_OPEN === false) return;
-    // load() 失败时 resolve 出 null,render 会退回 DORMS,不会空白
     if (!window.C103Content) return render(null);
     C103Content.load().then((content) => render(content && content.dorms));
   };
