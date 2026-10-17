@@ -124,7 +124,8 @@
       margin-bottom: 8px;
       transition: color 0.6s ease;
     }
-    .acc-block input[type="text"] {
+    .acc-block input[type="text"],
+    .acc-block input[type="password"] {
       width: 100%;
       font-family: var(--font-body);
       font-size: 0.95rem;
@@ -136,12 +137,14 @@
       outline: none;
       transition: background-color 0.4s ease, border-color 0.3s ease, color 0.6s ease;
     }
-    .acc-block input[type="text"]:focus { border-color: var(--gold-line); background: var(--gold-soft); }
+    .acc-block input[type="text"]:focus,
+    .acc-block input[type="password"]:focus { border-color: var(--gold-line); background: var(--gold-soft); }
     .acc-block .pick-hint { display: inline-block; margin-left: 12px; vertical-align: middle; }
 
     /* 昵称:输入框 + 单独一个保存按钮 */
     .acc-nick-row { display: flex; gap: 10px; align-items: center; }
-    .acc-nick-row input[type="text"] { flex: 1; min-width: 0; }
+    .acc-nick-row input[type="text"],
+    .acc-nick-row input[type="password"] { flex: 1; min-width: 0; }
     .acc-nick-row .submit-btn { flex: none; padding: 11px 18px; }
 
     /* ---- 年级 + 班号 ---- */
@@ -367,6 +370,32 @@
             <a class="submit-btn" id="acc-home" href="u.html?id=" style="text-decoration:none;display:inline-block">查看我的主页 →</a>
           </div>
 
+          <!-- 账号安全:改用户名 / 改密码,都要再输一次当前密码确认是本人 -->
+          <div class="acc-block" id="sec-username">
+            <p class="acc-label">修改用户名</p>
+            <input id="acc-newname" type="text" maxlength="16" autocomplete="off" placeholder="新用户名，2~16 位，中文、字母、数字、下划线">
+            <div class="acc-nick-row" style="margin-top:10px">
+              <input id="acc-newname-pass" type="password" maxlength="64" autocomplete="current-password" placeholder="当前密码，确认是你本人">
+              <button class="submit-btn" type="button" id="acc-rename-save">改名</button>
+            </div>
+            <em class="field-tip">改的是登录用的账号名，不是昵称；改完之后你发过的老帖子名字也会跟着变</em>
+            <p class="form-msg" id="acc-rename-msg"></p>
+          </div>
+
+          <div class="acc-block" id="sec-password">
+            <p class="acc-label">修改密码</p>
+            <input id="acc-oldpass" type="password" maxlength="64" autocomplete="current-password" placeholder="当前密码">
+            <div style="margin-top:10px">
+              <input id="acc-newpass" type="password" maxlength="64" autocomplete="new-password" placeholder="新密码，至少 6 位">
+            </div>
+            <div class="acc-nick-row" style="margin-top:10px">
+              <input id="acc-newpass2" type="password" maxlength="64" autocomplete="new-password" placeholder="再输一次新密码">
+              <button class="submit-btn" type="button" id="acc-pass-save">改密码</button>
+            </div>
+            <em class="field-tip">改完之后，其它手机 / 电脑上的登录会全部退出，只有这里还登着</em>
+            <p class="form-msg" id="acc-pass-msg"></p>
+          </div>
+
           <!-- 只有普通成员看得到:这是激活「管理后台」入口的口令 -->
           <div class="acc-activate" id="acc-activate" hidden>
             <p class="acc-label">激活口令（只能用一次）</p>
@@ -403,6 +432,7 @@
 
       const ROLE_TEXT = { owner: "服主 · 全站管理", admin: "管理员", member: "普通成员" };
       let current = null;
+      let hashScrolled = false; // 锚点补滚动只做一次,免得每次登录状态刷新都滚屏
 
       function esc(s) {
         return String(s).replace(/[&<>"']/g, (c) =>
@@ -471,6 +501,14 @@
         if (gSel) gSel.value = user.grade || "";
         const cInp = $("#acc-classno");
         if (cInp) cInp.value = user.class_no || "";
+
+        // 从个人主页的入口跳进来时带着 #sec-username / #sec-password 锚点,
+        // 但资料卡在登录状态回来前是 hidden 的,浏览器原生的锚点滚动会落空,这里补上(只滚一次)
+        if (!hashScrolled && (location.hash === "#sec-username" || location.hash === "#sec-password")) {
+          hashScrolled = true;
+          const t = document.querySelector(location.hash);
+          if (t) setTimeout(() => t.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+        }
       }
 
       /* ---- 保存班级信息 ---- */
@@ -700,6 +738,76 @@
           say(msg, err.message, "err");
         } finally {
           btn.disabled = false;
+        }
+      });
+
+      /* ---- 改用户名:新名字 + 当前密码确认 ---- */
+      on($("#acc-rename-save"), "click", async () => {
+        const msg = $("#acc-rename-msg");
+        const btn = $("#acc-rename-save");
+        const name = $("#acc-newname").value.trim();
+        const pass = $("#acc-newname-pass").value;
+        if (!name || !pass) { say(msg, "新用户名和当前密码都要填", "err"); return; }
+
+        btn.disabled = true;
+        btn.textContent = "改名中";
+        try {
+          const res = await fetch(API + "/auth/security", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ action: "username", username: name, password: pass }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || "改名失败了，稍后再试");
+
+          // 登录名变了,本地缓存和导航栏立刻跟上
+          A.user = Object.assign({}, A.user, { name: name });
+          A._emit();
+          current = A.user;
+          $("#acc-newname").value = "";
+          $("#acc-newname-pass").value = "";
+          render(A.user);
+          say(msg, "用户名改好了，下次登录用新名字", "ok");
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "改名";
+        }
+      });
+
+      /* ---- 改密码:旧密码验证 + 两次新密码确认 ---- */
+      on($("#acc-pass-save"), "click", async () => {
+        const msg = $("#acc-pass-msg");
+        const btn = $("#acc-pass-save");
+        const oldPass = $("#acc-oldpass").value;
+        const newPass = $("#acc-newpass").value;
+        const newPass2 = $("#acc-newpass2").value;
+        if (!oldPass || !newPass) { say(msg, "旧密码和新密码都要填", "err"); return; }
+        if (newPass !== newPass2) { say(msg, "两次输入的新密码不一样", "err"); return; }
+
+        btn.disabled = true;
+        btn.textContent = "改密码中";
+        try {
+          const res = await fetch(API + "/auth/security", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ action: "password", oldPassword: oldPass, newPassword: newPass }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || "改密码失败了，稍后再试");
+
+          $("#acc-oldpass").value = "";
+          $("#acc-newpass").value = "";
+          $("#acc-newpass2").value = "";
+          say(msg, "密码改好了，其它设备上的登录已全部退出", "ok");
+        } catch (err) {
+          say(msg, err.message, "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "改密码";
         }
       });
 

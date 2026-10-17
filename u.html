@@ -730,6 +730,11 @@
         const dmBtn = state.mine
           ? ""
           : `<a class="pf-dm" id="pf-dm" href="messages.html?to=${uid}" hidden>发私信</a>`;
+        // 看自己的主页:给改用户名 / 改密码的入口,跳到个人中心对应区块
+        const secBtns = state.mine
+          ? `<a class="pf-dm" href="account.html#sec-username">修改用户名</a>
+             <a class="pf-dm" href="account.html#sec-password">修改密码</a>`
+          : "";
 
         // 成就板块:接口给了才渲染(拿不到就整块不出现,不留空壳)
         const achs = Array.isArray(data.achievements) ? data.achievements : [];
@@ -758,6 +763,7 @@
                 <span class="heart">❤</span><span id="pf-like-n">${Number(state.likes) || 0}</span>
               </button>
               ${dmBtn}
+              ${secBtns}
             </div>
           </article>
 
