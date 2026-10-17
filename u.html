@@ -625,15 +625,15 @@
         return fmtDate(t);
       }
 
-      function badge(u, withCert) {
+      function badge(u) {
         const role = u && u.role;
         const hasCert = !!(u && String(u.cert_title || "").trim());
         if (role === "owner") return '<em class="pf-badge owner">服主</em>';
-        // 有官方认证头衔时头衔药丸优先:帖子列表的名字已带药丸,管理员标记直接隐藏;
-        // 资料卡上没渲染药丸,用头衔补位,免得啥标记都不剩
+        // 名字本身由 C103Person.html 渲染,已带头衔药丸;
+        // 有头衔的管理员这里不再补药丸(否则重复),没头衔的补「管理员」
         if (role === "admin") {
           if (!hasCert) return '<em class="pf-badge admin">管理员</em>';
-          return withCert ? window.C103Person.cert(u) : "";
+          return "";
         }
         return "";
       }
@@ -759,7 +759,7 @@
           <article class="glass pf-card">
             <div class="pf-face-wrap">${avatar(u, "pf-face")}</div>
             <div class="pf-info">
-              <h2 class="pf-name">${name}${badge(u, true)}</h2>
+              <h2 class="pf-name">${name}${badge(u)}</h2>
               ${window.C103Person.realLine(u)}
               <p class="pf-sig${hasSig ? "" : " empty"}">${sig}</p>
               <div class="pf-meta">
