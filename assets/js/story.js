@@ -1054,6 +1054,22 @@
       return;
     }
 
+    // 板块门禁:103 纪事(完整页面)只对注册并实名的同学开放。
+    // 首页内嵌的「班级社区」卡片流设了 CLASS103_BOARD,属于首页一部分,
+    // 已用 publicOnly 过滤掉实名帖,不参与这道门禁。
+    const isBoardEmbed = !!window.CLASS103_BOARD;
+    if (!isBoardEmbed) {
+      const gateStart = () => {
+        if (window.C103_SECTION_OPEN === false) return; // 遮罩已盖上,什么都不加载
+        boot();
+      };
+      if (window.C103_SECTION_OPEN === true) gateStart();
+      else document.addEventListener("c103-section-gate", gateStart, { once: true });
+      return;
+    }
+    boot();
+
+    function boot() {
     // 等 nav.js 问完服务器「我是谁」再决定发帖框的样子
     const ready = (window.C103Auth && window.C103Auth.ready) || Promise.resolve(null);
     ready.then((user) => {
@@ -1088,5 +1104,6 @@
         }
       }
     });
+    }
   });
 })();

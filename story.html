@@ -107,6 +107,19 @@
   </div>
 
   <script src="assets/js/nav.js"></script>
+  <script>
+    // 103 纪事板块门禁:未注册 / 未实名的同学不能查看。
+    // story.js 会等这面旗帜立起来再决定加不加载,防止接口数据漏出。
+    (function () {
+      var A = window.C103Auth;
+      var r = A && (A.ready || A.refresh());
+      (r || Promise.resolve()).then(function () {
+        window.C103_SECTION_OPEN = A.canViewSections();
+        if (!window.C103_SECTION_OPEN) A.sectionGate("103 纪事");
+        document.dispatchEvent(new CustomEvent("c103-section-gate"));
+      });
+    })();
+  </script>
   <script src="assets/js/story.js"></script>
 </body>
 </html>

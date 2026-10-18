@@ -191,17 +191,9 @@
           <a class="more" href="moments.html" data-veil>查看全部<i>→</i></a>
         </div>
       </div>
-      <div class="showcase-grid" data-io>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-01.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-02.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-03.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-04.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-05.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-06.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-07.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-08.jpg" alt="合唱比赛"></a>
-        <a class="ph" href="moments.html" data-veil><img src="assets/images/albums/choir-09.jpg" alt="合唱比赛"></a>
+      <div class="showcase-grid" data-io id="moments-grid">
       </div>
+      <p class="moments-empty" id="moments-home-empty" hidden>高光时刻还没录入，去「管理后台 → 高光时刻」加一组。</p>
       <div class="container">
         <p class="showcase-note" data-io>合唱比赛 · 96.95 分 · 位列第一<i>/</i>另有宿舍游行视频</p>
       </div>
@@ -674,15 +666,23 @@
         }).join("");
       }
 
-      // ---- 03 高光时刻:每个分组取第一张照片,拼成九宫格 ----
+      // ---- 03 高光时刻:每个分组取第一张照片,拼成九宫格;没数据就空态 ----
       function paintMoments(moments, site) {
         const note = document.querySelector("#moments .showcase-note");
-        if (note && site.momentsNote) {
-          note.innerHTML = String(site.momentsNote).split("/")
-            .map((p) => esc(p.trim())).filter(Boolean).join("<i>/</i>");
+        if (note) {
+          const txt = String(site.momentsNote || "").trim();
+          if (txt) {
+            note.hidden = false;
+            note.innerHTML = txt.split("/")
+              .map((p) => esc(p.trim())).filter(Boolean).join("<i>/</i>");
+          } else {
+            note.hidden = true;
+            note.innerHTML = "";
+          }
         }
 
-        const grid = document.querySelector("#moments .showcase-grid");
+        const grid = document.getElementById("moments-grid");
+        const emptyTip = document.getElementById("moments-home-empty");
         const groups = (moments && moments.groups) || [];
         // 每组第一张,作为该组在首页的代表
         const picks = [];
@@ -690,7 +690,13 @@
           const first = g && g.photos && g.photos[0];
           if (first) picks.push({ src: first.src, caption: first.caption, title: g.title });
         });
-        if (!grid || !picks.length) return;
+        if (!grid) return;
+        if (!picks.length) {
+          grid.innerHTML = "";
+          if (emptyTip) emptyTip.hidden = false;
+          return;
+        }
+        if (emptyTip) emptyTip.hidden = true;
         grid.innerHTML = picks.slice(0, 9).map((p) =>
           `<a class="ph" href="moments.html" data-veil><img src="${esc(img(p.src))}" alt="${esc(p.caption || p.title)}"></a>`
         ).join("");

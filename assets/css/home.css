@@ -611,6 +611,15 @@ body.poster .site-header:not(.is-scrolled) {
   transform: scale(1.06);
   filter: saturate(1) brightness(1);
 }
+
+/* 高光时刻空态 */
+.moments-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  letter-spacing: 1px;
+}
 /* 第 1 张跨两列,做视觉锚点 */
 .showcase-grid .ph:first-child { grid-column: span 2; aspect-ratio: 2 / 1; }
 

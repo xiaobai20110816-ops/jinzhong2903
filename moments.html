@@ -39,104 +39,25 @@
 
   <section class="section">
     <div class="container">
-      <!-- 照片墙:图片放在 assets/images/albums/ 里,新增照片照下面格式加一段 figure 即可 -->
-      <div id="moments-grid" class="moments-grid">
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-01.jpg" alt="合唱比赛 01">
-          <figcaption>合唱比赛 · 01</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-02.jpg" alt="合唱比赛 02">
-          <figcaption>合唱比赛 · 02</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-03.jpg" alt="合唱比赛 03">
-          <figcaption>合唱比赛 · 03</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-04.jpg" alt="合唱比赛 04">
-          <figcaption>合唱比赛 · 04</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-05.jpg" alt="合唱比赛 05">
-          <figcaption>合唱比赛 · 05</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-06.jpg" alt="合唱比赛 06">
-          <figcaption>合唱比赛 · 06</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-07.jpg" alt="合唱比赛 07">
-          <figcaption>合唱比赛 · 07</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-08.jpg" alt="合唱比赛 08">
-          <figcaption>合唱比赛 · 08</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-09.jpg" alt="合唱比赛 09">
-          <figcaption>合唱比赛 · 09</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-10.jpg" alt="合唱比赛 10">
-          <figcaption>合唱比赛 · 10</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-11.jpg" alt="合唱比赛 11">
-          <figcaption>合唱比赛 · 11</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-12.jpg" alt="合唱比赛 12">
-          <figcaption>合唱比赛 · 12</figcaption>
-        </figure>
-        <figure class="moment-item">
-          <img src="assets/images/albums/choir-13.jpg" alt="合唱比赛 13">
-          <figcaption>合唱比赛 · 13</figcaption>
-        </figure>
+      <!-- 照片分组来自后台「高光时刻」,这里只放第一个分组的容器 -->
+      <div class="group-head" id="moments-first-head" hidden>
+        <span class="en" id="moments-first-en"></span>
+        <h2 id="moments-first-title"></h2>
       </div>
+      <div id="moments-grid" class="moments-grid"></div>
+      <p class="moments-empty" id="moments-empty" hidden>高光时刻还没录入，去「管理后台 → 高光时刻」加一组。</p>
     </div>
   </section>
 
-  <!-- 天桥文化:目前只有一张,以后加图直接往 .bridge-grid 里接着放一段 figure 即可 -->
-  <section class="section">
-    <div class="container">
-      <div class="group-head">
-        <span class="en">Overpass</span>
-        <h2>天桥文化</h2>
-      </div>
-      <div class="bridge-grid">
-        <figure class="moment-item">
-          <img src="assets/images/albums/bridge-01.jpg" alt="天桥文化 01">
-          <figcaption>天桥文化 · 01</figcaption>
-        </figure>
-      </div>
-    </div>
-  </section>
-
-  <!-- 活动视频:宿舍大合唱 -->
-  <section class="section">
+  <!-- 活动视频:来自后台,没有视频时整块隐藏 -->
+  <section class="section" id="moments-video-section" hidden>
     <div class="container">
       <div class="video-block">
         <div class="group-head">
           <span class="en">Feature</span>
-          <h2>宿舍大合唱</h2>
+          <h2>活动视频</h2>
         </div>
-        <div class="video-list">
-          <figure class="video-item">
-            <video controls preload="metadata" playsinline>
-              <source src="assets/videos/parade.mp4" type="video/mp4">
-              你的浏览器不支持视频播放。
-            </video>
-            <figcaption class="video-note">片段一 · 时长 04:31</figcaption>
-          </figure>
-          <figure class="video-item">
-            <video controls preload="metadata" playsinline>
-              <source src="assets/videos/parade-2.mp4" type="video/mp4">
-              你的浏览器不支持视频播放。
-            </video>
-            <figcaption class="video-note">片段二 · 时长 00:30</figcaption>
-          </figure>
-        </div>
+        <div class="video-list"></div>
       </div>
     </div>
   </section>
@@ -152,8 +73,8 @@
 
   <script src="assets/js/nav.js"></script>
   <script>
-    // 高光时刻:照片分组与视频来自后台(GET /api/content 的 moments)
-    // 分组、图、视频都在渲染完成后再统一绑一次灯箱;拿不到内容就保留写死的三块
+    // 高光时刻:照片分组与视频全部来自后台(GET /api/content 的 moments),
+    // 接口没有数据就显示空态,不再保留写死内容。
     document.addEventListener("DOMContentLoaded", () => {
       // 来自接口的文本 / 图片地址统一处理(图片地址必须过 C103Img)
       const esc = (s) =>
@@ -189,7 +110,7 @@
         </figure>`;
       };
 
-      // 点击放大(灯箱):渲染完成 / 兜底内容都要能用,统一在这里绑定
+      // 点击放大(灯箱):渲染完成后统一绑定
       const bindLightbox = () => {
         document.querySelectorAll(".moment-item").forEach((item) => {
           item.addEventListener("click", () => {
@@ -203,71 +124,103 @@
       };
 
       const grid = document.getElementById("moments-grid");
+      const firstHead = document.getElementById("moments-first-head");
+      const firstEn = document.getElementById("moments-first-en");
+      const firstTitle = document.getElementById("moments-first-title");
+      const emptyTip = document.getElementById("moments-empty");
       const mainSection = grid ? grid.closest("section") : null;
-      const fallbackBridge = document.querySelector(".bridge-grid")
-        ? document.querySelector(".bridge-grid").closest("section")
-        : null;
+      const videoSection = document.getElementById("moments-video-section");
+      const videoList = videoSection ? videoSection.querySelector(".video-list") : null;
+
+      // 清掉上一次渲染出来的动态分组(避免 onChange 二次触发时叠加)
+      const clearDynamicGroups = () => {
+        document.querySelectorAll("[data-moments-dyn]").forEach((n) => n.remove());
+      };
 
       const render = (moments) => {
-        // 加载失败 / 没有分组:保留写死的三块
-        if (!moments || !Array.isArray(moments.groups) || !moments.groups.length) return;
+        clearDynamicGroups();
+        const groups = moments && Array.isArray(moments.groups) ? moments.groups : [];
 
-        // 第 1 组 → 现有照片墙(没有图就沿用写死的 13 张)
-        const first = moments.groups[0] || {};
-        const firstPhotos = Array.isArray(first.photos) ? first.photos : [];
-        if (grid && firstPhotos.length) {
-          grid.innerHTML = firstPhotos.map((p) => figure(p, first.title)).join("");
+        if (!groups.length) {
+          // 没有任何分组:空态,隐藏第一组标题
+          if (grid) grid.innerHTML = "";
+          if (firstHead) firstHead.hidden = true;
+          if (emptyTip) emptyTip.hidden = false;
+        } else {
+          if (emptyTip) emptyTip.hidden = true;
+
+          // 第 1 组 → 照片墙,配上分组标题
+          const first = groups[0] || {};
+          const firstPhotos = Array.isArray(first.photos) ? first.photos : [];
+          if (firstHead) {
+            firstHead.hidden = false;
+            if (firstEn) firstEn.textContent = first.en || "";
+            if (firstTitle) firstTitle.textContent = first.title || "";
+          }
+          if (grid) {
+            grid.innerHTML = firstPhotos.map((p) => figure(p, first.title)).join("");
+          }
+
+          // 第 2 组及以后:每组一个 section,插在第一块之后
+          if (mainSection) {
+            let anchor = mainSection;
+            groups.slice(1).forEach((g) => {
+              const photos = Array.isArray(g.photos) ? g.photos : [];
+              if (!photos.length) return;
+              const section = document.createElement("section");
+              section.className = "section";
+              section.setAttribute("data-moments-dyn", "");
+              section.innerHTML = `
+              <div class="container">
+                <div class="group-head">
+                  <span class="en">${esc(g.en || "")}</span>
+                  <h2>${esc(g.title || "")}</h2>
+                </div>
+                <div class="bridge-grid">${photos.map((p) => figure(p, g.title)).join("")}</div>
+              </div>`;
+              anchor.after(section);
+              anchor = section;
+            });
+          }
         }
 
-        // 第 2 组及以后:每组一个 group-head + bridge-grid,插在第一块 section 之后
-        if (fallbackBridge) fallbackBridge.remove();
-        if (mainSection) {
-          let anchor = mainSection;
-          moments.groups.slice(1).forEach((g) => {
-            const photos = Array.isArray(g.photos) ? g.photos : [];
-            if (!photos.length) return;
-            const section = document.createElement("section");
-            section.className = "section";
-            section.innerHTML = `
-            <div class="container">
-              <div class="group-head">
-                <span class="en">${esc(g.en || "")}</span>
-                <h2>${esc(g.title || "")}</h2>
-              </div>
-              <div class="bridge-grid">${photos.map((p) => figure(p, g.title)).join("")}</div>
-            </div>`;
-            anchor.after(section);
-            anchor = section;
-          });
-        }
-
-        // 视频:后台有就清空重建,没有就保留写死的两个
-        const videos = Array.isArray(moments.videos) ? moments.videos : [];
-        const videoList = document.querySelector(".video-list");
-        if (videoList && videos.length) {
-          videoList.innerHTML = videos
-            .map(
-              (v) => `
-          <figure class="video-item">
-            <video controls preload="metadata" playsinline>
-              <source src="${esc(img(v && v.src))}" type="video/mp4">
-              你的浏览器不支持视频播放。
-            </video>
-            <figcaption class="video-note">${esc((v && v.caption) || "")}</figcaption>
-          </figure>`
-            )
-            .join("");
+        // 视频:后台有就渲染,没有就整块隐藏
+        const videos = moments && Array.isArray(moments.videos) ? moments.videos : [];
+        if (videoSection && videoList) {
+          if (videos.length) {
+            videoList.innerHTML = videos
+              .map(
+                (v) => `
+            <figure class="video-item">
+              <video controls preload="metadata" playsinline>
+                <source src="${esc(img(v && v.src))}" type="video/mp4">
+                你的浏览器不支持视频播放。
+              </video>
+              <figcaption class="video-note">${esc((v && v.caption) || "")}</figcaption>
+            </figure>`
+              )
+              .join("");
+            videoSection.hidden = false;
+          } else {
+            videoList.innerHTML = "";
+            videoSection.hidden = true;
+          }
         }
       };
 
       if (window.C103Content) {
-        // load() 失败时 resolve 出 null,此时保留写死内容,但灯箱照常绑定
         C103Content.load().then((content) => {
-          if (content) render(content.moments);
+          render(content && content.moments);
           bindLightbox();
         });
-      } else {
-        bindLightbox();
+        // 后台改了别的内容(比如换个分组标题)时,这里同步刷新
+        if (window.C103Content.onChange) {
+          window.C103Content.onChange((content) => {
+            if (!content) return;
+            render(content.moments);
+            bindLightbox();
+          });
+        }
       }
     });
   </script>
