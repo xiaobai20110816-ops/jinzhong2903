@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { href: "dormitory.html", label: "宿舍风采" },
   { href: "moments.html", label: "高光时刻" },
   { href: "gallery.html", label: "图库" },
-  { href: "videos.html", label: "视频" },
   { href: "story.html", label: "103 纪事" },
   { href: "rank.html", label: "活跃榜" },
   { href: "announcements.html", label: "班级公告" },
@@ -443,9 +442,11 @@ const C103Auth = {
   },
 
   /* 板块门禁遮罩:盖住整页,不给未注册 / 未实名的人看内容。
-     数据层面后端接口同样会拦(401/403),这里是用户体验兜底 */
-  sectionGate(label) {
+     数据层面后端接口同样会拦(401/403),这里是用户体验兜底。
+     opts.loginOnly = true 时只要求「已登录」,不要求实名(103 纪事用) */
+  sectionGate(label, opts) {
     if (document.getElementById("c103-section-gate")) return;
+    const loginOnly = !!(opts && opts.loginOnly);
     const light = document.documentElement.dataset.theme === "light";
     const ov = document.createElement("div");
     ov.id = "c103-section-gate";
@@ -469,14 +470,18 @@ const C103Auth = {
       'stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:14px">' +
       '<rect x="4" y="10.5" width="16" height="10" rx="2.5"></rect>' +
       '<path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path><circle cx="12" cy="15.5" r="1.4"></circle></svg>' +
-      '<h2 style="margin:0 0 10px;font-size:20px;font-weight:700">仅限本班实名同学</h2>' +
+      '<h2 style="margin:0 0 10px;font-size:20px;font-weight:700">' +
+      (loginOnly ? "登录后可见" : "仅限本班实名同学") + "</h2>" +
       '<p style="margin:0 0 22px;font-size:14px;line-height:1.8;opacity:.75">' +
       esc(label || "该板块") +
-      "只对注册并完成实名的同学开放。<br>登录后去个人中心完成实名认证就能看了。</p>" +
+      (loginOnly
+        ? "只对已注册登录的同学开放。<br>登录后就能看了。"
+        : "只对注册并完成实名的同学开放。<br>登录后去个人中心完成实名认证就能看了。") +
+      "</p>" +
       '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">' +
       '<a href="account.html" style="text-decoration:none;padding:10px 22px;border-radius:999px;' +
       "font-size:14px;font-weight:600;color:#111;background:linear-gradient(135deg,#f0b90b,#ff8a00)\">" +
-      "去登录 / 实名</a>" +
+      (loginOnly ? "去登录" : "去登录 / 实名") + "</a>" +
       '<a href="javascript:history.back()" style="text-decoration:none;padding:10px 22px;border-radius:999px;' +
       "font-size:14px;color:" +
       (light ? "#0f172a" : "#f4f6fa") +
@@ -1583,7 +1588,8 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => { location.href = "account.html"; }, 700);
         return;
       }
-      location.href = "videos.html?post=1";
+      // 照片和视频已经合并在图库页:带上 ?video=1 直接滚到统一上传框
+      location.href = "gallery.html?video=1";
     });
 
     // 快滚到第一屏时先把加号藏起来,别压在海报上

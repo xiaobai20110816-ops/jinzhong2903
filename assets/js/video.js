@@ -617,13 +617,18 @@
         });
 
         bar.style.width = "100%";
-        say("发布好了，去视频页看看", "ok");
+        say("发布好了", "ok");
         titleEl.value = "";
         bodyEl.value = "";
         reset();
         progress.hidden = true;
-        // 刷新一下卡片流:视频页由 story.js 负责,直接重载最省事也最不容易错
-        setTimeout(() => location.reload(), 700);
+        // 合并页(gallery.html)一次选了多个视频时,由页面接管「继续下一个」;
+        // 单页视频页没有这个钩子,还是老办法:重载一次列表
+        if (typeof window.C103VideoOnPublished === "function") {
+          window.C103VideoOnPublished();
+        } else {
+          setTimeout(() => location.reload(), 700);
+        }
       } catch (err) {
         say(err.message, "err");
       } finally {
@@ -763,7 +768,7 @@
         appendItems(d.items || []);
 
         if (!state.items.length) {
-          scroll.innerHTML = `<div class="player-empty"><b>还没有视频</b>第一个片子，等你来拍。<br><a href="videos.html">← 回视频页</a></div>`;
+          scroll.innerHTML = `<div class="player-empty"><b>还没有视频</b>第一个片子，等你来拍。<br><a href="gallery.html">← 回照片·视频</a></div>`;
           return;
         }
         if (page === 1) {
@@ -774,7 +779,7 @@
         }
       } catch (err) {
         if (!state.items.length) {
-          scroll.innerHTML = `<div class="player-empty"><b>打不开</b>${esc(err.message)}<br><a href="videos.html">← 回视频页</a></div>`;
+          scroll.innerHTML = `<div class="player-empty"><b>打不开</b>${esc(err.message)}<br><a href="gallery.html">← 回照片·视频</a></div>`;
         }
       } finally {
         state.loading = false;
@@ -1061,7 +1066,7 @@
       const next = sl.nextElementSibling || sl.previousElementSibling;
       sl.remove();
       if (!scroll.querySelector(".player-slide")) {
-        location.href = "videos.html";
+        location.href = "gallery.html";
         return;
       }
       if (wasCurrent && next && next.scrollIntoView) {

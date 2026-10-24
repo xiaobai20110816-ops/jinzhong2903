@@ -825,7 +825,7 @@
         const logged = !!state.user;
         if (form) form.hidden = !logged;
         if (gate) gate.hidden = logged;
-        // 这两块也跟登录身份挂钩,顺手一起更新
+        // 这几块也跟登录身份挂钩,顺手一起更新
         renderDmButton();
         maybeRenderOwnerDm();
       }

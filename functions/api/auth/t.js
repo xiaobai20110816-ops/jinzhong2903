@@ -4,9 +4,6 @@ import {
   notReady,
   ensureSchema,
   currentUser,
-  isActivationCode,
-  claimOnce,
-  CLAIM_KEY,
 } from "../_utils.js";
 
 export async function onRequestPost({ request, env }) {

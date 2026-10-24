@@ -190,19 +190,6 @@
     .acc-need-class[hidden] { display: none; }
     .acc-need-class b { color: var(--gold); font-weight: 600; }
 
-    /* ---- 一次性激活口令 ---- */
-    .acc-activate { margin-bottom: 20px; }
-    .acc-activate[hidden] { display: none; }
-    .acc-activate-row { display: flex; gap: 10px; align-items: center; }
-    .acc-activate-row input[type="text"] { flex: 1; min-width: 0; }
-    .acc-activate-row .submit-btn { flex: none; padding: 11px 20px; }
-    .acc-activate p.hint {
-      margin-top: 9px;
-      font-size: 0.75rem;
-      line-height: 1.7;
-      color: var(--faint);
-    }
-
     .acc-foot {
       display: flex;
       align-items: center;
@@ -396,17 +383,6 @@
             <p class="form-msg" id="acc-pass-msg"></p>
           </div>
 
-          <!-- 只有普通成员看得到:这是激活「管理后台」入口的口令 -->
-          <div class="acc-activate" id="acc-activate" hidden>
-            <p class="acc-label">激活口令（只能用一次）</p>
-            <div class="acc-activate-row">
-              <input id="acc-code" type="text" maxlength="64" autocomplete="off" placeholder="粘贴那串一次性口令">
-              <button class="submit-btn" type="button" id="acc-activate-btn">激活</button>
-            </div>
-            <p class="hint">输入这串口令后，导航栏会出现「管理后台」入口，可以改全站内容。<b>这串口令只能生效一次，用完永久作废。</b></p>
-            <p class="form-msg" id="acc-activate-msg"></p>
-          </div>
-
           <p class="form-msg" id="acc-msg"></p>
           <div class="acc-foot">
             <button class="submit-btn" type="button" id="acc-save">保存</button>
@@ -480,15 +456,11 @@
         const home = $("#acc-home");
         if (home) home.href = "u.html?id=" + encodeURIComponent(user.id);
 
-        // 激活口令只给普通成员看:已经当上服主/管理员的就不用再看了
-        const act = $("#acc-activate");
-        if (act) act.hidden = user.role !== "member";
-
         const note = $("#acc-note");
         if (user.role === "owner" || user.role === "admin") {
           note.hidden = false;
           note.innerHTML = user.role === "owner"
-            ? "你已激活口令，导航栏里可以进「管理后台」改全站内容。"
+            ? "你是本站服主，导航栏里可以进「管理后台」改全站内容。"
             : "你拥有管理权限，可以置顶和删除任意一条留言，也能进「管理后台」改全站内容。";
         } else {
           note.hidden = true;
@@ -808,38 +780,6 @@
         } finally {
           btn.disabled = false;
           btn.textContent = "改密码";
-        }
-      });
-
-      /* ---- 一次性激活口令:只有一次机会 ---- */
-      on($("#acc-activate-btn"), "click", async () => {
-        const msg = $("#acc-activate-msg");
-        const btn = $("#acc-activate-btn");
-        const code = $("#acc-code").value.trim();
-        if (!code) { say(msg, "先把口令填上", "err"); return; }
-
-        btn.disabled = true;
-        btn.textContent = "激活中";
-        try {
-          const res = await fetch(API + "/auth/activate", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({ code: code }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.ok) throw new Error(data.error || "激活失败了，稍后再试");
-
-          A.user = data.user;
-          A._emit(); // 导航栏的「管理后台」入口立刻出现
-          $("#acc-code").value = "";
-          say($("#acc-msg"), "激活成功，导航栏里已经出现「管理后台」入口。", "ok");
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } catch (err) {
-          say(msg, err.message, "err");
-        } finally {
-          btn.disabled = false;
-          btn.textContent = "激活";
         }
       });
 

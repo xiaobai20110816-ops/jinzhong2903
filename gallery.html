@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="103班 · 班级图库">
-  <title>班级图库 · 103班 音乐领军班</title>
+  <meta name="description" content="103班 · 照片与视频">
+  <title>照片 · 视频 · 103班 音乐领军班</title>
   <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
   <meta name="view-transition" content="same-origin">
   <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
@@ -27,14 +27,16 @@
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/layout.css">
   <link rel="stylesheet" href="assets/css/gallery.css">
+  <link rel="stylesheet" href="assets/css/story.css">
+  <link rel="stylesheet" href="assets/css/video.css">
 </head>
 <body>
   <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
 
   <section class="page-hero">
     <div class="no">Gallery</div>
-    <h1><span class="gold-text">班级图库</span></h1>
-    <p>每一张，都是我们这个班的画面</p>
+    <h1><span class="gold-text">照片 · 视频</span></h1>
+    <p>照片和视频都在这里，选好文件自动分流</p>
   </section>
 
   <section class="section">
@@ -50,7 +52,7 @@
           <option value="xs">极小 · 960px</option>
         </select>
         <label class="g-pick">
-          <input type="file" id="g-files" accept="image/*" multiple>选择照片
+          <input type="file" id="g-files" accept="image/*,video/*" multiple>选择照片 / 视频
         </label>
         <button type="button" id="g-send" class="g-btn">上传</button>
         <span id="g-hint" class="g-hint"></span>
@@ -68,6 +70,73 @@
     </div>
   </section>
 
+  <!-- ========== 视频:卡片流 + 发布框(由 video.js / story.js 接管) ========== -->
+  <section class="section" id="video">
+    <div class="container">
+      <div class="media-head">
+        <h2>视频</h2>
+        <p>点开一块屏幕，全班一起看。视频和上面的照片共用一个上传框。</p>
+      </div>
+      <div class="story-wrap">
+
+        <!-- 发布框:默认藏着,选中视频后才由页面脚本亮出来 -->
+        <div class="v-up" id="video-upload" hidden>
+          <div class="v-up-head">
+            <span class="v-up-title">发视频</span>
+            <span class="v-up-hint">MP4 / WebM / MOV，发布前会在本地压一遍再传</span>
+          </div>
+
+          <div class="v-drop" id="v-drop">
+            <b>＋ 选一个视频</b>
+            <span>封面会自动从画面里截一张；手机拍的片子会先压缩，省流量也省时间</span>
+            <input type="file" id="v-file" accept="video/*">
+          </div>
+
+          <video class="v-preview" id="v-preview" controls muted playsinline hidden></video>
+          <div class="v-meta-row" id="v-meta-row"></div>
+
+          <div class="v-level" id="v-level" hidden>
+            <span class="v-level-lb">上传画质</span>
+            <div class="v-level-row" id="v-level-row"></div>
+            <p class="v-level-note" id="v-level-note"></p>
+          </div>
+
+          <label class="field">
+            <span>标题</span>
+            <input id="v-title" maxlength="40" placeholder="给这个视频起个标题（如：体育节接力决赛）">
+          </label>
+
+          <label class="field">
+            <span>说点什么（可不写）</span>
+            <textarea id="v-body" rows="3" maxlength="2000" placeholder="这个片子的来龙去脉，写两句就够了。"></textarea>
+          </label>
+
+          <div class="vis-pick" id="v-vis" role="group" aria-label="谁可以看">
+            <span class="vis-lb">谁可以看</span>
+            <button type="button" class="vis-opt active" data-vis="public">全部可见</button>
+            <button type="button" class="vis-opt" data-vis="class">仅本班可见</button>
+          </div>
+
+          <div class="v-progress" id="v-progress" hidden><i></i></div>
+
+          <div class="composer-foot">
+            <p class="form-msg" id="v-msg"></p>
+            <button class="submit-btn" type="button" id="v-submit">发布视频</button>
+          </div>
+        </div>
+
+        <div class="story-list card-grid" id="story-list"></div>
+
+        <div class="pager" id="pager" hidden>
+          <button type="button" id="prev-btn">‹ 更新的</button>
+          <span id="page-info"></span>
+          <button type="button" id="next-btn">更早的 ›</button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
   <!-- 灯箱:点缩略图放大原图,下方给下载按钮 -->
   <div id="lightbox" class="lightbox" aria-hidden="true">
     <span class="close" id="lightbox-close" role="button" tabindex="0">×</span>
@@ -80,15 +149,19 @@
     </div>
   </div>
 
+  <script>
+    // 照片 + 视频合并页:视频卡片流由 story.js 的 videos 模式渲染
+    window.CLASS103_BOARD = { mode: "videos" };
+  </script>
   <script src="assets/js/nav.js"></script>
   <script>
-    // 图库板块门禁:未注册 / 未实名的同学不能浏览图库。
+    // 板块门禁:未注册 / 未实名的同学不能浏览照片和视频。
     // ready 可能还是 null(nav.js 没跑到 refresh),主动调一下兜底
     (function () {
       var A = window.C103Auth;
       var r = A && (A.ready || A.refresh());
       (r || Promise.resolve()).then(function () {
-        if (!A.canViewSections()) A.sectionGate("图库");
+        if (!A.canViewSections()) A.sectionGate("照片·视频");
       });
     })();
   </script>
@@ -356,8 +429,16 @@
 
       // 选完文件立刻给个反馈,别让人以为卡了
       gFiles.addEventListener("change", () => {
-        const n = (gFiles.files || []).length;
-        gHint.textContent = n ? "已选 " + n + " 张，填好名字点「上传」。" + levelTip() : "";
+        const list = Array.from(gFiles.files || []);
+        const vids = list.filter(
+          (f) => /^video\//.test(f.type) || /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(f.name)
+        ).length;
+        const pics = list.length - vids;
+        if (!list.length) { gHint.textContent = ""; return; }
+        const bits = [];
+        if (pics) bits.push(pics + " 张照片");
+        if (vids) bits.push(vids + " 个视频");
+        gHint.textContent = "已选 " + bits.join(" + ") + "，点「上传」后自动分流。" + (pics ? levelTip() : "");
       });
 
       // 当前档位的说明文字(提示大概会压到多大)
@@ -372,66 +453,117 @@
         gHint.textContent = levelTip();
       });
 
+      // ---------- 视频:统一上传框选中的视频交给 video.js 的发布流程 ----------
+      const videoQueue = [];
+      const vBox = document.getElementById("video-upload");
+      const vFile = document.getElementById("v-file");
+      const vTitle = document.getElementById("v-title");
+
+      function pumpVideo() {
+        const f = videoQueue.shift();
+        if (!f || !vFile) return;
+        // 把文件塞进视频发布框自己的 input,再触发 change,
+        // 这样截封面、自动选画质、压缩、上传全都复用 video.js 现成的那一套
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        vFile.files = dt.files;
+        vFile.dispatchEvent(new Event("change", { bubbles: true }));
+        if (vTitle && !vTitle.value.trim()) {
+          vTitle.value = f.name.replace(/\.[^.]+$/, "").slice(0, 40);
+        }
+        if (vBox) {
+          vBox.hidden = false;
+          vBox.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        if (gHint) {
+          gHint.textContent = videoQueue.length
+            ? "视频还有 " + videoQueue.length + " 个在排队，发布完会自动继续下一个。"
+            : "视频已载入，填好标题点「发布视频」。";
+        }
+      }
+
+      // video.js 发布成功后的回调:队列里还有就继续下一个,全部发完重载一次刷新列表
+      window.C103VideoOnPublished = () => {
+        if (videoQueue.length) setTimeout(pumpVideo, 500);
+        else location.reload();
+      };
+
       // 上传按钮:无条件绑定(权限由服务端管,没权限的请求会被 401 挡下)。
       // 之前只在 load() 成功且 canUpload 为真时才绑,一旦那步没走到,
       // 点「上传」就完全没反应 —— 这正是「选了图点了却无响应」的根因。
       if (!upBox.__bound) {
         upBox.__bound = true;
         gSend.addEventListener("click", async () => {
-          const files = Array.from(gFiles.files || []).filter((f) => f.size > 0);
-          if (!files.length) { gMsg.textContent = "先选几张照片"; return; }
-          const t = gTitle.value.trim();
-          if (!t) { gMsg.textContent = "先给照片起个名字"; return; }
+          const picked = Array.from(gFiles.files || []).filter((f) => f.size > 0);
+          if (!picked.length) { gMsg.textContent = "先选几张照片或视频"; return; }
 
-          gSend.disabled = true;
-          gMsg.textContent = "";
-          gProg.hidden = false;
-          gProgBar.style.width = "0%";
-          try {
-            const level = LEVELS[gLevel.value]; // null = 不压缩
-            for (let i = 0; i < files.length; i++) {
-              const file = files[i];
-              const n = i + 1;
-              gProgTxt.textContent = "准备第 " + n + "/" + files.length + " 张…";
-              // 压缩大图是重活,先让浏览器把提示画出来,免得看着像卡死
-              gHint.textContent = level
-                ? "正在压缩第 " + n + "/" + files.length + " 张…"
-                : "正在读取第 " + n + "/" + files.length + " 张…";
-              await new Promise((r) => setTimeout(r, 30));
+          // 按类型分流:照片走下面的批量压缩上传,视频交给 video.js 的发布流程
+          const isVideo = (f) =>
+            /^video\//.test(f.type) || /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(f.name);
+          const photos = picked.filter((f) => !isVideo(f));
+          const clips = picked.filter(isVideo);
 
-              // 原图档:原样上传;其余档:先压到选定画质,再拿压好的图做缩略图
-              let fullBlob = file;
-              let fullName = file.name;
-              if (level) {
-                fullBlob = await window.C103Image.compress(file, {
-                  maxEdge: level.maxEdge,
-                  quality: level.quality,
-                  targetBytes: 0, // 只压这一次,不再按体积反复压
-                });
-                fullName = "photo.jpg";
-              }
+          // 先传照片(要照片名),再逐个处理视频(标题在发布框里填)
+          if (photos.length) {
+            const t = gTitle.value.trim();
+            if (!t) { gMsg.textContent = "先给照片起个名字"; return; }
 
-              const form = new FormData();
-              form.append("title", t);
-              // 把上传档位一起报给服务端存下来,下载时只给「这一档及其以下」
-              form.append("level", gLevel.value);
-              form.append("full", fullBlob, fullName);
-              form.append("thumb", await compressThumb(fullBlob));
-              gHint.textContent =
-                "正在上传第 " + n + "/" + files.length + " 张（" +
-                fmtMB(fullBlob.size) + (level ? "，已从 " + fmtMB(file.size) + " 压小" : "") + "）…";
-              await xhrUpload(form);
-            }
-            gProg.hidden = true;
-            gHint.textContent = "全部传完，正在刷新图库…";
+            gSend.disabled = true;
             gMsg.textContent = "";
-            gFiles.value = "";
-            load(0); // 传完重拉,额度也跟着刷新
-          } catch (e) {
-            gMsg.textContent = e.message || "上传中断，检查网络再试";
-          } finally {
-            gProg.hidden = true;
-            gSend.disabled = false;
+            gProg.hidden = false;
+            gProgBar.style.width = "0%";
+            try {
+              const level = LEVELS[gLevel.value]; // null = 不压缩
+              for (let i = 0; i < photos.length; i++) {
+                const file = photos[i];
+                const n = i + 1;
+                gProgTxt.textContent = "准备第 " + n + "/" + photos.length + " 张…";
+                // 压缩大图是重活,先让浏览器把提示画出来,免得看着像卡死
+                gHint.textContent = level
+                  ? "正在压缩第 " + n + "/" + photos.length + " 张…"
+                  : "正在读取第 " + n + "/" + photos.length + " 张…";
+                await new Promise((r) => setTimeout(r, 30));
+
+                // 原图档:原样上传;其余档:先压到选定画质,再拿压好的图做缩略图
+                let fullBlob = file;
+                let fullName = file.name;
+                if (level) {
+                  fullBlob = await window.C103Image.compress(file, {
+                    maxEdge: level.maxEdge,
+                    quality: level.quality,
+                    targetBytes: 0, // 只压这一次,不再按体积反复压
+                  });
+                  fullName = "photo.jpg";
+                }
+
+                const form = new FormData();
+                form.append("title", t);
+                // 把上传档位一起报给服务端存下来,下载时只给「这一档及其以下」
+                form.append("level", gLevel.value);
+                form.append("full", fullBlob, fullName);
+                form.append("thumb", await compressThumb(fullBlob));
+                gHint.textContent =
+                  "正在上传第 " + n + "/" + photos.length + " 张（" +
+                  fmtMB(fullBlob.size) + (level ? "，已从 " + fmtMB(file.size) + " 压小" : "") + "）…";
+                await xhrUpload(form);
+              }
+              gProg.hidden = true;
+              gHint.textContent = "照片传完了，正在刷新图库…";
+              gMsg.textContent = "";
+              load(0); // 传完重拉,额度也跟着刷新
+            } catch (e) {
+              gMsg.textContent = e.message || "上传中断，检查网络再试";
+              return; // 照片都没传成,就别接着处理视频了
+            } finally {
+              gProg.hidden = true;
+              gSend.disabled = false;
+            }
+          }
+
+          gFiles.value = "";
+          if (clips.length) {
+            videoQueue.push(...clips);
+            pumpVideo();
           }
         });
       }
@@ -468,7 +600,22 @@
         }
       };
       load(2);
+
+      // 从导航的「＋ → 发视频」跳过来时,上传框亮出来后滚到它
+      // (老链接 videos.html?post=1 也会重定向到这里,顺便认一下 post)
+      const jump = new URLSearchParams(location.search);
+      if (jump.get("video") || jump.get("post")) {
+        let n = 0;
+        const t = setInterval(() => {
+          if (!upBox.hidden) {
+            upBox.scrollIntoView({ behavior: "smooth", block: "start" });
+            clearInterval(t);
+          } else if (++n > 25) clearInterval(t);
+        }, 200);
+      }
     });
   </script>
+  <script src="assets/js/story.js"></script>
+  <script src="assets/js/video.js"></script>
 </body>
 </html>

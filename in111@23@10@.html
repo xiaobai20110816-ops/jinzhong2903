@@ -49,14 +49,15 @@
       <div class="poster-shade" aria-hidden="true"></div>
       <div class="poster-dissolve" aria-hidden="true"></div>
       <div class="poster-center">
-        <p class="poster-kicker">Jinhua No.1 High School</p>
+        <!-- 第一屏文案全部来自后台「管理后台 → 首页文案」,这里留空由 JS 填 -->
+        <p class="poster-kicker"></p>
         <!-- 投影交给外层:see home.css .poster-title-wrap -->
         <div class="poster-title-wrap">
-          <h1 class="poster-title">103<span>班</span></h1>
+          <h1 class="poster-title"></h1>
         </div>
         <div class="poster-rule" aria-hidden="true"></div>
-        <p class="poster-tagline">CLASS 103 · MUSICAL VANGUARDS</p>
-        <p class="poster-year">2026</p>
+        <p class="poster-tagline"></p>
+        <p class="poster-year"></p>
       </div>
       <button class="scroll-hint" id="scroll-hint" type="button" aria-label="进入内容">
         <span>SCROLL</span>
@@ -158,24 +159,8 @@
       <div class="rail-wrap" data-io>
         <button class="rail-btn prev" type="button" aria-label="往前看">‹</button>
         <div class="showcase-rail" id="dorm-rail">
-          <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-body"><b>311</b><em>皇家园区</em><i>成员：金楚涵、何易航、李想</i></span>
-          </a>
-          <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-body"><b>312</b><em>大诚酒店</em><i>成员：大诚、陈诺</i></span>
-          </a>
-          <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-body"><b>409</b><em>待补充</em><i>成员：待定</i></span>
-          </a>
-          <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-body"><b>410</b><em>金楚涵教总部</em><i>成员：待定</i></span>
-          </a>
-          <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-body"><b>411</b><em>法兰西室联盟</em><i>成员：待定</i></span>
-          </a>
-          <a class="dorm-mini" href="dormitory.html" data-veil>
-            <span class="dorm-mini-body"><b>412</b><em>待补充</em><i>成员：待定</i></span>
-          </a>
+          <!-- 宿舍卡片全部来自后台「管理后台 → 宿舍风采」,这里只放读取中的占位 -->
+          <p class="rail-empty">正在读取宿舍…</p>
         </div>
         <button class="rail-btn next" type="button" aria-label="往后看">›</button>
       </div>
@@ -195,7 +180,7 @@
       </div>
       <p class="moments-empty" id="moments-home-empty" hidden>高光时刻还没录入，去「管理后台 → 高光时刻」加一组。</p>
       <div class="container">
-        <p class="showcase-note" data-io>合唱比赛 · 96.95 分 · 位列第一<i>/</i>另有宿舍游行视频</p>
+        <p class="showcase-note" data-io hidden></p>
       </div>
     </section>
 
@@ -656,11 +641,20 @@
       function paintRail(dorms) {
         const rail = document.getElementById("dorm-rail");
         if (!rail) return;
-        rail.innerHTML = dorms.map((d) => {
+        const list = Array.isArray(dorms) ? dorms : [];
+        // 后台没有宿舍就显示空态,不再保留任何写死卡片
+        if (!list.length) {
+          rail.innerHTML = '<p class="rail-empty">宿舍信息还没录入，去「管理后台 → 宿舍风采」加一组。</p>';
+          return;
+        }
+        rail.innerHTML = list.map((d) => {
           const members = (d.members && d.members.length)
             ? d.members.join("、")
             : "待定";
+          // 第一张照片当缩略图;没传照片就只显示文字部分
+          const photo = (d.photos && d.photos[0]) || "";
           return `<a class="dorm-mini" href="dormitory.html" data-veil>
+              ${photo ? `<span class="dorm-mini-photo"><img src="${esc(img(photo))}" alt="${esc(d.number || "")}" loading="lazy"></span>` : ""}
               <span class="dorm-mini-body"><b>${esc(d.number)}</b><em>${esc(d.nick || "待补充")}</em><i>成员：${esc(members)}</i></span>
             </a>`;
         }).join("");
@@ -721,13 +715,11 @@
       }
 
       function paint(content) {
-        if (content) {
-          paintHero(content.site || {});
-          if (Array.isArray(content.students) && content.students.length) paintStudents(content.students);
-          if (Array.isArray(content.dorms) && content.dorms.length) paintRail(content.dorms);
-          paintMoments(content.moments, content.site || {});
-          if (Array.isArray(content.announcements)) paintNews(content.announcements);
-        }
+        // 各板块一律以后台数据为准:拿不到(返回 null)也走空态,不再保留写死内容
+        const site = (content && content.site) || {};
+        paintHero(site);
+        paintRail(content && content.dorms);
+        paintMoments(content && content.moments, site);
         initDormRail(); // 卡片定下来之后再启动滑轨
       }
 

@@ -108,14 +108,16 @@
 
   <script src="assets/js/nav.js"></script>
   <script>
-    // 103 纪事板块门禁:未注册 / 未实名的同学不能查看。
+    // 103 纪事板块门禁:只要求「已注册登录」。
+    // 未实名的同学也能看,但「仅本班可见」的帖子由后端 canViewClass 过滤掉,
+    // 列表和总数都不会出现这些帖子。
     // story.js 会等这面旗帜立起来再决定加不加载,防止接口数据漏出。
     (function () {
       var A = window.C103Auth;
       var r = A && (A.ready || A.refresh());
       (r || Promise.resolve()).then(function () {
-        window.C103_SECTION_OPEN = A.canViewSections();
-        if (!window.C103_SECTION_OPEN) A.sectionGate("103 纪事");
+        window.C103_SECTION_OPEN = !!(A && A.user);
+        if (!window.C103_SECTION_OPEN) A.sectionGate("103 纪事", { loginOnly: true });
         document.dispatchEvent(new CustomEvent("c103-section-gate"));
       });
     })();

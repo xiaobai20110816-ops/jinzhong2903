@@ -621,7 +621,7 @@
         <!-- 没权限 -->
         <div class="glass gate" id="adm-gate" hidden>
           <h2>这扇门只对服主和管理员开</h2>
-          <p id="gate-text">先用账号登录。如果你手里有一次性的服主激活口令，去个人中心激活一下再回来。</p>
+          <p id="gate-text">先用账号登录，登录后如果你有服主或管理员权限，这里会自动打开。</p>
           <a class="btn" href="account.html">去个人中心 →</a>
         </div>
 
@@ -1423,18 +1423,21 @@
             }</div>
           </div>
           <div class="m-right"></div>`;
-        // 只有服主能看到操作按钮;自己那一行只留「改名 / 重置密码」
-        // (不能给自己换角色、不能封自己、不能删自己),
-        // 别人的行全部放开,包括早期遗留的另一个服主账号。
-        if (me && me.role === "owner") {
+        // 官方认证头衔:服主和管理员对每一行都能改(含自己)。
+        // 其余操作(角色 / 改名 / 改密 / 封禁 / 删除)仍然只有服主能点;
+        // 自己那一行只留「改名 / 重置密码」(不能给自己换角色、不能封自己、不能删自己)。
+        const isOwnerView = me && me.role === "owner";
+        const isStaffView = me && (me.role === "owner" || me.role === "admin");
+        if (isStaffView) {
           const right = $(".m-right", el);
           const self = me.id === u.id;
-          if (!self) right.appendChild(roleSelect(u));
-          right.appendChild(nameBtn(u));
-          right.appendChild(pwdBtn(u));
-          // 官方认证头衔:服主对每一行都能改(含自己),管理员整块看不到
+          if (isOwnerView) {
+            if (!self) right.appendChild(roleSelect(u));
+            right.appendChild(nameBtn(u));
+            right.appendChild(pwdBtn(u));
+          }
           right.appendChild(certBox(u));
-          if (!self) {
+          if (isOwnerView && !self) {
             right.appendChild(banBtn(u));
             right.appendChild(delBtn(u));
           }
@@ -2194,8 +2197,8 @@
         const ok = !!me && (me.role === "owner" || me.role === "admin");
         if (!ok) {
           $("#gate-text").textContent = me
-            ? "你现在的身份是普通成员。如果手里有一次性的服主激活口令，去个人中心激活一下再回来。"
-            : "先用账号登录。如果你手里有一次性的服主激活口令，去个人中心激活一下再回来。";
+            ? "你现在的身份是普通成员。需要服主或管理员权限的话，请找服主授予。"
+            : "先用账号登录，登录后如果你有服主或管理员权限，这里会自动打开。";
         }
         // 「B2 配置」里能读到密钥，只给服主开；管理员连页签都不显示
         const isOwner = !!me && me.role === "owner";

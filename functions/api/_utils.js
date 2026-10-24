@@ -896,35 +896,6 @@ export function regionOf(request) {
   return OVERSEAS[country] || "海外";
 }
 
-/* ============================================================
-   一次性服主激活口令
-
-   口令明文不入仓库:这里只留 SHA-256(固定盐 + 明文)。
-   谁先登录后用它,谁就成为服主;之后 settings 里会写死一行
-   owner_claimed,再拿这串口令来只会被告知「已经用过了」。
-   没有后路:不做转让,也没法重置。
-   ============================================================ */
-
-const ACTIVATION_SALT = "103-vanguard-2026";
-const ACTIVATION_SHA256 = "ac4aa0ea59eb903c48abf13f4297de331183f787aafe318303ead729debc40a5";
-export const CLAIM_KEY = "owner_claimed";
-
-export async function isActivationCode(code) {
-  const input = String(code || "").trim().toUpperCase();
-  if (!input) return false;
-  return (await hashPassword(input, ACTIVATION_SALT)) === ACTIVATION_SHA256;
-}
-
-/* 原子占位:settings 的主键决定了只有一个请求能插进去。
-   插进去 = 我抢到了;插不进去 = 别人已经用过了 */
-export async function claimOnce(db, key, value) {
-  const res = await db
-    .prepare("INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
-    .bind(key, String(value == null ? "" : value), Date.now())
-    .run();
-  return !!(res.meta && res.meta.changes);
-}
-
 /* 把一页根帖下面所有回复一次捞齐(广度优先,避免逐条查库)。
    返回扁平数组,顺序是「根帖先、同层按时间早晚」 */
 export async function loadThread(db, rootIds) {
