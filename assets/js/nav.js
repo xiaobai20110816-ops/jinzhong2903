@@ -6,18 +6,69 @@
    所有页面共用这一份,子页面不用各自写导航和登录逻辑。
    ============================================================ */
 
-// 导航配置：改了导航项,所有页面一起变
+// 导航配置：改了导航项,所有页面一起变。
+// 全站只留 5 个入口,原来散着的九项按「同一类东西放一起」并进板块里,
+// 板块内部再用下面 SECTIONS 那一排小药丸切换。
 const NAV_ITEMS = [
   { href: "index.html", label: "首页" },
-  { href: "students.html", label: "学生风采" },
-  { href: "dormitory.html", label: "宿舍风采" },
-  { href: "moments.html", label: "高光时刻" },
-  { href: "gallery.html", label: "图库" },
-  { href: "story.html", label: "103 纪事" },
-  { href: "rank.html", label: "活跃榜" },
-  { href: "announcements.html", label: "班级公告" },
-  { href: "messages.html", label: "私信" },
+  { href: "story.html", label: "纪事" },
+  { href: "gallery.html", label: "光影" },
+  { href: "students.html", label: "同窗" },
+  { href: "messages.html", label: "信箱" },
 ];
+
+/* 板块内的分工:键是页面文件名,值是这一页属于哪个板块、板块里有哪几页。
+   子导航由 nav.js 注入,所以同板块的页面不用各自写一遍。
+   带 #hash 的项是「同一个页面里的不同区块」,靠 hash 判断谁高亮。 */
+const SECTIONS = {
+  "story.html": { items: [["story.html", "时间线"], ["announcements.html", "班级公告"]] },
+  "post.html": { items: [["story.html", "时间线"], ["announcements.html", "班级公告"]] },
+  "announcements.html": { items: [["story.html", "时间线"], ["announcements.html", "班级公告"]] },
+  "gallery.html": {
+    items: [["gallery.html", "照片"], ["gallery.html#video", "视频"], ["gallery.html#highlight", "高光"]],
+  },
+  "students.html": {
+    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
+  },
+  "dormitory.html": {
+    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
+  },
+  "rank.html": {
+    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
+  },
+  "u.html": {
+    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
+  },
+};
+
+/* 当前该高亮哪一项:href 的页面名对上当前页;带 hash 的再对上当前 hash。
+   不带 hash 的那项只有「同一页里没指定区块」时才算高亮 */
+function subnavActive(href, current, hash) {
+  const [page, frag] = href.split("#");
+  if (page !== current) return false;
+  if (frag) return hash === "#" + frag;
+  // 页面里全是带 hash 的项时(比如光影),默认落在第一项上
+  const allFrag = (SECTIONS[current] || { items: [] }).items.every((it) => it[0].includes("#"));
+  return allFrag ? !hash || hash === "#" + (SECTIONS[current].items[0][0].split("#")[1] || "") : true;
+}
+
+/* 板块子导航:一条居中的小药丸,只有同板块的页面才会出现 */
+function buildSubnav(current, hash) {
+  const sec = SECTIONS[current];
+  if (!sec) return null;
+  const bar = document.createElement("div");
+  bar.className = "subnav";
+  bar.innerHTML = `
+    <div class="subnav-inner">
+      ${sec.items
+        .map(
+          ([href, label]) =>
+            `<a href="${href}" data-nav class="${subnavActive(href, current, hash) ? "active" : ""}">${label}</a>`
+        )
+        .join("")}
+    </div>`;
+  return bar;
+}
 
 // 主题存在 localStorage:dark(默认) / light
 const THEME_KEY = "class103-theme";
@@ -1276,15 +1327,15 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-24-1";
+const SPLASH_VERSION = "2026-10-24-2";
 const SPLASH_DATE = "2026.10.24";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "首页回来了，宿舍和高光时刻先做清理。";
+const SPLASH_LEAD = "导航收成五项，照片能评论，AI 开始看门。";
 const SPLASH_NOTES = [
-  "首页恢复正常访问，班级社区卡片流、公告、风采都回来了",
-  "宿舍照片先撤下，页面显示占位；管理员可在后台按宿舍重新上传",
-  "高光时刻里失效的旧视频条目已清掉，不会再点开一片空白",
-  "个人中心新增改密码 / 改用户名，改完其它设备会自动下线",
+  "导航从九项并成五项：首页 / 纪事 / 光影 / 同窗 / 信箱，板块内部用小药丸切换",
+  "高光时刻并进「光影」，和图库、视频在同一页",
+  "图库照片可以评论、回复，评论框里还有「AI 帮我想」",
+  "发帖、私信、群聊会先过一次内容审核：规则常开，AI 接上后一起把关",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -1383,6 +1434,18 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     </div>`;
   document.body.prepend(header);
+
+  // ---- 板块子导航:同板块的几个页面靠这一排小药丸切换 ----
+  const subnav = buildSubnav(current, location.hash);
+  if (subnav) {
+    header.after(subnav);
+    // 「光影」这种一页里分几块的:hash 一变,高亮跟着走
+    window.addEventListener("hashchange", () => {
+      subnav.querySelectorAll("a").forEach((a) => {
+        a.classList.toggle("active", subnavActive(a.getAttribute("href"), current, location.hash));
+      });
+    });
+  }
 
   // 手机版导航栏塞不下这个按钮,把它挪进汉堡菜单里
   if (matchMedia("(max-width: 820px)").matches) {
@@ -1626,7 +1689,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.appendChild(panel);
   const notifList = panel.querySelector("#notif-list");
 
-  const NOTIF_TEXT = { reply: "回复了你", wall: "在你主页留了言", like: "赞了你的主页", vcomment: "评论了你的视频" };
+  const NOTIF_TEXT = { reply: "回复了你", wall: "在你主页留了言", like: "赞了你的主页", vcomment: "评论了你的视频", gcomment: "评论了你的照片" };
 
   function fmtAgo(ms) {
     const d = Date.now() - ms;
@@ -1647,6 +1710,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (n.type === "like") return "u.html?id=" + ((C103Auth.user && C103Auth.user.id) || "");
     // 视频下面的评论:直接去全屏播放页,带上 &r= 会定位到那条评论
     if (n.video_id) return "video.html?id=" + n.video_id + (n.reply_id ? "&r=" + n.reply_id : "");
+    // 照片评论:回图库,带上 ?photo= 会直接打开那张图的灯箱
+    if (n.gallery_id) return "gallery.html?photo=" + n.gallery_id;
     if (!n.post_id) return "story.html";
     return "post.html?id=" + n.post_id + (n.reply_id ? "&r=" + n.reply_id : "");
   }

@@ -88,7 +88,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-24.1";
+const SCHEMA_VERSION = "2026-10-24.2";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -182,6 +182,11 @@ export function ensureSchema(db) {
       await addColumn(db, "posts", "visibility", "TEXT DEFAULT 'public'"); // 'public' 所有人可见 / 'class' 仅本班(登录)可见
       // 挂在某个视频下面的评论:有值就不是留言板的帖子,列表查询一律排除掉
       await addColumn(db, "posts", "video_id", "INTEGER");
+      // 图库照片下面的评论/回复:和视频评论同一套,用 gallery_id 认领
+      await addColumn(db, "posts", "gallery_id", "INTEGER");
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_gallery ON posts(gallery_id, created_at)`)
+        .run();
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_posts_parent ON posts(parent_id, created_at)`)
         .run();
@@ -332,6 +337,8 @@ export function ensureSchema(db) {
       await addColumn(db, "notifications", "reply_id", "INTEGER");
       // 老库升级:视频评论 / 视频点赞产生的通知,点它要跳到 video.html
       await addColumn(db, "notifications", "video_id", "INTEGER");
+      // 老库升级:照片评论的通知,点它跳回图库那张图
+      await addColumn(db, "notifications", "gallery_id", "INTEGER");
       // 只查「我的、未读的、最新的」,这三列一起建索引最省
       await db
         .prepare(
@@ -953,7 +960,7 @@ export async function loadThread(db, rootIds) {
 
 /* 列表要读的列:集中一处,加字段时不会漏掉某条 SQL */
 export const POST_COLS =
-  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, video_id, created_at";
+  "id, name, body, images, parent_id, user_id, region, reply_to_id, pinned, wall_id, visibility, video_id, gallery_id, created_at";
 
 /* 一行数据库记录 → 前端要的样子 */
 export function toPost(row) {
@@ -968,6 +975,7 @@ export function toPost(row) {
     pinned: row.pinned ? 1 : 0,
     wall_id: row.wall_id || 0,
     video_id: row.video_id || 0,
+    gallery_id: row.gallery_id || 0,
     visibility: row.visibility === "class" ? "class" : "public",
     created_at: row.created_at,
   };
@@ -1089,8 +1097,8 @@ export async function notify(db, opts) {
   try {
     await db
       .prepare(
-        `INSERT INTO notifications (user_id, actor_id, type, post_id, wall_id, reply_id, video_id, excerpt, read, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
+        `INSERT INTO notifications (user_id, actor_id, type, post_id, wall_id, reply_id, video_id, gallery_id, excerpt, read, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
       )
       .bind(
         userId,
@@ -1100,6 +1108,7 @@ export async function notify(db, opts) {
         parseInt(opts.wallId, 10) || null,
         parseInt(opts.replyId, 10) || null,
         parseInt(opts.videoId, 10) || null,
+        parseInt(opts.galleryId, 10) || null,
         String(opts.excerpt || "").slice(0, 120),
         Date.now()
       )

@@ -3,11 +3,13 @@
    GET  /api/posts?page=1          读主留言板(倒序分页,服主置顶排最前)
    GET  /api/posts?author=<id>     读某个人发过的主帖
    GET  /api/posts?wall=<id>       读某个人的「个人主页留言墙」(扁平一层)
+   GET  /api/posts?gallery=<id>    读图库某张照片下面的评论(一层平铺)
    POST /api/posts                 发一条(登录后才能发)
 
    回复结构参考 B 站:所有回复都拍平成一层挂在主帖下面,
    每条回复用 reply_to_name 说明「回复的是谁」,不再一层套一层。
-   留言墙的留言挂在 posts 表里用 wall_id 区分,不进主留言板。
+   留言墙的留言挂在 posts 表里用 wall_id 区分,视频评论用 video_id,
+   照片评论用 gallery_id —— 这三类都不进主留言板。
    ============================================================ */
 
 import {
@@ -29,6 +31,7 @@ import {
   likedBy,
   onlineUserIds,
 } from "./_utils.js";
+import { moderate } from "./_moderation.js";
 
 const PAGE_SIZE = 20;
 const MAX_BODY = 4000;
@@ -45,6 +48,7 @@ export async function onRequestGet({ request, env }) {
   const offset = (page - 1) * PAGE_SIZE;
   const authorId = parseInt(url.searchParams.get("author") || "0", 10) || 0;
   const wallId = parseInt(url.searchParams.get("wall") || "0", 10) || 0;
+  const galleryId = parseInt(url.searchParams.get("gallery") || "0", 10) || 0;
   // feed=cards:小红书式卡片流,只要主帖本身(封面 / 标题 / 作者 / 点赞),不带回复树
   const cards = url.searchParams.get("feed") === "cards";
 
@@ -57,7 +61,7 @@ export async function onRequestGet({ request, env }) {
   const findId = parseInt(url.searchParams.get("find") || "0", 10) || 0;
   if (findId) {
     const row = await env.DB.prepare(
-      "SELECT id, parent_id, wall_id, video_id FROM posts WHERE id = ?"
+      "SELECT id, parent_id, wall_id, video_id, gallery_id FROM posts WHERE id = ?"
     )
       .bind(findId)
       .first();
@@ -66,6 +70,10 @@ export async function onRequestGet({ request, env }) {
     // 视频下面的评论不在留言板里,让前端去 video.html 找人
     if (row.video_id) {
       return json({ ok: true, kind: "video", video_id: row.video_id, page: 1, root_id: 0 });
+    }
+    // 照片下面的评论同理,回图库开灯箱
+    if (row.gallery_id) {
+      return json({ ok: true, kind: "gallery", gallery_id: row.gallery_id, page: 1, root_id: 0 });
     }
 
     // 回复是一层平铺,parent_id 直接就是根帖;留言墙的墙主记在 wall_id
@@ -99,7 +107,7 @@ export async function onRequestGet({ request, env }) {
     const visOnly = canViewClass(me) ? "" : " AND (visibility IS NULL OR visibility = 'public')";
     const before = await env.DB.prepare(
       `SELECT COUNT(*) AS n FROM posts
-        WHERE parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL ${visOnly}
+        WHERE parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL AND gallery_id IS NULL ${visOnly}
           AND (pinned > ? OR (pinned = ? AND (created_at > ? OR (created_at = ? AND id > ?))))`
     )
       .bind(root.pinned || 0, root.pinned || 0, root.created_at, root.created_at, rootId)
@@ -145,13 +153,56 @@ export async function onRequestGet({ request, env }) {
     });
   }
 
+  // ---- 图库照片的评论:一层平铺,根评论 + 挂在根下面的回复 ----
+  if (galleryId) {
+    const { results } = await env.DB.prepare(
+      `SELECT ${POST_COLS} FROM posts WHERE gallery_id = ? ORDER BY created_at ASC, id ASC`
+    )
+      .bind(galleryId)
+      .all()
+      .catch(() => ({ results: [] }));
+
+    const rows = results || [];
+    const authors = await loadAuthors(env.DB, rows, me);
+    const roots = [];
+    const byId = new Map();
+    const rowById = new Map(rows.map((r) => [r.id, r]));
+    for (const r of rows) {
+      if (r.parent_id) continue;
+      const item = { ...toPost(r), author: authors.get(r.user_id) || null, replies: [] };
+      roots.push(item);
+      byId.set(r.id, item);
+    }
+    for (const r of rows) {
+      if (!r.parent_id) continue;
+      const root = byId.get(r.parent_id) || byId.get(rowById.get(r.parent_id)?.parent_id);
+      if (!root) continue;
+      // 只有「回复某条评论」才带 @;直接评论照片不显示回复对象
+      const targetRow = r.reply_to_id ? rowById.get(r.reply_to_id) || null : null;
+      const target = targetRow ? { name: targetRow.name, author: authors.get(targetRow.user_id) || null } : null;
+      const targetAuthor = target && target.author;
+      root.replies.push({
+        ...toPost(r),
+        author: authors.get(r.user_id) || null,
+        // 回复某条回复时,「@某某」取被回复的人;否则不显示
+        reply_to_name: target
+          ? (targetAuthor && (targetAuthor.display_name || targetAuthor.real_name || targetAuthor.name)) ||
+            target.name
+          : "",
+        reply_to_verified: targetAuthor && targetAuthor.verified && targetAuthor.real_name ? 1 : 0,
+      });
+    }
+
+    return json({ ok: true, gallery: galleryId, total: rows.length, posts: roots });
+  }
+
   // ---- 主留言板 / 某个人的主帖 ----
   // 分页分的是「主帖」,回复跟着主帖一起出来,不会被翻页截断
   // 未注册 / 未实名的普通用户只看得到 public 的主帖(管理员标记过的)
   const visOnly = canViewClass(me) ? "" : " AND (visibility IS NULL OR visibility = 'public')";
   const where = authorId
-    ? "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL AND user_id = ?" + visOnly
-    : "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL" + visOnly;
+    ? "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL AND gallery_id IS NULL AND user_id = ?" + visOnly
+    : "parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL AND gallery_id IS NULL" + visOnly;
   const bindWhere = authorId ? [authorId] : [];
 
   const totalRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM posts WHERE ${where}`)
@@ -289,10 +340,25 @@ export async function onRequestPost({ request, env }) {
       return fail("这条内容仅限已实名的本班同学查看", 403);
     videoOwner = v.user_id || 0;
   }
+  // 图库照片下面的评论(图库里点开一张图留言):同样不进主留言板,
+  // 靠 posts.gallery_id 认领,通知发回给照片的上传者
+  let galleryId = parseInt(payload.gallery, 10) || 0;
+  let galleryOwner = 0;
+  if (galleryId) {
+    const g = await env.DB.prepare("SELECT id, uploaded_by FROM gallery WHERE id = ?")
+      .bind(galleryId)
+      .first();
+    if (!g) return fail("这张照片已经不在了，刷新一下再看看", 404);
+    galleryOwner = g.uploaded_by || 0;
+  }
   // 可见性只对「主帖」有意义:回复跟随主帖,留言墙一律公开
   const visibility = payload.visibility === "class" ? "class" : "public";
 
   if (!body && images.length === 0) return fail("写点什么，或者放张图吧");
+
+  // 写库前先审核:规则层永远在,AI 层接上了才参与
+  const mod = await moderate(env, body, wallId ? "留言" : videoId || galleryId || replyTo ? "评论" : "帖子");
+  if (!mod.ok) return fail(mod.reason, 422);
 
   // 留言墙:挂在别人(或自己)的个人主页上,不进主留言板
   if (wallId) {
@@ -355,7 +421,7 @@ export async function onRequestPost({ request, env }) {
   let replyTarget = null;
   if (replyTo) {
     const target = await env.DB.prepare(
-      "SELECT id, parent_id, user_id, video_id FROM posts WHERE id = ?"
+      "SELECT id, parent_id, user_id, video_id, gallery_id FROM posts WHERE id = ?"
     )
       .bind(replyTo)
       .first();
@@ -371,6 +437,15 @@ export async function onRequestPost({ request, env }) {
         .catch(() => null);
       videoOwner = (v && v.user_id) || 0;
     }
+    // 回复的是照片下面的评论,同理留在那张照片下面
+    if (target.gallery_id) {
+      galleryId = target.gallery_id;
+      const g = await env.DB.prepare("SELECT uploaded_by FROM gallery WHERE id = ?")
+        .bind(galleryId)
+        .first()
+        .catch(() => null);
+      galleryOwner = (g && g.uploaded_by) || 0;
+    }
   }
 
   const now = Date.now();
@@ -379,8 +454,8 @@ export async function onRequestPost({ request, env }) {
   )
     .bind(me.id)
     .first();
-  // 视频下面的评论和「回复」一样属于聊天,不该按发主帖的 15 秒来卡
-  const waitMs = parentId || videoId ? REPLY_COOLDOWN_MS : COOLDOWN_MS;
+  // 视频 / 照片下面的评论和「回复」一样属于聊天,不该按发主帖的 15 秒来卡
+  const waitMs = parentId || videoId || galleryId ? REPLY_COOLDOWN_MS : COOLDOWN_MS;
   if (last && now - last.created_at < waitMs) {
     const wait = Math.ceil((waitMs - (now - last.created_at)) / 1000);
     return fail(`发得有点快啦，${wait} 秒后再来`, 429);
@@ -392,8 +467,8 @@ export async function onRequestPost({ request, env }) {
   const vis = parentId ? "public" : visibility; // 回复跟随主帖,自己不单独设可见性
 
   const res = await env.DB.prepare(
-    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, video_id, visibility, created_at)
-     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
+    `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, video_id, gallery_id, visibility, created_at)
+     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`
   )
     .bind(
       me.name,
@@ -405,6 +480,7 @@ export async function onRequestPost({ request, env }) {
       replyTo || null,
       pinned,
       videoId || null,
+      galleryId || null,
       vis,
       now
     )
@@ -420,6 +496,7 @@ export async function onRequestPost({ request, env }) {
       postId: parentId,
       replyId: res.meta.last_row_id,
       videoId: videoId || 0,
+      galleryId: galleryId || 0,
       excerpt: body || "[图片]",
     });
   } else if (videoId) {
@@ -429,6 +506,15 @@ export async function onRequestPost({ request, env }) {
       actorId: me.id,
       type: "vcomment",
       videoId: videoId,
+      excerpt: body || "[图片]",
+    });
+  } else if (galleryId) {
+    // 在别人照片底下留了条评论 → 告诉上传的人
+    await notify(env.DB, {
+      userId: galleryOwner,
+      actorId: me.id,
+      type: "gcomment",
+      galleryId: galleryId,
       excerpt: body || "[图片]",
     });
   }
@@ -446,6 +532,7 @@ export async function onRequestPost({ request, env }) {
       pinned,
       wall_id: 0,
       video_id: videoId || 0,
+      gallery_id: galleryId || 0,
       visibility: vis,
       author: me,
       reply_to_name: "",

@@ -82,7 +82,7 @@ export async function onRequestGet({ request, env, params }) {
   }
 
   const postRow = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND parent_id IS NULL AND wall_id IS NULL"
+    "SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND parent_id IS NULL AND wall_id IS NULL AND gallery_id IS NULL"
   )
     .bind(id)
     .first();

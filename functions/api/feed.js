@@ -83,7 +83,7 @@ export async function onRequestGet({ request, env }) {
   const [postRes, videoRes] = await Promise.all([
     env.DB.prepare(
       `SELECT ${POST_COLS} FROM posts
-        WHERE parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL${postVis}
+        WHERE parent_id IS NULL AND wall_id IS NULL AND video_id IS NULL AND gallery_id IS NULL${postVis}
         ORDER BY pinned DESC, created_at DESC, id DESC
         LIMIT ?`
     )

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="103班 · 照片与视频">
-  <title>照片 · 视频 · 103班 音乐领军班</title>
+  <meta name="description" content="103班 · 光影：照片、视频与高光时刻">
+  <title>光影 · 103班 音乐领军班</title>
   <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
   <meta name="view-transition" content="same-origin">
   <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
@@ -29,14 +29,15 @@
   <link rel="stylesheet" href="assets/css/gallery.css">
   <link rel="stylesheet" href="assets/css/story.css">
   <link rel="stylesheet" href="assets/css/video.css">
+  <link rel="stylesheet" href="assets/css/moments.css">
 </head>
 <body>
   <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
 
   <section class="page-hero">
     <div class="no">Gallery</div>
-    <h1><span class="gold-text">照片 · 视频</span></h1>
-    <p>照片和视频都在这里，选好文件自动分流</p>
+    <h1><span class="gold-text">光影</span></h1>
+    <p>照片、视频、高光时刻 —— 都在这一页</p>
   </section>
 
   <section class="section">
@@ -137,16 +138,52 @@
     </div>
   </section>
 
-  <!-- 灯箱:点缩略图放大原图,下方给下载按钮 -->
-  <div id="lightbox" class="lightbox" aria-hidden="true">
-    <span class="close" id="lightbox-close" role="button" tabindex="0">×</span>
-    <img id="lightbox-img" alt="">
-    <div class="lb-bar">
-      <span id="lightbox-caption" class="lightbox-caption"></span>
-      <!-- 档位由脚本按这张图的上传画质填充:只给「上传档位及其以下」 -->
-      <select id="lightbox-level" class="g-sel" title="下载画质：只能选上传档位及其以下"></select>
-      <button id="lightbox-dl" class="lb-dl" type="button">保存</button>
+  <!-- ========== 高光时刻:原来单独的 moments.html 并到这里 ========== -->
+  <section class="section" id="highlight">
+    <div class="container">
+      <div class="media-head">
+        <h2>高光时刻</h2>
+        <p>那些定格在旋律里的瞬间，由后台「高光时刻」录入。</p>
+      </div>
+      <div class="group-head" id="moments-first-head" hidden>
+        <span class="en" id="moments-first-en"></span>
+        <h2 id="moments-first-title"></h2>
+      </div>
+      <div id="moments-grid" class="moments-grid"></div>
+      <p class="moments-empty" id="moments-empty" hidden>高光时刻还没录入，去「管理后台 → 高光时刻」加一组。</p>
     </div>
+  </section>
+
+  <!-- 灯箱:点缩略图放大原图 + 在这张照片下面评论 / 回复 -->
+  <div id="lightbox" class="lightbox gal-lb" aria-hidden="true">
+    <span class="close" id="lightbox-close" role="button" tabindex="0">×</span>
+    <div class="lb-main">
+      <img id="lightbox-img" alt="">
+      <div class="lb-bar">
+        <span id="lightbox-caption" class="lightbox-caption"></span>
+        <!-- 档位由脚本按这张图的上传画质填充:只给「上传档位及其以下」 -->
+        <select id="lightbox-level" class="g-sel" title="下载画质：只能选上传档位及其以下"></select>
+        <button id="lightbox-dl" class="lb-dl" type="button">保存</button>
+      </div>
+    </div>
+
+    <aside class="lb-comments" aria-label="照片评论">
+      <div class="lbc-head">评论 <span id="lbc-count"></span></div>
+      <div class="lbc-list" id="lbc-list"><p class="lbc-empty">正在读取评论…</p></div>
+      <div class="lbc-reply" id="lbc-reply" hidden>
+        回复 <b id="lbc-reply-name"></b>
+        <button type="button" id="lbc-reply-x" aria-label="取消回复">×</button>
+      </div>
+      <div class="lbc-form">
+        <textarea id="lbc-input" rows="2" maxlength="500" placeholder="在这张照片下面说点什么…"></textarea>
+        <div class="lbc-foot">
+          <button type="button" id="lbc-ai" class="lbc-ai">AI 帮我想</button>
+          <button type="button" id="lbc-send" class="lbc-send">发送</button>
+        </div>
+        <div class="lbc-sug" id="lbc-sug" hidden></div>
+        <p class="lbc-msg" id="lbc-msg"></p>
+      </div>
+    </aside>
   </div>
 
   <script>
@@ -225,6 +262,8 @@
 
       // 灯箱当前这张:保存按钮按下面选中的画质导出
       let lbItem = null;
+      // 已经从 ?photo= 自动开过一次灯箱了吗(避免每次刷新列表都重新弹开)
+      let openedFromLink = false;
 
       function openLightbox(item) {
         lbItem = item;
@@ -237,6 +276,8 @@
         lightbox.classList.add("show");
         lightbox.setAttribute("aria-hidden", "false");
         bindLightboxDelete(item, true);
+        // 通知评论模块:现在打开的是哪张图(item 里的 id 就是图库主键)
+        document.dispatchEvent(new CustomEvent("c103:photo", { detail: { item } }));
       }
 
       // 灯箱「保存」:按选中的画质下载(原始 / 大 / 中 / 小 / 极小)
@@ -576,6 +617,18 @@
           if (!d || !d.ok) throw new Error("bad payload");
           render(d.items || [], d.me, d.quota);
 
+          // 从「照片评论」通知点进来(?photo=<id>):直接打开那张图的灯箱
+          if (!openedFromLink) {
+            const pid = parseInt(new URLSearchParams(location.search).get("photo") || "0", 10);
+            if (pid) {
+              const hit = (d.items || []).find((x) => Number(x.id) === pid);
+              if (hit) {
+                openedFromLink = true;
+                openLightbox(hit);
+              }
+            }
+          }
+
           // 上传区:实名 / 管理员 / 服主才有
           const meCan = canUpload(d.me);
           upBox.hidden = false;
@@ -617,5 +670,292 @@
   </script>
   <script src="assets/js/story.js"></script>
   <script src="assets/js/video.js"></script>
+  <script>
+    /* ============================================================
+       高光时刻(原 moments.html 并进这一页)
+       分组照片和标题都来自后台 GET /api/content 的 moments
+       ============================================================ */
+    document.addEventListener("DOMContentLoaded", () => {
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      const img = window.C103Img || ((v) => v);
+      const grid = document.getElementById("moments-grid");
+      if (!grid) return;
+
+      const lightbox = document.getElementById("lightbox");
+      const lbImg = document.getElementById("lightbox-img");
+      const lbCap = document.getElementById("lightbox-caption");
+      const emptyTip = document.getElementById("moments-empty");
+      const firstHead = document.getElementById("moments-first-head");
+
+      const figure = (photo, title) => {
+        const caption = photo && photo.caption ? String(photo.caption) : "";
+        return `
+        <figure class="moment-item">
+          <img src="${esc(img(photo && photo.src))}" alt="${esc(caption || title || "")}">
+          ${caption ? `<figcaption>${esc(caption)}</figcaption>` : ""}
+        </figure>`;
+      };
+
+      // 点高光照片 → 同一个灯箱,但没有图库主键,所以不显示评论 / 下载
+      const bindLightbox = () => {
+        document.querySelectorAll(".moment-item").forEach((item) => {
+          item.onclick = () => {
+            const image = item.querySelector("img");
+            const cap = item.querySelector("figcaption");
+            lbImg.src = image.src;
+            lbCap.textContent = cap ? cap.textContent : "";
+            lightbox.classList.add("show");
+            lightbox.setAttribute("aria-hidden", "false");
+            document.dispatchEvent(new CustomEvent("c103:photo", { detail: { item: null } }));
+          };
+        });
+      };
+
+      const render = (moments) => {
+        document.querySelectorAll("[data-moments-dyn]").forEach((n) => n.remove());
+        const groups = moments && Array.isArray(moments.groups) ? moments.groups : [];
+
+        if (!groups.length) {
+          grid.innerHTML = "";
+          if (firstHead) firstHead.hidden = true;
+          if (emptyTip) emptyTip.hidden = false;
+          return;
+        }
+        if (emptyTip) emptyTip.hidden = true;
+
+        const first = groups[0] || {};
+        const firstPhotos = Array.isArray(first.photos) ? first.photos : [];
+        if (firstHead) {
+          firstHead.hidden = false;
+          document.getElementById("moments-first-en").textContent = first.en || "";
+          document.getElementById("moments-first-title").textContent = first.title || "";
+        }
+        grid.innerHTML = firstPhotos.map((p) => figure(p, first.title)).join("");
+
+        // 第 2 组及以后:每组一块,顺着插在上一块后面
+        let anchor = grid.parentNode;
+        groups.slice(1).forEach((g) => {
+          const photos = Array.isArray(g.photos) ? g.photos : [];
+          if (!photos.length) return;
+          const box = document.createElement("div");
+          box.setAttribute("data-moments-dyn", "");
+          box.innerHTML = `
+            <div class="group-head"><span class="en">${esc(g.en || "")}</span><h2>${esc(g.title || "")}</h2></div>
+            <div class="bridge-grid">${photos.map((p) => figure(p, g.title)).join("")}</div>`;
+          anchor.after(box);
+          anchor = box;
+        });
+
+        bindLightbox();
+      };
+
+      if (window.C103Content) {
+        C103Content.load().then((c) => render(c && c.moments));
+        if (C103Content.onChange) {
+          C103Content.onChange((c) => { if (c) render(c.moments); });
+        }
+      }
+    });
+  </script>
+  <script>
+    /* ============================================================
+       照片评论 / 回复 + AI 帮我想
+       挂在图库灯箱里:打开哪张图,就拉哪张图的评论
+       API:GET api/posts?gallery=<图 id> / POST api/posts {gallery, reply_to_id}
+       ============================================================ */
+    document.addEventListener("DOMContentLoaded", () => {
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+      const nameOf = (a) =>
+        (a && (a.display_name || a.real_name || a.name)) || "已注销";
+      const fmtAgo = (ms) => {
+        const d = Date.now() - ms;
+        if (d < 60000) return "刚刚";
+        if (d < 3600000) return Math.floor(d / 60000) + " 分钟前";
+        if (d < 86400000) return Math.floor(d / 3600000) + " 小时前";
+        if (d < 604800000) return Math.floor(d / 86400000) + " 天前";
+        const x = new Date(ms);
+        return x.getMonth() + 1 + " 月 " + x.getDate() + " 日";
+      };
+
+      const panel = document.querySelector(".lb-comments");
+      const list = document.getElementById("lbc-list");
+      const count = document.getElementById("lbc-count");
+      const input = document.getElementById("lbc-input");
+      const sendBtn = document.getElementById("lbc-send");
+      const aiBtn = document.getElementById("lbc-ai");
+      const sug = document.getElementById("lbc-sug");
+      const msg = document.getElementById("lbc-msg");
+      const replyBar = document.getElementById("lbc-reply");
+      const replyName = document.getElementById("lbc-reply-name");
+      const replyX = document.getElementById("lbc-reply-x");
+      const lbLevel = document.getElementById("lightbox-level");
+      const lbDl = document.getElementById("lightbox-dl");
+      if (!panel || !list) return;
+
+      let photoId = 0;      // 当前灯箱里的图库 id;0 = 高光照片,不显示评论
+      let replyTo = 0;      // 正在回复哪一条评论
+      let lastComment = ""; // 最新一条评论,给 AI 当上下文
+
+      function itemHtml(p, isReply) {
+        const a = p.author;
+        const av = a && a.avatar
+          ? `<img class="lbc-av" src="api/img/${encodeURIComponent(a.avatar)}" alt="">`
+          : `<span class="lbc-av lbc-av-t">${esc(nameOf(a).slice(0, 1))}</span>`;
+        const to = p.reply_to_name ? `<span class="lbc-to">回复 ${esc(p.reply_to_name)}</span>` : "";
+        return `
+        <div class="lbc-item${isReply ? " is-reply" : ""}" data-pid="${p.id}" data-name="${esc(nameOf(a))}">
+          ${av}
+          <div class="lbc-body">
+            <div class="lbc-name">${esc(nameOf(a))}${to}<span class="lbc-time">${fmtAgo(p.created_at)}</span></div>
+            <div class="lbc-text">${esc(p.body)}</div>
+          </div>
+          <button type="button" class="lbc-r">回复</button>
+        </div>`;
+      }
+
+      function render(d) {
+        const roots = (d && d.posts) || [];
+        const total = roots.reduce((n, r) => n + 1 + (r.replies || []).length, 0);
+        count.textContent = total ? "（" + total + "）" : "";
+        if (!total) {
+          list.innerHTML = '<p class="lbc-empty">还没有人评论，来当第一个</p>';
+          lastComment = "";
+          return;
+        }
+        list.innerHTML = roots
+          .map((r) => itemHtml(r, false) + (r.replies || []).map((x) => itemHtml(x, true)).join(""))
+          .join("");
+        const texts = list.querySelectorAll(".lbc-text");
+        lastComment = texts.length ? texts[texts.length - 1].textContent.trim() : "";
+        list.querySelectorAll(".lbc-r").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const row = btn.closest(".lbc-item");
+            replyTo = parseInt(row.dataset.pid, 10) || 0;
+            replyName.textContent = row.dataset.name || "";
+            replyBar.hidden = false;
+            input.focus();
+          });
+        });
+        list.scrollTop = list.scrollHeight;
+      }
+
+      async function loadComments(id) {
+        photoId = id;
+        replyTo = 0;
+        replyBar.hidden = true;
+        msg.textContent = "";
+        sug.hidden = true;
+        list.innerHTML = '<p class="lbc-empty">正在读取评论…</p>';
+        try {
+          const res = await fetch("api/posts?gallery=" + id, {
+            credentials: "same-origin",
+            cache: "no-store",
+          });
+          const d = await res.json().catch(() => null);
+          if (!res.ok || !d || !d.ok) throw new Error("bad");
+          render(d);
+        } catch (e) {
+          list.innerHTML = '<p class="lbc-empty">评论没读上来，检查网络再刷新</p>';
+        }
+      }
+
+      // 灯箱打开时由图库脚本广播:c103:photo
+      document.addEventListener("c103:photo", (e) => {
+        const item = e.detail && e.detail.item;
+        const isPhoto = !!(item && item.id);
+        panel.hidden = !isPhoto;
+        lbLevel.hidden = !isPhoto;
+        lbDl.hidden = !isPhoto;
+        if (isPhoto) loadComments(item.id);
+        else photoId = 0;
+      });
+
+      replyX.addEventListener("click", () => {
+        replyTo = 0;
+        replyBar.hidden = true;
+      });
+
+      async function send() {
+        const body = input.value.trim();
+        if (!photoId) { msg.textContent = "先点开一张图库照片，才能评论"; return; }
+        if (!body) { msg.textContent = "写点什么再发吧"; return; }
+        sendBtn.disabled = true;
+        msg.textContent = "发送中…";
+        try {
+          const res = await fetch("api/posts", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ body, gallery: photoId, reply_to_id: replyTo || 0 }),
+          });
+          const d = await res.json().catch(() => null);
+          if (!res.ok || !d || !d.ok) {
+            msg.textContent = (d && d.error) || "没发出去，再试一次";
+            return;
+          }
+          input.value = "";
+          replyTo = 0;
+          replyBar.hidden = true;
+          sug.hidden = true;
+          msg.textContent = "";
+          loadComments(photoId);
+        } catch (e) {
+          msg.textContent = "网络出错，检查网络再试";
+        } finally {
+          sendBtn.disabled = false;
+        }
+      }
+      sendBtn.addEventListener("click", send);
+      // Ctrl / Cmd + Enter 快捷发送
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send();
+      });
+
+      aiBtn.addEventListener("click", async () => {
+        if (!photoId) { msg.textContent = "先点开一张图库照片"; return; }
+        const seed = input.value.trim();
+        const caption = (document.getElementById("lightbox-caption").textContent || "").split("　上传")[0];
+        const context = seed || [caption, lastComment ? "最新评论：" + lastComment : ""].filter(Boolean).join("，");
+        if (!context) { msg.textContent = "先随便写半句，AI 顺着你的意思改"; return; }
+        aiBtn.disabled = true;
+        msg.textContent = "AI 正在想…";
+        try {
+          const res = await fetch("api/ai/reply", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ text: context, kind: "comment" }),
+          });
+          const d = await res.json().catch(() => null);
+          if (!res.ok || !d || !d.ok) {
+            msg.textContent = (d && d.error) || "AI 这次没接上，先自己写也行";
+            return;
+          }
+          msg.textContent = "";
+          sug.hidden = false;
+          sug.innerHTML = (d.suggestions || [])
+            .map((s) => `<button type="button">${esc(s)}</button>`)
+            .join("");
+          sug.querySelectorAll("button").forEach((b) => {
+            b.addEventListener("click", () => {
+              input.value = b.textContent;
+              sug.hidden = true;
+              input.focus();
+            });
+          });
+        } catch (e) {
+          msg.textContent = "AI 这次没接上，先自己写也行";
+        } finally {
+          aiBtn.disabled = false;
+        }
+      });
+    });
+  </script>
 </body>
 </html>

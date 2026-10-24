@@ -173,7 +173,7 @@
           <span class="no">03</span>
           <h2>高光时刻</h2>
           <span class="en">MOMENTS</span>
-          <a class="more" href="moments.html" data-veil>查看全部<i>→</i></a>
+          <a class="more" href="gallery.html#highlight" data-veil>查看全部<i>→</i></a>
         </div>
       </div>
       <div class="showcase-grid" data-io id="moments-grid">
@@ -692,7 +692,7 @@
         }
         if (emptyTip) emptyTip.hidden = true;
         grid.innerHTML = picks.slice(0, 9).map((p) =>
-          `<a class="ph" href="moments.html" data-veil><img src="${esc(img(p.src))}" alt="${esc(p.caption || p.title)}"></a>`
+          `<a class="ph" href="gallery.html#highlight" data-veil><img src="${esc(img(p.src))}" alt="${esc(p.caption || p.title)}"></a>`
         ).join("");
       }
 

@@ -44,7 +44,7 @@ export async function onRequestGet({ request, env }) {
     all(
       `SELECT u.id, u.username, u.avatar_key, u.role, u.real_name, u.verified, u.display_name, u.cert_title, u.cert_level, COUNT(*) AS n
          FROM posts p JOIN users u ON u.id = p.user_id
-        WHERE p.parent_id IS NULL AND p.wall_id IS NULL AND IFNULL(u.banned, 0) = 0
+        WHERE p.parent_id IS NULL AND p.wall_id IS NULL AND p.gallery_id IS NULL AND IFNULL(u.banned, 0) = 0
         GROUP BY u.id
         ORDER BY n DESC, u.id ASC
         LIMIT 10`

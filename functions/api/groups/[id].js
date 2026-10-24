@@ -8,6 +8,7 @@
    ============================================================ */
 
 import { json, fail, notReady, ensureSchema, currentUser, classGate, namedUser } from "../_utils.js";
+import { moderate } from "../_moderation.js";
 
 const PAGE = 50;
 const MAX_BODY = 500;
@@ -125,6 +126,10 @@ export async function onRequestPost({ request, env, params }) {
   const body = cleanBody(payload && payload.body);
   if (!body) return fail("写点什么再发吧");
   if (body.length > MAX_BODY) return fail(`一条消息最多 ${MAX_BODY} 个字，精简一下吧`);
+
+  // 群聊同样先过审核
+  const mod = await moderate(env, body, "群消息");
+  if (!mod.ok) return fail(mod.reason, 422);
 
   const now = Date.now();
   const last = await env.DB.prepare(

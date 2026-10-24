@@ -179,6 +179,53 @@
 .nav-links a:hover { color: var(--nav-ink); background: var(--chip); }
 .nav-links a.active { color: var(--gold); background: var(--gold-soft); }
 
+/* ---- 板块子导航:导航从九项并成五项后,板块内部靠这一条切换 ----
+   和导航同款玻璃药丸,只是更小、居中,滚动时跟着页面走(不吸顶,
+   免得和吸顶的主导航抢位置) */
+.subnav {
+  display: flex;
+  justify-content: center;
+  padding: 0 20px;
+  margin: -2px 0 6px;
+  position: relative;
+  z-index: 120;
+}
+.subnav-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: 999px;
+  background: var(--nav-bg, var(--glass-bg));
+  border: 1px solid var(--nav-brd, var(--glass-brd));
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+.subnav-inner::-webkit-scrollbar { display: none; }
+.subnav-inner a {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  color: var(--muted);
+  transition: color 0.22s ease, background-color 0.22s ease;
+}
+.subnav-inner a:hover { color: var(--text); background: var(--chip); }
+.subnav-inner a.active { color: var(--gold); background: var(--gold-soft); }
+
+@media (max-width: 520px) {
+  .subnav { padding: 0 14px; }
+  .subnav-inner { gap: 2px; padding: 4px; }
+  .subnav-inner a { padding: 6px 11px; font-size: 0.76rem; }
+}
+
 /* 右侧控件组:通知铃铛 / 管理后台 / 账号 / 外观 / 汉堡,统一排成一行 */
 .nav-tools {
   flex: none;

@@ -8,6 +8,7 @@
    ============================================================ */
 
 import { json, fail, notReady, ensureSchema, currentUser, classGate, namedUser } from "../../_utils.js";
+import { moderate } from "../../_moderation.js";
 
 const PAGE = 50;
 const MAX_BODY = 500;
@@ -105,6 +106,10 @@ export async function onRequestPost({ request, env, params }) {
   const body = cleanBody(payload && payload.body);
   if (!body) return fail("写点什么再发吧");
   if (body.length > MAX_BODY) return fail(`一条私信最多 ${MAX_BODY} 个字，精简一下吧`);
+
+  // 私信也过一道审核:规则层永远在,AI 层接上了才参与
+  const mod = await moderate(env, body, "私信");
+  if (!mod.ok) return fail(mod.reason, 422);
 
   // 最简限流:看这个发送者最近一条的时间,1 秒内连发就拦住
   const now = Date.now();
