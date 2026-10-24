@@ -154,12 +154,12 @@ export async function onRequestPut({ request, env, params }) {
     binds.push(payload.pinned ? 1 : 0);
   }
 
-  // 可见性标记:服主 / 管理员决定这条主帖给不给未注册 / 未实名的人看。
-  // 只对主留言板的主帖有意义 —— 回复跟随主帖,留言墙和视频评论不在流里
+  // 可见性标记:服主 / 管理员决定这条内容给不给未注册 / 未实名的人看。
+  // 主帖和回复都可以单独标记;留言墙和视频评论不在流里,不标记
   if (payload.visibility !== undefined) {
     if (!isStaff(me)) return fail("只有服主和管理员能改可见性", 403);
-    if (row.parent_id || row.wall_id || row.video_id)
-      return fail("只能标记主留言板里的主帖");
+    if (row.wall_id || row.video_id)
+      return fail("只能标记主留言板里的内容");
     sets.push("visibility = ?");
     binds.push(payload.visibility === "class" ? "class" : "public");
   }

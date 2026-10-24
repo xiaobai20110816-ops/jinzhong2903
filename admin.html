@@ -1546,7 +1546,7 @@
             <div class="m-line">
               ${isReply ? '<span class="reply-tag">回复</span>' : ""}
               <span class="m-name">${esc(summary)}</span>
-              ${isReply ? "" : visBadge(item.visibility)}
+              ${visBadge(item.visibility)}
               ${!authorVerified ? '<span class="ver-badge warn">非本班用户</span>' : ""}
             </div>
             <div class="m-meta">${esc(who)}${who ? " · " : ""}${esc(fmtDate(item.created_at))}${!authorVerified ? ' · <b style="color:var(--gold)">非本班用户</b>' : ""}</div>
@@ -1584,8 +1584,8 @@
           right.appendChild(okBtn);
         }
 
-        // 主帖和视频才有「公开/仅实名」切换;回复跟着主帖走,不单独设
-        if (!isReply) {
+        // 主帖、回复、视频都有「公开/仅实名」切换;留言墙和视频评论不在流里,不显示
+        if (!isReply || item.parent_id) {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "m-btn";
@@ -1594,7 +1594,7 @@
             const target = item.visibility === "class" ? "public" : "class";
             btn.disabled = true;
             try {
-              const res = await fetch(API + (isPost ? "/posts/" : "/videos/") + item.id, {
+              const res = await fetch(API + (isPost || isReply ? "/posts/" : "/videos/") + item.id, {
                 method: "PUT",
                 headers: { "content-type": "application/json" },
                 credentials: "same-origin",
@@ -1606,7 +1606,7 @@
               $(".m-line .ver-badge", el).outerHTML = visBadge(item.visibility);
               btn.textContent = item.visibility === "class" ? "设为公开" : "设为仅实名";
               say(msgId,
-                isPost
+                isPost || isReply
                   ? "已标记，游客的卡片流最迟半分钟内生效"
                   : "已标记，取流缓存已顺手清掉，游客侧立即生效",
                 "ok");

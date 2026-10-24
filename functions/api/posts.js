@@ -201,6 +201,9 @@ export async function onRequestGet({ request, env }) {
   const rowById = new Map(rows.map((r) => [r.id, r]));
   const authors = await loadAuthors(env.DB, rows, me);
 
+  // 未实名的人看不到「仅本班」的回复;主帖本身已经在上面滤过了
+  const seeClass = canViewClass(me);
+
   const out = list.map((r) => ({
     ...toPost(r),
     author: authors.get(r.user_id) || null,
@@ -222,6 +225,8 @@ export async function onRequestGet({ request, env }) {
 
   for (const row of rows) {
     if (!row.parent_id) continue;
+    // 「仅本班」的回复:没权限的人直接跳过
+    if (!seeClass && row.visibility === "class") continue;
     const root = rootById.get(rootIdOf(row));
     if (!root) continue;
 
