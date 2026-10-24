@@ -651,7 +651,10 @@
           const members = (d.members && d.members.length)
             ? d.members.join("、")
             : "待定";
+          // 第一张照片当缩略图;没传照片就只显示文字部分
+          const photo = (d.photos && d.photos[0]) || "";
           return `<a class="dorm-mini" href="dormitory.html" data-veil>
+              ${photo ? `<span class="dorm-mini-photo"><img src="${esc(img(photo))}" alt="${esc(d.number || "")}" loading="lazy"></span>` : ""}
               <span class="dorm-mini-body"><b>${esc(d.number)}</b><em>${esc(d.nick || "待补充")}</em><i>成员：${esc(members)}</i></span>
             </a>`;
         }).join("");
