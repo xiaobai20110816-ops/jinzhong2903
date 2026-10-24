@@ -3,123 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="103班 · 班级视频：全班的片子都在这里">
-  <title>班级视频 · 103班 音乐领军班</title>
-  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
-  <meta name="view-transition" content="same-origin">
-  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
-  <meta name="theme-color" content="#070b14">
-  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
-  <script>
-    try {
-      if (localStorage.getItem("class103-theme") === "light") {
-        document.documentElement.dataset.theme = "light";
-        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
-      }
-      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
-      var sk = localStorage.getItem("class103-skin");
-      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
-    } catch (e) {}
-  </script>
-  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
-  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
-  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
-  <link rel="stylesheet" href="assets/css/base.css">
-  <link rel="stylesheet" href="assets/css/layout.css">
-  <link rel="stylesheet" href="assets/css/story.css">
-  <link rel="stylesheet" href="assets/css/video.css">
+  <title>照片 · 视频 · 103班 音乐领军班</title>
+  <meta name="description" content="103班 · 照片和视频都在这里">
+  <link rel="canonical" href="gallery.html">
+  <!-- 视频页并进了「照片 · 视频」页,老链接直接跳过去,别让人停在空页 -->
+  <meta http-equiv="refresh" content="0; url=gallery.html#video">
+  <script>location.replace("gallery.html#video");</script>
 </head>
 <body>
-  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
-
-  <section class="page-hero">
-    <div class="no">Video</div>
-    <h1><span class="gold-text">班级视频</span></h1>
-    <p>点开一块屏幕，全班一起看</p>
-  </section>
-
-  <section class="section">
-    <div class="container">
-      <div class="story-wrap">
-
-        <!-- ========== 发视频:实名认证过的同学 / 管理员 / 服主可见 ========== -->
-        <div class="v-up" id="video-upload" hidden>
-          <div class="v-up-head">
-            <span class="v-up-title">发视频</span>
-            <span class="v-up-hint">MP4 / WebM / MOV，发布前会在本地压一遍再传</span>
-          </div>
-
-          <div class="v-drop" id="v-drop">
-            <b>＋ 选一个视频</b>
-            <span>封面会自动从画面里截一张；手机拍的片子会先压缩，省流量也省时间</span>
-            <input type="file" id="v-file" accept="video/*">
-          </div>
-
-          <video class="v-preview" id="v-preview" controls muted playsinline hidden></video>
-          <div class="v-meta-row" id="v-meta-row"></div>
-
-          <!-- 压到多清:默认按原片的清晰度自己挑一档,不想压就选「原画质」 -->
-          <div class="v-level" id="v-level" hidden>
-            <span class="v-level-lb">上传画质</span>
-            <div class="v-level-row" id="v-level-row"></div>
-            <p class="v-level-note" id="v-level-note"></p>
-          </div>
-
-          <label class="field">
-            <span>标题</span>
-            <input id="v-title" maxlength="40" placeholder="给这个视频起个标题（如：体育节接力决赛）">
-          </label>
-
-          <label class="field">
-            <span>说点什么（可不写）</span>
-            <textarea id="v-body" rows="3" maxlength="2000" placeholder="这个片子的来龙去脉，写两句就够了。"></textarea>
-          </label>
-
-          <div class="vis-pick" id="v-vis" role="group" aria-label="谁可以看">
-            <span class="vis-lb">谁可以看</span>
-            <button type="button" class="vis-opt active" data-vis="public">全部可见</button>
-            <button type="button" class="vis-opt" data-vis="class">仅本班可见</button>
-          </div>
-
-          <div class="v-progress" id="v-progress" hidden><i></i></div>
-
-          <div class="composer-foot">
-            <p class="form-msg" id="v-msg"></p>
-            <button class="submit-btn" type="button" id="v-submit">发布视频</button>
-          </div>
-        </div>
-
-        <!-- ========== 视频卡片流(脚本从 /api/videos 拉) ========== -->
-        <div class="story-list card-grid" id="story-list"></div>
-
-        <div class="pager" id="pager" hidden>
-          <button type="button" id="prev-btn">‹ 更新的</button>
-          <span id="page-info"></span>
-          <button type="button" id="next-btn">更早的 ›</button>
-        </div>
-
-      </div>
-    </div>
-  </section>
-
-  <script>
-    // 视频页:只要视频的双列卡片流(帖子的卡片流在首页,由 /api/feed 合并给出)
-    window.CLASS103_BOARD = { mode: "videos" };
-  </script>
-  <script src="assets/js/nav.js"></script>
-  <script>
-    // 视频板块门禁:未注册 / 未实名的同学不能浏览视频列表。
-    // 被管理员标记为「公开」的单个视频不受影响,游客从首页卡片流点开照样能看。
-    // ready 可能还是 null(nav.js 没跑到 refresh),主动调一下兜底
-    (function () {
-      var A = window.C103Auth;
-      var r = A && (A.ready || A.refresh());
-      (r || Promise.resolve()).then(function () {
-        if (!A.canViewSections()) A.sectionGate("班级视频");
-      });
-    })();
-  </script>
-  <script src="assets/js/story.js"></script>
-  <script src="assets/js/video.js"></script>
+  <p style="font-family:sans-serif;padding:40px;color:#888">
+    视频已经合并到「照片 · 视频」页，正在跳转…
+    <a href="gallery.html#video">点这里</a>
+  </p>
 </body>
 </html>

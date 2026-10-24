@@ -12,8 +12,7 @@ const NAV_ITEMS = [
   { href: "students.html", label: "学生风采" },
   { href: "dormitory.html", label: "宿舍风采" },
   { href: "moments.html", label: "高光时刻" },
-  { href: "gallery.html", label: "图库" },
-  { href: "videos.html", label: "视频" },
+  { href: "gallery.html", label: "照片·视频" },
   { href: "story.html", label: "103 纪事" },
   { href: "rank.html", label: "活跃榜" },
   { href: "announcements.html", label: "班级公告" },
@@ -1583,7 +1582,8 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => { location.href = "account.html"; }, 700);
         return;
       }
-      location.href = "videos.html?post=1";
+      // 照片和视频已经合并在图库页:带上 ?video=1 直接滚到统一上传框
+      location.href = "gallery.html?video=1";
     });
 
     // 快滚到第一屏时先把加号藏起来,别压在海报上
