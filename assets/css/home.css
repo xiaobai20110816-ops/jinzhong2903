@@ -174,6 +174,12 @@ body.poster .site-header:not(.is-scrolled) {
   max-width: 1500px;
 }
 
+/* 第一屏文案由后台填充:空着时先按一行高度占位,文字写进来时页面不会往下跳 */
+.poster-kicker:empty,
+.poster-title:empty,
+.poster-tagline:empty,
+.poster-year:empty { min-height: 1em; }
+
 /* 小字标头 */
 .poster-kicker {
   font-family: var(--font-latin);
@@ -472,6 +478,16 @@ body.poster .site-header:not(.is-scrolled) {
   scrollbar-width: none;
 }
 .showcase-rail::-webkit-scrollbar { display: none; }
+
+/* 宿舍滑轨空态 */
+.rail-empty {
+  flex: 1 0 100%;
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  letter-spacing: 1px;
+}
 
 /* 左右玻璃圆钮:浮在滑轨两端 */
 .rail-btn {

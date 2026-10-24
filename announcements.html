@@ -179,6 +179,15 @@
       color: var(--muted);
       opacity: 0.42;
     }
+
+    /* 没有公告时的空态 */
+    .tl-empty {
+      text-align: center;
+      padding: 46px 20px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+    }
   </style>
 </head>
 <body>
@@ -193,33 +202,8 @@
   <section class="section">
     <div class="container">
       <div class="timeline">
-        <!-- 置顶公告 -->
-        <div class="tl-item pinned">
-          <div class="tl-date">2026.10.03<span class="tl-pin">置顶</span></div>
-          <div class="tl-body">
-            <h3>103 官网正式成立</h3>
-            <p>金秋十月，属于我们的数字阵地正式上线。从今天起，103 班有了自己的官网，全班的故事都写在这里。</p>
-            <p>本次上线的内容：</p>
-            <p>· 自由注册登录 —— 起个名字、传张头像、写一句个性签名，以后发帖不用再留名字</p>
-            <p>· 留言板升级 —— 像 B 站那样逐条回复，点「回复」就地展开，关系一眼看清</p>
-            <p>· IP 属地 —— 每条留言下面标注省份，都是自己人，坦坦荡荡</p>
-            <p>· 服主标识 —— 班委账号带金色「服主」徽章，发布的通知自动置顶</p>
-            <p>· 图片上传 —— 最多 3 张，自动压缩，传得快也看得清</p>
-            <p>官网地址：jinzhong2903.me</p>
-          </div>
-        </div>
-        <div class="tl-item pinned">
-          <div class="tl-date">2026.09.29<span class="tl-pin">置顶</span></div>
-          <div class="tl-body">
-            <p>合唱比赛获得 96.95 分,位列第一。</p>
-          </div>
-        </div>
-        <div class="tl-item">
-          <div class="tl-date">2026.09.25</div>
-          <div class="tl-body">
-            <p>素养 103 第二帝国建立,何易航政府覆灭,金楚涵皈依第二帝国。</p>
-          </div>
-        </div>
+        <!-- 公告全部来自后台「管理后台 → 班级公告」,这里只放读取中的占位 -->
+        <p class="tl-empty">正在读取公告…</p>
       </div>
 
       <!-- 鸣谢:最底下一行小字,不张扬 -->
@@ -254,13 +238,18 @@
       };
 
       const render = (list) => {
-        // 加载失败 / 列表为空:保留写死的三段
-        if (!Array.isArray(list) || !list.length) return;
+        const items = Array.isArray(list) ? list : [];
+        // 没有公告 / 读不到:显示空态,不再退回任何写死内容
+        if (!items.length) {
+          timeline.innerHTML =
+            '<p class="tl-empty">还没有公告。班级公告由服主 / 管理员在「管理后台 → 班级公告」发布。</p>';
+          return;
+        }
 
         // 置顶的排前面,其余保持后台数组顺序
-        const items = list.slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+        const sorted = items.slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
-        timeline.innerHTML = items
+        timeline.innerHTML = sorted
           .map((a) => {
             // 正文按 Markdown 渲染(后台怎么写就怎么显示);渲染器没加载时退回纯文本段落
             const body = window.C103Markdown
@@ -283,11 +272,10 @@
       };
 
       if (!window.C103Content) return;
-      // load() 失败时 resolve 出 null,此时保留写死内容
+      // 读不到内容(返回 null)也照样走空态,不保留任何写死公告
       C103Content.load().then((content) => {
-        if (!content) return;
-        renderThanks(content.site);
-        render(content.announcements);
+        renderThanks(content && content.site);
+        render(content && content.announcements);
       });
     });
   </script>
