@@ -356,6 +356,11 @@
     }
     .member .ver-badge.on { color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-line); }
     .member .ver-badge.off { color: var(--muted); background: var(--chip); border: 1px solid var(--line); }
+    /* 未实名作者的「非本班用户」警示标:红色,和金色通过标明显区分 */
+    .member .ver-badge.warn { color: #ff4d4f; background: rgba(255,77,79,.12); border: 1px solid rgba(255,77,79,.35); font-weight: 600; }
+    /* 内容审核的「删除」按钮:红色边框警示 */
+    .member .m-btn.m-danger { color: #ff4d4f; border-color: rgba(255,77,79,.35); background: rgba(255,77,79,.08); }
+    .member .m-btn.m-danger:hover { background: rgba(255,77,79,.15); border-color: rgba(255,77,79,.5); }
     .member .i-real {
       width: 100%;
       margin-top: 9px;
@@ -1519,14 +1524,51 @@
           ? (raw.length > 24 ? raw.slice(0, 24) + "…" : raw)
           : (isPost ? "（图片帖）" : "（无标题视频）");
         const who = item.author && (item.author.display_name || item.author.name) || "";
+        // 未实名作者:展示角标 + 「通过」按钮(通过 = 直接设为公开)
+        const authorVerified = !!(item.author && item.author.verified);
         const el = document.createElement("div");
         el.className = "row member";
         el.innerHTML = `
           <div class="m-info">
-            <div class="m-line"><span class="m-name">${esc(summary)}</span>${visBadge(item.visibility)}</div>
-            <div class="m-meta">${esc(who)}${who ? " · " : ""}${esc(fmtDate(item.created_at))}</div>
+            <div class="m-line">
+              <span class="m-name">${esc(summary)}</span>${visBadge(item.visibility)}
+              ${!authorVerified ? '<span class="ver-badge warn">非本班用户</span>' : ""}
+            </div>
+            <div class="m-meta">${esc(who)}${who ? " · " : ""}${esc(fmtDate(item.created_at))}${!authorVerified ? ' · <b style="color:var(--gold)">非本班用户</b>' : ""}</div>
           </div>
           <div class="m-right"></div>`;
+
+        const right = $(".m-right", el);
+        const msgId = isPost ? "review-posts-msg" : "review-videos-msg";
+
+        // 未实名作者发的帖子才给「通过」:通过后转为公开,不再出现在审核提示里
+        if (isPost && !authorVerified) {
+          const okBtn = document.createElement("button");
+          okBtn.type = "button";
+          okBtn.className = "m-btn";
+          okBtn.textContent = "通过";
+          okBtn.addEventListener("click", async () => {
+            okBtn.disabled = true;
+            try {
+              const res = await fetch(API + "/posts/" + item.id, {
+                method: "PUT",
+                headers: { "content-type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ visibility: "public" }),
+              });
+              const d = await res.json().catch(() => ({}));
+              if (!res.ok || !d.ok) throw new Error(d.error || "操作失败了");
+              item.visibility = "public";
+              // 通过后就当作实名处理:摘掉角标,只留「设为仅实名」按钮
+              renderReview();
+              say(msgId, "已通过，帖子转为公开。", "ok");
+            } catch (err) {
+              say(msgId, err.message, "err");
+              okBtn.disabled = false;
+            }
+          });
+          right.appendChild(okBtn);
+        }
 
         const btn = document.createElement("button");
         btn.type = "button";
@@ -1534,7 +1576,6 @@
         btn.textContent = item.visibility === "class" ? "设为公开" : "设为仅实名";
         btn.addEventListener("click", async () => {
           const target = item.visibility === "class" ? "public" : "class";
-          const msgId = isPost ? "review-posts-msg" : "review-videos-msg";
           btn.disabled = true;
           try {
             const res = await fetch(API + (isPost ? "/posts/" : "/videos/") + item.id, {
@@ -1558,7 +1599,31 @@
             btn.disabled = false;
           }
         });
-        $(".m-right", el).appendChild(btn);
+        right.appendChild(btn);
+
+        // 删除:帖子 / 视频都能删,删完这一行直接消失
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "m-btn m-danger";
+        delBtn.textContent = "删除";
+        delBtn.addEventListener("click", async () => {
+          if (!confirm(isPost ? "删除这条帖子？回复也会一起清掉。" : "删除这个视频？相关文件也会清掉。")) return;
+          delBtn.disabled = true;
+          try {
+            const res = await fetch(API + (isPost ? "/posts/" : "/videos/") + item.id, {
+              method: "DELETE",
+              credentials: "same-origin",
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok || !d.ok) throw new Error(d.error || "删除失败了");
+            el.remove();
+            say(msgId, isPost ? "已删除该帖子。" : "已删除该视频。", "ok");
+          } catch (err) {
+            say(msgId, err.message, "err");
+            delBtn.disabled = false;
+          }
+        });
+        right.appendChild(delBtn);
         return el;
       }
 
