@@ -176,6 +176,24 @@
     }
     .field-grid input[type="text"] { width: 100%; }
 
+    /* 问卷编辑器 / 统计 */
+    .sv-q-row { border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-top: 12px; }
+    .sv-q-head { display: flex; gap: 10px; align-items: center; }
+    .sv-q-tag {
+      flex: none; font-size: 0.72rem; color: var(--gold);
+      border: 1px solid var(--gold-line); border-radius: 999px; padding: 2px 10px;
+    }
+    .sv-q-opts { margin-top: 10px; display: grid; gap: 8px; }
+    .sv-opt-row { display: flex; gap: 8px; align-items: center; }
+    .sv-opt-add { margin-top: 10px; padding: 6px 14px; font-size: 0.76rem; }
+    .sv-stat-q { margin-top: 18px; }
+    .sv-stat-opt { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.84rem; }
+    .sv-stat-lb { flex: none; max-width: 40%; }
+    .sv-stat-bar { flex: 1; height: 8px; border-radius: 99px; background: var(--chip); overflow: hidden; }
+    .sv-stat-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-2)); }
+    .sv-stat-n { flex: none; font-size: 0.76rem; color: var(--faint); }
+    .sv-stat-a { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 0.84rem; margin-top: 8px; }
+
     /* ---- 图片墙 ---- */
     .shots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .shot { position: relative; width: 74px; height: 74px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
@@ -655,6 +673,7 @@
             <button class="adm-tab" type="button" data-panel="usage">用量看板</button>
             <button class="adm-tab" type="button" data-panel="accounts">账号统计</button>
             <button class="adm-tab" type="button" data-panel="gallery">图库</button>
+            <button class="adm-tab" type="button" data-panel="survey">问卷</button>
             <button class="adm-tab" type="button" data-panel="b2" data-owner-only hidden>B2 配置</button>
           </div>
 
@@ -812,6 +831,52 @@
                 <span id="g-msg" class="tip"></span>
               </div>
               <div id="g-list"><p class="msg">正在读取…</p></div>
+            </div>
+          </div>
+
+          <!-- ========== 问卷 ========== -->
+          <div class="glass panel" id="panel-survey" hidden>
+            <div class="panel-head">
+              <h2>问卷</h2>
+              <p>建好问卷后，把链接 <b>survey.html?id=编号</b> 发给同学就能填了（问卷页不在导航里，只能靠链接直达）。题目只有两种：单选（至少两个选项）和填空。登录的同学一人一份，交过还能回来改；结果在「统计」里看。</p>
+            </div>
+            <div class="rows" id="sv-list"></div>
+            <p class="msg" id="sv-msg"></p>
+            <div class="panel-foot">
+              <span class="tip">截止后同学们打开问卷会看到「已截止」，不能再交。</span>
+              <button class="btn ghost" type="button" id="sv-add">＋ 新建问卷</button>
+            </div>
+
+            <!-- 编辑器:新建 / 编辑共用,默认藏着 -->
+            <div id="sv-editor" hidden style="margin-top:22px;border-top:1px solid var(--line);padding-top:18px">
+              <div class="panel-head"><h2 id="sv-editor-title">新建问卷</h2></div>
+              <div class="field-grid">
+                <label><span class="lb">问卷标题</span>
+                  <input id="sv-f-title" type="text" maxlength="60" placeholder="如：秋游地点意向调查">
+                </label>
+                <label><span class="lb">说明（显示在标题下面，可不写）</span>
+                  <textarea id="sv-f-intro" rows="2" maxlength="500" placeholder="填答说明、截止时间…"></textarea>
+                </label>
+              </div>
+              <div id="sv-q-list"></div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+                <button class="btn ghost" type="button" id="sv-q-add-choice">＋ 加一道单选题</button>
+                <button class="btn ghost" type="button" id="sv-q-add-text">＋ 加一道填空题</button>
+              </div>
+              <div class="panel-foot">
+                <span class="tip">改题目不会删掉已收上来的答卷，但旧答案会和新题目对不上，统计一律按新题目口径算。</span>
+                <div>
+                  <span class="msg" id="sv-save-msg"></span>
+                  <button class="btn ghost" type="button" id="sv-cancel">收起</button>
+                  <button class="btn" type="button" id="sv-save">保存问卷</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 统计:点某份问卷的「统计」后在这里展开 -->
+            <div id="sv-stats" hidden style="margin-top:22px;border-top:1px solid var(--line);padding-top:18px">
+              <div class="panel-head"><h2 id="sv-stats-title">统计</h2></div>
+              <div id="sv-stats-body"><p class="msg">正在统计…</p></div>
             </div>
           </div>
 
@@ -2262,6 +2327,302 @@
         });
       }
 
+      /* ============ 问卷 ============ */
+      /* 后端:/api/surveys(列表/创建)、/api/surveys/:id(详情/改/删/统计)。
+         编辑器是「内存里的题目数组 → 收集成 JSON → 整个 PUT」,不做逐题接口 */
+      let svEditing = 0; // 0 = 编辑器关着;-1 = 新建;其它 = 正在改的问卷 id
+
+      async function renderSurveys(okMsg) {
+        const box = $("#sv-list");
+        if (!box) return;
+        say("sv-msg", "");
+        box.innerHTML = '<p class="msg">正在读取…</p>';
+        try {
+          const res = await fetch(API + "/surveys", { credentials: "same-origin" });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "读不到问卷列表");
+          const list = d.surveys || [];
+          box.innerHTML = "";
+          if (!list.length) box.innerHTML = '<p class="msg">还没有问卷，点下面「新建问卷」做第一份。</p>';
+          list.forEach((s) => box.appendChild(svRow(s)));
+          if (okMsg) say("sv-msg", okMsg, "ok");
+        } catch (err) {
+          box.innerHTML = "";
+          say("sv-msg", err.message, "err");
+        }
+      }
+
+      function svRow(s) {
+        const el = document.createElement("div");
+        el.className = "row member";
+        el.innerHTML = `
+          <div class="m-info">
+            <div class="m-line">
+              <span class="m-name">${esc(s.title)}</span>
+              ${s.open ? '<span class="ver-badge on">开放中</span>' : '<span class="ver-badge off">已截止</span>'}
+            </div>
+            <div class="m-meta">编号 ${s.id} · ${(s.questions || []).length} 道题 · 已收 ${s.answers_count} 份 · 链接 survey.html?id=${s.id}</div>
+          </div>
+          <div class="m-right"></div>`;
+        const right = $(".m-right", el);
+
+        const linkBtn = document.createElement("button");
+        linkBtn.type = "button";
+        linkBtn.className = "m-btn";
+        linkBtn.textContent = "复制链接";
+        linkBtn.addEventListener("click", async () => {
+          const url = location.origin + "/survey.html?id=" + s.id;
+          try {
+            await navigator.clipboard.writeText(url);
+            say("sv-msg", "链接已复制：" + url, "ok");
+          } catch (e) {
+            say("sv-msg", "复制不了，手动抄一下：" + url, "err");
+          }
+        });
+        right.appendChild(linkBtn);
+
+        const statBtn = document.createElement("button");
+        statBtn.type = "button";
+        statBtn.className = "m-btn";
+        statBtn.textContent = "统计";
+        statBtn.addEventListener("click", () => renderSvStats(s.id));
+        right.appendChild(statBtn);
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "m-btn";
+        editBtn.textContent = "编辑";
+        editBtn.addEventListener("click", () => openSvEditor(s));
+        right.appendChild(editBtn);
+
+        const toggleBtn = document.createElement("button");
+        toggleBtn.type = "button";
+        toggleBtn.className = "m-btn";
+        toggleBtn.textContent = s.open ? "截止" : "重新开放";
+        toggleBtn.addEventListener("click", async () => {
+          toggleBtn.disabled = true;
+          try {
+            const res = await fetch(API + "/surveys/" + s.id, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ open: s.open ? 0 : 1 }),
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok || !d.ok) throw new Error(d.error || "操作失败了");
+            renderSurveys(s.open ? "已截止，同学们打开会看到「已截止」。" : "已重新开放。");
+          } catch (err) {
+            say("sv-msg", err.message, "err");
+            toggleBtn.disabled = false;
+          }
+        });
+        right.appendChild(toggleBtn);
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "m-btn m-danger";
+        delBtn.textContent = "删除";
+        delBtn.addEventListener("click", async () => {
+          if (!confirm("删除这份问卷？已收上来的 " + s.answers_count + " 份答卷也会一起清掉。")) return;
+          delBtn.disabled = true;
+          try {
+            const res = await fetch(API + "/surveys/" + s.id, {
+              method: "DELETE",
+              credentials: "same-origin",
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok || !d.ok) throw new Error(d.error || "删除失败了");
+            if (svEditing === s.id) closeSvEditor();
+            $("#sv-stats").hidden = true;
+            renderSurveys("已删除。");
+          } catch (err) {
+            say("sv-msg", err.message, "err");
+            delBtn.disabled = false;
+          }
+        });
+        right.appendChild(delBtn);
+        return el;
+      }
+
+      /* 编辑器里的一道题。type 存在行元素的 dataset 上 */
+      function svQRow(q) {
+        const row = document.createElement("div");
+        const isChoice = !q || q.type !== "text";
+        row.className = "sv-q-row";
+        row.dataset.type = isChoice ? "choice" : "text";
+        row.innerHTML = `
+          <div class="sv-q-head">
+            <span class="sv-q-tag">${isChoice ? "单选" : "填空"}</span>
+            <input type="text" class="sv-q-title w-grow" maxlength="120" placeholder="题目，如：你最想去哪儿？" value="${esc((q && q.title) || "")}">
+            <button class="icon-btn" type="button" title="删掉这题">×</button>
+          </div>`;
+        $(".icon-btn", row).addEventListener("click", () => row.remove());
+        if (isChoice) {
+          const opts = document.createElement("div");
+          opts.className = "sv-q-opts";
+          row.appendChild(opts);
+          const seed = (q && q.options && q.options.length ? q.options : ["", ""]);
+          seed.forEach((o) => opts.appendChild(svOptRow(o)));
+          const add = document.createElement("button");
+          add.type = "button";
+          add.className = "btn ghost sv-opt-add";
+          add.textContent = "＋ 加选项";
+          add.addEventListener("click", () => opts.appendChild(svOptRow("")));
+          row.appendChild(add);
+        }
+        return row;
+      }
+
+      function svOptRow(v) {
+        const r = document.createElement("div");
+        r.className = "sv-opt-row";
+        r.innerHTML = `<input type="text" class="w-grow" maxlength="60" placeholder="选项" value="${esc(v || "")}"><button class="icon-btn" type="button" title="删掉这个选项">×</button>`;
+        $(".icon-btn", r).addEventListener("click", () => r.remove());
+        return r;
+      }
+
+      function openSvEditor(s) {
+        svEditing = s ? s.id : -1;
+        $("#sv-editor-title").textContent = s ? "编辑问卷（编号 " + s.id + "）" : "新建问卷";
+        $("#sv-f-title").value = s ? s.title : "";
+        $("#sv-f-intro").value = s ? s.intro || "" : "";
+        const list = $("#sv-q-list");
+        list.innerHTML = "";
+        (s && s.questions && s.questions.length
+          ? s.questions
+          : [{ type: "choice", title: "", options: ["", ""] }]
+        ).forEach((q) => list.appendChild(svQRow(q)));
+        say("sv-save-msg", "");
+        $("#sv-editor").hidden = false;
+        $("#sv-editor").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function closeSvEditor() {
+        svEditing = 0;
+        $("#sv-editor").hidden = true;
+      }
+
+      /* 把编辑器里的题目收集成接口要的形状;不合格返回 null 并提示 */
+      function collectSurvey() {
+        const title = $("#sv-f-title").value.trim();
+        const intro = $("#sv-f-intro").value.trim();
+        if (!title) {
+          say("sv-save-msg", "问卷还没写标题", "err");
+          return null;
+        }
+        const rows = $$(".sv-q-row", $("#sv-q-list"));
+        if (!rows.length) {
+          say("sv-save-msg", "问卷至少要有一道题", "err");
+          return null;
+        }
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const t = $(".sv-q-title", row).value.trim();
+          if (!t) {
+            say("sv-save-msg", "第 " + (i + 1) + " 题还没写题目", "err");
+            return null;
+          }
+        }
+        const questions = rows.map((row) => {
+          const q = { type: row.dataset.type, title: $(".sv-q-title", row).value.trim() };
+          if (q.type === "choice") {
+            q.options = $$(".sv-opt-row input", row)
+              .map((i) => i.value.trim())
+              .filter(Boolean);
+          }
+          return q;
+        });
+        for (let i = 0; i < questions.length; i++) {
+          const q = questions[i];
+          if (q.type === "choice" && q.options.length < 2) {
+            say("sv-save-msg", "第 " + (i + 1) + " 题是单选题，至少要两个选项", "err");
+            return null;
+          }
+        }
+        return { title, intro, questions };
+      }
+
+      async function renderSvStats(id) {
+        const box = $("#sv-stats");
+        const body = $("#sv-stats-body");
+        box.hidden = false;
+        $("#sv-stats-title").textContent = "统计（编号 " + id + "）";
+        body.innerHTML = '<p class="msg">正在统计…</p>';
+        box.scrollIntoView({ behavior: "smooth", block: "start" });
+        try {
+          const res = await fetch(API + "/surveys/" + id + "?stats=1", { credentials: "same-origin" });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "统计没读上来");
+          if (!d.total) {
+            body.innerHTML = '<p class="msg">还没人填。把链接发出去吧：survey.html?id=' + id + "</p>";
+            return;
+          }
+          let html = '<p class="msg" style="margin-bottom:6px">共 ' + d.total + " 份答卷</p>";
+          (d.stats || []).forEach((st, i) => {
+            html +=
+              '<div class="sv-stat-q"><div class="m-line"><span class="m-name">' +
+              (i + 1) + ". " + esc(st.title) + "</span>" +
+              '<span class="sv-q-tag">' + (st.type === "choice" ? "单选" : "填空") + "</span></div>";
+            if (st.type === "choice") {
+              (st.options || []).forEach((o) => {
+                const pct = d.total ? Math.round((o.count * 100) / d.total) : 0;
+                html +=
+                  '<div class="sv-stat-opt"><span class="sv-stat-lb">' + esc(o.text) + "</span>" +
+                  '<span class="sv-stat-bar"><i style="width:' + pct + '%"></i></span>' +
+                  '<span class="sv-stat-n">' + o.count + " 人 · " + pct + "%</span></div>";
+              });
+            } else {
+              const arr = st.answers || [];
+              if (!arr.length) html += '<p class="msg" style="margin-top:8px">这题没人写。</p>';
+              arr.forEach((a) => {
+                const who = a.author
+                  ? a.author.display_name || a.author.real_name || a.author.name
+                  : "已注销";
+                html += '<div class="sv-stat-a"><b>' + esc(who) + "：</b>" + esc(a.body) + "</div>";
+              });
+            }
+            html += "</div>";
+          });
+          body.innerHTML = html;
+        } catch (err) {
+          body.innerHTML = '<p class="msg">' + esc(err.message) + "</p>";
+        }
+      }
+
+      // 编辑器按钮:新建 / 收起 / 加题 / 保存
+      $("#sv-add").addEventListener("click", () => openSvEditor(null));
+      $("#sv-cancel").addEventListener("click", closeSvEditor);
+      $("#sv-q-add-choice").addEventListener("click", () => {
+        $("#sv-q-list").appendChild(svQRow({ type: "choice", title: "", options: ["", ""] }));
+      });
+      $("#sv-q-add-text").addEventListener("click", () => {
+        $("#sv-q-list").appendChild(svQRow({ type: "text", title: "" }));
+      });
+      $("#sv-save").addEventListener("click", async () => {
+        const payload = collectSurvey();
+        if (!payload) return;
+        const btn = $("#sv-save");
+        btn.disabled = true;
+        say("sv-save-msg", "保存中…", "saving");
+        try {
+          const editing = svEditing > 0 ? svEditing : 0;
+          const res = await fetch(API + (editing ? "/surveys/" + editing : "/surveys"), {
+            method: editing ? "PUT" : "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
+          closeSvEditor();
+          renderSurveys(editing ? "已保存（编号 " + editing + "）。" : "已建好，复制链接发给同学就能填了。");
+        } catch (err) {
+          say("sv-save-msg", err.message, "err");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
       /* ============ 页签 ============ */
       $$(".adm-tab").forEach((tab) => {
         tab.addEventListener("click", () => {
@@ -2274,6 +2635,7 @@
           if (name === "usage") renderUsage();
           if (name === "accounts") renderAccounts();
           if (name === "gallery") renderGallery();
+          if (name === "survey") renderSurveys();
           if (name === "b2") loadB2();
         });
       });

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="103班 · 问卷">
+  <title>问卷 · 103班 音乐领军班</title>
+  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
+  <meta name="view-transition" content="same-origin">
+  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
+  <meta name="theme-color" content="#070b14">
+  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
+  <script>
+    try {
+      if (localStorage.getItem("class103-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
+      }
+      var sk = localStorage.getItem("class103-skin");
+      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
+    } catch (e) {}
+  </script>
+  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
+  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
+  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/story.css">
+  <style>
+    /* 问卷页专用:题目卡片 + 选项 */
+    .sv-box { max-width: 760px; margin: 0 auto; }
+    .sv-intro { opacity: .75; font-size: 14px; line-height: 1.8; margin: -6px 0 22px; white-space: pre-wrap; }
+    .sv-q { padding: 20px 22px; border-radius: 16px; margin-bottom: 16px; }
+    .sv-q-t { font-size: 16px; font-weight: 600; margin: 0 0 14px; line-height: 1.6; }
+    .sv-q-t .sv-q-no { color: var(--gold); margin-right: 8px; }
+    .sv-q-t .sv-q-type {
+      font-size: 11px; font-weight: 500; opacity: .55; margin-left: 10px;
+      border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px;
+      vertical-align: 2px;
+    }
+    .sv-opt {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 14px; border-radius: 12px; margin-bottom: 8px;
+      border: 1px solid rgba(128, 138, 158, .22);
+      cursor: pointer; transition: border-color .15s, background .15s;
+      font-size: 14px; line-height: 1.5;
+    }
+    .sv-opt:hover { border-color: rgba(240, 185, 11, .5); }
+    .sv-opt.on { border-color: var(--gold); background: rgba(240, 185, 11, .08); }
+    .sv-opt input { accent-color: var(--gold); flex: none; }
+    .sv-text {
+      width: 100%; box-sizing: border-box; resize: vertical; min-height: 74px;
+      padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 14px;
+      color: inherit; background: rgba(128, 138, 158, .08);
+      border: 1px solid rgba(128, 138, 158, .22); outline: none;
+    }
+    .sv-text:focus { border-color: var(--gold); }
+    .sv-foot { display: flex; align-items: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; }
+    .sv-msg { font-size: 13px; }
+    .sv-msg.ok { color: #34c98e; }
+    .sv-msg.err { color: #ff6b6b; }
+    .sv-state { text-align: center; padding: 60px 24px; border-radius: 18px; font-size: 15px; line-height: 2; }
+    .sv-closed {
+      display: inline-block; font-size: 12px; color: #ff9f43;
+      border: 1px solid rgba(255, 159, 67, .4); border-radius: 999px; padding: 2px 12px;
+      margin-left: 10px; vertical-align: 2px;
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
+
+  <section class="page-hero">
+    <div class="no">Survey</div>
+    <h1><span class="gold-text">问卷</span></h1>
+    <p>一人一份，提交后还能回来改</p>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="sv-box" id="sv-box">
+        <p class="glass sv-state">正在读取问卷…</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // 门禁:登录就能填(不要求实名);未登录整页盖住
+    (function () {
+      var A = window.C103Auth;
+      var r = A && (A.ready || A.refresh());
+      (r || Promise.resolve()).then(function () {
+        if (!A.user) A.sectionGate("问卷", { loginOnly: true });
+      });
+    })();
+  </script>
+  <script>
+    // 问卷页:按 URL 里的 id 拉问卷,渲染题目,提交 / 更新我的答案
+    document.addEventListener("DOMContentLoaded", () => {
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+        );
+
+      const box = document.getElementById("sv-box");
+      const id = parseInt(new URLSearchParams(location.search).get("id"), 10) || 0;
+
+      function state(html) {
+        box.innerHTML = '<p class="glass sv-state">' + html + "</p>";
+      }
+
+      if (!id) {
+        state("地址里没带问卷编号。<br>应该从老师发的链接进来，形如 survey.html?id=1");
+        return;
+      }
+
+      function render(d) {
+        const s = d.survey;
+        const mine = Array.isArray(d.my_answers) ? d.my_answers : [];
+        const answered = mine.length === s.questions.length && s.questions.length > 0;
+        const closed = !s.open;
+
+        let html =
+          '<h2 style="margin:0 0 10px;font-size:24px">' +
+          esc(s.title) +
+          (closed ? '<span class="sv-closed">已截止</span>' : "") +
+          "</h2>";
+        if (s.intro) html += '<p class="sv-intro">' + esc(s.intro) + "</p>";
+
+        html += '<form id="sv-form" novalidate>';
+        s.questions.forEach((q, i) => {
+          html += '<div class="glass sv-q">';
+          html +=
+            '<p class="sv-q-t"><span class="sv-q-no">' +
+            (i + 1) +
+            ".</span>" +
+            esc(q.title) +
+            '<span class="sv-q-type">' +
+            (q.type === "choice" ? "单选" : "填空") +
+            "</span></p>";
+          if (q.type === "choice") {
+            q.options.forEach((opt, oi) => {
+              const checked = mine[i] === oi ? " checked" : "";
+              html +=
+                '<label class="sv-opt' +
+                (mine[i] === oi ? " on" : "") +
+                '"><input type="radio" name="q' +
+                i +
+                '" value="' +
+                oi +
+                '"' +
+                checked +
+                (closed ? " disabled" : "") +
+                "><span>" +
+                esc(opt) +
+                "</span></label>";
+            });
+          } else {
+            html +=
+              '<textarea class="sv-text" name="q' +
+              i +
+              '" maxlength="500" placeholder="写点什么…"' +
+              (closed ? " disabled" : "") +
+              ">" +
+              esc(mine[i] || "") +
+              "</textarea>";
+          }
+          html += "</div>";
+        });
+
+        if (!closed) {
+          html +=
+            '<div class="sv-foot">' +
+            '<button type="submit" class="btn" id="sv-send">' +
+            (answered ? "更新答案" : "提交") +
+            "</button>" +
+            '<span class="sv-msg" id="sv-msg"></span>' +
+            (answered ? '<span class="sv-msg ok">已提交过，可以改了再交</span>' : "") +
+            "</div>";
+        }
+        html += "</form>";
+        box.innerHTML = html;
+
+        // 选项高亮跟着 radio 走
+        box.querySelectorAll('.sv-opt input[type="radio"]').forEach((r) => {
+          r.addEventListener("change", () => {
+            box
+              .querySelectorAll('.sv-opt input[name="' + r.name + '"]')
+              .forEach((x) => x.closest(".sv-opt").classList.toggle("on", x.checked));
+          });
+        });
+
+        const form = document.getElementById("sv-form");
+        if (!form || closed) return;
+        const sendBtn = document.getElementById("sv-send");
+        const msg = document.getElementById("sv-msg");
+        let submitted = answered;
+
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          msg.textContent = "";
+          msg.className = "sv-msg";
+
+          const answers = s.questions.map((q, i) => {
+            if (q.type === "choice") {
+              const pick = form.querySelector('input[name="q' + i + '"]:checked');
+              return pick ? parseInt(pick.value, 10) : -1;
+            }
+            const ta = form.querySelector('textarea[name="q' + i + '"]');
+            return ta ? ta.value.trim() : "";
+          });
+
+          // 前端先拦一遍,少一趟来回
+          for (let i = 0; i < s.questions.length; i++) {
+            if (s.questions[i].type === "choice" && answers[i] < 0) {
+              msg.textContent = "第 " + (i + 1) + " 题还没选";
+              msg.className = "sv-msg err";
+              return;
+            }
+            if (s.questions[i].type === "text" && !answers[i]) {
+              msg.textContent = "第 " + (i + 1) + " 题还没填";
+              msg.className = "sv-msg err";
+              return;
+            }
+          }
+
+          sendBtn.disabled = true;
+          sendBtn.textContent = "提交中…";
+          try {
+            const res = await fetch("api/surveys/" + id + "/answer", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ answers: answers }),
+            });
+            const d2 = await res.json().catch(() => null);
+            if (!res.ok || !d2 || !d2.ok) throw new Error((d2 && d2.error) || "提交失败");
+            msg.textContent = "已提交，想改的话改完再交一次就行";
+            msg.className = "sv-msg ok";
+            submitted = true;
+            sendBtn.textContent = "更新答案";
+          } catch (err) {
+            msg.textContent = err.message || "提交失败，检查网络再试";
+            msg.className = "sv-msg err";
+            sendBtn.textContent = submitted ? "更新答案" : "提交";
+          } finally {
+            sendBtn.disabled = false;
+          }
+        });
+      }
+
+      (async function load(retries) {
+        try {
+          const res = await fetch("api/surveys/" + id, {
+            credentials: "same-origin",
+            cache: "no-store",
+          });
+          const d = await res.json().catch(() => null);
+          if (res.status === 401) {
+            // 未登录:门禁遮罩已经在盖着,这里不用再说一遍
+            state("登录后就能填这份问卷了。");
+            return;
+          }
+          if (!res.ok || !d || !d.ok) throw new Error((d && d.error) || "问卷没读上来");
+          render(d);
+        } catch (e) {
+          if (retries > 0) return setTimeout(() => load(retries - 1), 600);
+          state(esc(e.message || "问卷没读上来，检查一下网络再刷新。"));
+        }
+      })(2);
+    });
+  </script>
+</body>
+</html>

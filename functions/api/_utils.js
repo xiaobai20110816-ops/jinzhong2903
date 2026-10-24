@@ -88,7 +88,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-07.2";
+const SCHEMA_VERSION = "2026-10-24.1";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -530,6 +530,38 @@ export function ensureSchema(db) {
       // 取「某个群的一段消息」按 group_id + id 找
       await db
         .prepare(`CREATE INDEX IF NOT EXISTS idx_gmsg_group ON group_messages(group_id, id)`)
+        .run();
+
+      // ---- 问卷:后台建好问卷,同学打开 survey.html?id=xx 填答 ----
+      // questions 是 JSON 数组:[{type:'choice'|'text', title, options:[...]}]
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS surveys (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             title TEXT NOT NULL,
+             intro TEXT NOT NULL DEFAULT '',
+             questions TEXT NOT NULL DEFAULT '[]',
+             open INTEGER NOT NULL DEFAULT 1,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL
+           )`
+        )
+        .run();
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_surveys_created ON surveys(created_at DESC)`)
+        .run();
+
+      // 答卷:一人一份,联合主键去重;answers 是和题目下标一一对应的 JSON 数组
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS survey_answers (
+             survey_id INTEGER NOT NULL,
+             user_id INTEGER NOT NULL,
+             answers TEXT NOT NULL DEFAULT '[]',
+             updated_at INTEGER NOT NULL,
+             PRIMARY KEY (survey_id, user_id)
+           )`
+        )
         .run();
 
       // 顺手做一次性的脏数据修复(settings 表已经建好,标记写在里面)
@@ -1075,4 +1107,65 @@ export async function notify(db, opts) {
   } catch (e) {
     /* 记不上就算了,别让通知拖垮正经业务 */
   }
+}
+
+/* ============================================================
+   问卷
+   题目只有两种:choice(单选) / text(填空)。
+   questions 存 JSON:[{type, title, options:[...]}]
+   ============================================================ */
+
+export const SURVEY_MAX_QUESTIONS = 30;
+export const SURVEY_MAX_OPTIONS = 10;
+export const SURVEY_MAX_TITLE = 60;
+export const SURVEY_MAX_INTRO = 500;
+
+/* 把前端传上来的题目数组规整成能入库的形状。
+   有问题返回 { error },没问题返回 { questions } */
+export function normQuestions(input) {
+  const list = Array.isArray(input) ? input : [];
+  if (!list.length) return { error: "问卷至少要有一道题" };
+  if (list.length > SURVEY_MAX_QUESTIONS)
+    return { error: `一份问卷最多 ${SURVEY_MAX_QUESTIONS} 道题` };
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const q = list[i] || {};
+    const type = q.type === "choice" ? "choice" : q.type === "text" ? "text" : "";
+    if (!type) return { error: `第 ${i + 1} 题的类型不对（只能是单选或填空）` };
+    const title = String(q.title || "").trim().slice(0, 120);
+    if (!title) return { error: `第 ${i + 1} 题还没写题目` };
+    if (type === "text") {
+      out.push({ type, title, options: [] });
+      continue;
+    }
+    const options = (Array.isArray(q.options) ? q.options : [])
+      .map((o) => String(o == null ? "" : o).trim().slice(0, 60))
+      .filter(Boolean)
+      .slice(0, SURVEY_MAX_OPTIONS);
+    if (options.length < 2) return { error: `第 ${i + 1} 题是单选题，至少要两个选项` };
+    out.push({ type, title, options });
+  }
+  return { questions: out };
+}
+
+/* 把传上来的答案按题目校验一遍,返回干净数组;不合格返回 { error } */
+export function normAnswers(questions, input) {
+  const answers = Array.isArray(input) ? input : [];
+  if (answers.length !== questions.length) return { error: "每道题都要答完才能提交" };
+  const out = [];
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i] || {};
+    const a = answers[i];
+    if (q.type === "choice") {
+      const n = typeof a === "number" ? a : parseInt(a, 10);
+      if (!Number.isInteger(n) || n < 0 || n >= (q.options || []).length)
+        return { error: `第 ${i + 1} 题还没选` };
+      out.push(n);
+    } else {
+      const t = String(a == null ? "" : a).trim().slice(0, 500);
+      if (!t) return { error: `第 ${i + 1} 题还没填` };
+      out.push(t);
+    }
+  }
+  return { answers: out };
 }
