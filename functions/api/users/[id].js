@@ -1,7 +1,7 @@
 /* ============================================================
    103 · 单个成员
    GET    /api/users/:id   读 TA 的资料(公开)+ 点赞数 + TA 发过多少主帖
-   PUT    /api/users/:id   改账号(仅服主):{ role?, username?, password?, banned? }
+   PUT    /api/users/:id   改账号(服主可改全部字段;管理员只能填真名 / 审核实名 / 认证头衔)
    DELETE /api/users/:id   彻底删掉这个账号(仅服主)
 
    删账号的取舍:
@@ -166,12 +166,13 @@ export async function onRequestPut({ request, env, params }) {
     return fail("提交的内容读不出来，请刷新页面重试");
   }
 
-  // 管理员只负责「实名审核」这一件事:能填真名、能点通过 / 取消;
+  // 管理员能做:填真名、审核实名、写官方认证头衔 / 级别;
   // 改角色、改名、重置密码、封禁、删除仍然只有服主能做
   if (!isOwner) {
+    const STAFF_FIELDS = ["real_name", "verified", "cert_title", "cert_level"];
     const keys = Object.keys(payload || {});
-    if (!keys.length || !keys.every((k) => k === "real_name" || k === "verified")) {
-      return fail("管理员只能填写真名和审核实名", 403);
+    if (!keys.length || !keys.every((k) => STAFF_FIELDS.includes(k))) {
+      return fail("管理员只能填写真名、审核实名和设置官方认证头衔", 403);
     }
   }
 
@@ -250,7 +251,7 @@ export async function onRequestPut({ request, env, params }) {
     changed.push(v ? "审核通过" : "取消实名");
   }
 
-  // 官方认证头衔 + 级别:只有服主能写(上面已把管理员的字段锁死成 real_name / verified)。
+  // 官方认证头衔 + 级别:服主和管理员都能写(管理员可写的字段在入口处已限定)。
   // 头衔传空字符串就是清除认证,顺手把级别也归零,免得留下一个没有头衔的级别。
   if (payload.cert_title !== undefined) {
     const cert = String(payload.cert_title || "").trim().slice(0, MAX_CERT_TITLE);

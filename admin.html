@@ -1423,18 +1423,21 @@
             }</div>
           </div>
           <div class="m-right"></div>`;
-        // 只有服主能看到操作按钮;自己那一行只留「改名 / 重置密码」
-        // (不能给自己换角色、不能封自己、不能删自己),
-        // 别人的行全部放开,包括早期遗留的另一个服主账号。
-        if (me && me.role === "owner") {
+        // 官方认证头衔:服主和管理员对每一行都能改(含自己)。
+        // 其余操作(角色 / 改名 / 改密 / 封禁 / 删除)仍然只有服主能点;
+        // 自己那一行只留「改名 / 重置密码」(不能给自己换角色、不能封自己、不能删自己)。
+        const isOwnerView = me && me.role === "owner";
+        const isStaffView = me && (me.role === "owner" || me.role === "admin");
+        if (isStaffView) {
           const right = $(".m-right", el);
           const self = me.id === u.id;
-          if (!self) right.appendChild(roleSelect(u));
-          right.appendChild(nameBtn(u));
-          right.appendChild(pwdBtn(u));
-          // 官方认证头衔:服主对每一行都能改(含自己),管理员整块看不到
+          if (isOwnerView) {
+            if (!self) right.appendChild(roleSelect(u));
+            right.appendChild(nameBtn(u));
+            right.appendChild(pwdBtn(u));
+          }
           right.appendChild(certBox(u));
-          if (!self) {
+          if (isOwnerView && !self) {
             right.appendChild(banBtn(u));
             right.appendChild(delBtn(u));
           }
