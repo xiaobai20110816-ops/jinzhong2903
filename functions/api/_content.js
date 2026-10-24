@@ -127,32 +127,32 @@ const DEFAULT_DORMS = [
     number: "311",
     nick: "皇家园区",
     members: [],
-    photos: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `assets/images/dorm/311/${n}.jpg`),
+    photos: [],
   },
   {
     number: "312",
     nick: "大诚酒店",
     members: [],
-    photos: [1, 2].map((n) => `assets/images/dorm/312/${n}.jpg`),
+    photos: [],
   },
   { number: "409", nick: "", members: [], photos: [] },
   {
     number: "410",
     nick: "金楚涵教总部",
     members: [],
-    photos: [1, 2, 3].map((n) => `assets/images/dorm/410/${n}.jpg`),
+    photos: [],
   },
   {
     number: "411",
     nick: "法兰西室联盟",
     members: [],
-    photos: [1, 2, 3, 4].map((n) => `assets/images/dorm/411/${n}.jpg`),
+    photos: [],
   },
   {
     number: "412",
     nick: "",
     members: [],
-    photos: [1, 2, 3, 4, 5].map((n) => `assets/images/dorm/412/${n}.jpg`),
+    photos: [],
   },
 ];
 
@@ -172,10 +172,7 @@ const DEFAULT_MOMENTS = {
       photos: [{ src: "assets/images/albums/bridge-01.jpg", caption: "天桥文化 · 01" }],
     },
   ],
-  videos: [
-    { src: "assets/videos/parade.mp4", caption: "片段一 · 时长 04:31" },
-    { src: "assets/videos/parade-2.mp4", caption: "片段二 · 时长 00:30" },
-  ],
+  videos: [],
 };
 
 export const DEFAULT_CONTENT = {
