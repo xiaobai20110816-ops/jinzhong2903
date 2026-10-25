@@ -28,18 +28,38 @@ async function kvProbe(env, key) {
 async function b2Probe(env, key) {
   const b2 = await b2Config(env, env.DB).catch(() => null);
   if (!b2 || !b2.ready) return { where: "b2", error: "b2-not-ready" };
+  const out = { where: "b2" };
   try {
     const got = await s3Get(b2, b2ObjectName(key), "bytes=0-1023");
-    return {
-      where: "b2",
-      status: got.status,
-      ok: got.ok || got.status === 206,
-      ct: got.headers.get("content-type"),
-      len: got.headers.get("content-length"),
+    out.status = got.status;
+    out.ok = got.ok || got.status === 206;
+    out.ct = got.headers.get("content-type");
+    out.rangeLen = got.headers.get("content-length");
+    out.rangeCr = got.headers.get("content-range");
+    const buf = new Uint8Array(await got.arrayBuffer().catch(() => new ArrayBuffer(0)));
+    out.head = Array.from(buf.slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) {
+    out.error = String((e && e.message) || e).slice(0, 200);
+  }
+  // 再按浏览器的方式完整取一次(不带 Range),看真实字节量和首字节魔数
+  try {
+    const full = await s3Get(b2, b2ObjectName(key), "");
+    const ab = await full.arrayBuffer();
+    const u8 = new Uint8Array(ab);
+    const magic = Array.from(u8.slice(0, 4), (b) => b.toString(16).padStart(2, "0")).join("");
+    out.whole = {
+      status: full.status,
+      ct: full.headers.get("content-type"),
+      len: u8.byteLength,
+      magic,
+      isJpeg: magic.startsWith("ffd8ff"),
+      isPng: magic === "89504e47",
+      isWebp: magic === "52494646",
     };
   } catch (e) {
-    return { where: "b2", error: String((e && e.message) || e).slice(0, 200) };
+    out.wholeError = String((e && e.message) || e).slice(0, 200);
   }
+  return out;
 }
 
 export async function onRequestGet({ request, env }) {
