@@ -1149,9 +1149,12 @@
         // 叫了 AI:它回得比人慢几秒,过一会儿自己把评论拉一次
         if (/@\s*AI/i.test(body)) {
           [5000, 11000].forEach((ms) =>
-            setTimeout(() => {
-              if (drawer.classList.contains("open") && drawer.getAttribute("data-vid") === String(videoId)) {
-                openComments(videoId).catch(() => {});
+            setTimeout(async () => {
+              if (!(drawer.classList.contains("open") && drawer.getAttribute("data-vid") === String(videoId))) return;
+              await openComments(videoId).catch(() => {});
+              // 等了 11 秒还没有 AI 的回复:说明模型那条路没通,给一句人话,别让人干等
+              if (ms === 11000 && !/AI\s*助手/.test(drawerList.textContent || "")) {
+                toast("AI 助手没回应，可能还没接上（服主需在 Cloudflare 绑定 Workers AI）");
               }
             }, ms)
           );

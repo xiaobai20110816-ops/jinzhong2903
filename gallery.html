@@ -988,8 +988,13 @@
           if (/@\s*AI/i.test(body)) {
             const pid = photoId;
             [5000, 11000].forEach((ms) =>
-              setTimeout(() => {
-                if (photoId === pid) loadComments(pid);
+              setTimeout(async () => {
+                if (photoId !== pid) return;
+                await loadComments(pid);
+                // 11 秒还没有 AI 的回复:模型那条路没通,说一句人话
+                if (ms === 11000 && !/AI\s*助手/.test(list.textContent || "")) {
+                  msg.textContent = "AI 助手没回应，可能还没接上（服主需在 Cloudflare 绑定 Workers AI）";
+                }
               }, ms)
             );
           }
