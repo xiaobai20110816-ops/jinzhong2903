@@ -24,29 +24,37 @@ async function readAll(stream) {
   return acc;
 }
 
-/* 把流里累积的 SSE / JSON 片段拼成一段正文 */
+/* 把流里累积的 SSE / JSON 片段拼成一段正文。
+   图生文模型(moondream)回的是一种 JSON-Patch 流:
+   {"mode":"append","name":"answer","value":"…"} —— 正文藏在 value 里,不是 response 字段 */
 function parseStreamText(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
-  if (s.startsWith("{")) {
-    try {
-      return aiText(JSON.parse(s));
-    } catch (e) {
-      /* 往下按行拆 */
-    }
-  }
+
   let acc = "";
+  let patch = "";
   for (const line of s.split(/\r?\n/)) {
     const t = line.trim();
     if (!t || t === "data: [DONE]") continue;
     const body = t.startsWith("data:") ? t.slice(5).trim() : t;
+    let o;
     try {
-      acc += aiText(JSON.parse(body));
+      o = JSON.parse(body);
     } catch (e) {
       if (!t.startsWith("data:")) acc += t;
+      continue;
     }
+    if (o && typeof o.name === "string" && "value" in o) {
+      if (/^(answer|caption|description|response|text|output_text|generated_text)$/i.test(o.name)) {
+        const v = typeof o.value === "string" ? o.value : "";
+        if (o.mode === "append") patch += v;
+        else patch = v; // replace
+      }
+      continue;
+    }
+    acc += aiText(o);
   }
-  return acc;
+  return acc + patch;
 }
 
 /* 调一次模型,返回模型吐出来的原始结果(绑定是对象,REST 是 {result})。
