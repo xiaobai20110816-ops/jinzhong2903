@@ -596,18 +596,44 @@ window.C103Emoji = (function () {
   }
 
   /* 载入表情列表;登录状态一变就作废重拉(收藏 / 最近使用是各人各一份) */
+  /* 表情列表存一份在本机:第二次进站先用旧的把正文渲染出来,
+     新的一份在后台慢慢拉,拿到就替换 —— 不让一个「表情包」列表堵住首屏 */
+  const EMOJI_CACHE_KEY = "class103-emojis";
+
   function load() {
     if (state.ready) return state.ready;
-    state.ready = apiFetch(API + "/emojis")
+
+    let cached = null;
+    try {
+      cached = JSON.parse(localStorage.getItem(EMOJI_CACHE_KEY) || "null");
+    } catch (e) {
+      cached = null;
+    }
+    if (cached && Array.isArray(cached.list)) {
+      state.list = cached.list;
+      state.favs = new Set(cached.favs || []);
+      state.recent = cached.recent || [];
+      rebuildMap();
+      state.ready = Promise.resolve(state); // 马上可用
+    }
+
+    const fresh = apiFetch(API + "/emojis")
       .then((d) => {
         state.list = d.list || [];
         state.favs = new Set(d.favs || []);
         state.recent = d.recent || [];
         rebuildMap();
+        try {
+          localStorage.setItem(
+            EMOJI_CACHE_KEY,
+            JSON.stringify({ list: state.list, favs: [...state.favs], recent: state.recent })
+          );
+        } catch (e) { /* 写不进去就算了 */ }
         if (pop) renderPanel();
         return state;
       })
       .catch(() => {
+        if (cached) return state; // 手上有旧的,继续用
         // 拉不到就退回只有默认表情,页面照常能用
         state.list = [];
         state.favs = new Set();
@@ -615,6 +641,8 @@ window.C103Emoji = (function () {
         state.ready = null; // 下次再试
         return state;
       });
+
+    if (!state.ready) state.ready = fresh;
     return state.ready;
   }
 

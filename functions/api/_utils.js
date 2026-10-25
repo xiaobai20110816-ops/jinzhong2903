@@ -89,6 +89,10 @@ let schemaReady = null;
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
 const SCHEMA_VERSION = "2026-10-25.1";
+/* 版本号确认过之后,在边缘缓存里留个记号:
+   这个 isolate 之后的所有请求,连那一次 D1 往返都省了 ——
+   D1 是跨区域的单点,一次查询几百毫秒,能少一次是一次 */
+const SCHEMA_CACHE_URL = "https://class103.internal/__schema/" + SCHEMA_VERSION;
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -141,6 +145,24 @@ async function repairBrokenWall(db) {
 export function ensureSchema(db) {
   if (!schemaReady) {
     schemaReady = (async () => {
+      const cache = typeof caches !== "undefined" ? caches.default : null;
+      const markOk = () => {
+        if (!cache) return;
+        const put = cache
+          .put(
+            SCHEMA_CACHE_URL,
+            new Response("1", { headers: { "cache-control": "max-age=86400" } })
+          )
+          .catch(() => {});
+        return put;
+      };
+
+      // 边缘缓存里有记号 = 这一步已经做过了,直接收工,不碰 D1
+      if (cache) {
+        const hit = await cache.match(SCHEMA_CACHE_URL).catch(() => null);
+        if (hit) return;
+      }
+
       // 先问一句「表建好了吗」。settings 表还不存在时这里会抛错,
       // 正好当成「第一次来」处理,继续往下走完整的建表流程
       const mark = await db
@@ -148,7 +170,10 @@ export function ensureSchema(db) {
         .bind(SCHEMA_KEY)
         .first()
         .catch(() => null);
-      if (mark && mark.value === SCHEMA_VERSION) return;
+      if (mark && mark.value === SCHEMA_VERSION) {
+        await markOk();
+        return;
+      }
 
       await db
         .prepare(
@@ -604,6 +629,7 @@ export function ensureSchema(db) {
         .prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
         .bind(SCHEMA_KEY, SCHEMA_VERSION, Date.now())
         .run();
+      await markOk();
     })().catch((err) => {
       schemaReady = null; // 失败就下次重来,不要把错误缓存住
       throw err;

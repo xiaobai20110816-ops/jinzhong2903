@@ -578,13 +578,14 @@
   async function goto(page) {
     if (page < 1) return;
     if (MODE === "single") return loadPost();
-    await emojiReady();
+    // 表情列表和正文请求一起发:表情到得慢,也不该把正文堵在后面
+    const eReady = emojiReady();
     notice("读取中", "<br>正在翻开 103 的纪事…");
     if (els.pager) els.pager.hidden = true;
     try {
       // 视频页:只铺视频卡片
       if (MODE === "videos") {
-        const data = await api(API + "/videos?page=" + page);
+        const [data] = await Promise.all([api(API + "/videos?page=" + page), eReady]);
         state.page = data.page;
         state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
         // 存成和首页同一套形状,删卡片时好按 id 找回来
@@ -601,7 +602,7 @@
 
       // 首页:帖子和视频混在一条流里(小红书那种),后端已经合好并排好序
       if (MODE === "cards") {
-        const data = await api(API + "/feed?page=" + page);
+        const [data] = await Promise.all([api(API + "/feed?page=" + page), eReady]);
         state.page = data.page;
         state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
         let items = data.items || [];
@@ -621,7 +622,7 @@
         return;
       }
 
-      const data = await api(API + "/posts?page=" + page);
+      const [data] = await Promise.all([api(API + "/posts?page=" + page), eReady]);
       state.page = data.page;
       state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
       let posts = data.posts || [];
@@ -656,10 +657,10 @@
       return;
     }
 
-    await emojiReady();
+    const eReady = emojiReady();
     notice("读取中", "<br>正在打开这一条…");
     try {
-      const data = await api(API + "/posts/" + id);
+      const [data] = await Promise.all([api(API + "/posts/" + id), eReady]);
       const post = data.post;
       if (els.list) {
         els.list.innerHTML = `<div class="post-detail">
@@ -1143,26 +1144,25 @@
     boot();
 
     function boot() {
-    // 等 nav.js 问完服务器「我是谁」再决定发帖框的样子
-    const ready = (window.C103Auth && window.C103Auth.ready) || Promise.resolve(null);
-    ready.then((user) => {
+    // 正文不等「我是谁」:列表 / 深链先开跑,登录态回来再补发帖框和删除按钮。
+    // 之前是先等 /api/me 再拉列表,两个请求串成一串,首屏白白多等一个来回。
+    const paintUser = (user) => {
       state.user = user;
       renderComposer();
       paintCardDel();
-      if (window.C103Auth) {
-        window.C103Auth.onChange((u) => {
-          state.user = u;
-          renderComposer();
-          paintCardDel();
-        });
-      }
-      // 带 ?p= / ?r= 就是从通知点进来的,直接翻到那一条;否则从第一页看起
-      focusDeepLink().then((hit) => {
-        if (!hit) goto(1);
-      });
+    };
+    const ready = (window.C103Auth && window.C103Auth.ready) || Promise.resolve(null);
+    ready.then(paintUser);
+    if (window.C103Auth) window.C103Auth.onChange(paintUser);
 
-      // 从底部那个「＋」跳过来的:等发帖框亮出来,直接送到位并聚焦
-      if (new URLSearchParams(location.search).get("post")) {
+    // 带 ?p= / ?r= 就是从通知点进来的,直接翻到那一条;否则从第一页看起
+    focusDeepLink().then((hit) => {
+      if (!hit) goto(1);
+    });
+
+    // 从底部那个「＋」跳过来的:等发帖框亮出来,直接送到位并聚焦
+    if (new URLSearchParams(location.search).get("post")) {
+      ready.then(() => {
         const jump = () => {
           if (!els.form || els.form.hidden) return false;
           els.form.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1175,8 +1175,8 @@
             if (jump() || ++n > 20) clearInterval(t);
           }, 200);
         }
-      }
-    });
+      });
+    }
     }
   });
 })();
