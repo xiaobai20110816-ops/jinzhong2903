@@ -1,0 +1,172 @@
+/* ============================================================
+   103班：音乐领军班 · 班级活跃榜样式
+   原为 rank.html 的内联样式,活跃榜并入「同窗」页后抽成独立文件,
+   由 students.html 引入。全部数据来自 GET /api/rank。
+   ============================================================ */
+
+/* 顶部四个总览数字 */
+.rk-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  max-width: 760px;
+  margin: 0 auto 34px;
+}
+.rk-stat {
+  text-align: center;
+  padding: 18px 10px;
+  border-radius: 16px;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  transition: background-color 0.6s ease, border-color 0.6s ease;
+}
+.rk-stat b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: var(--gold);
+}
+.rk-stat span { font-size: 0.74rem; letter-spacing: 0.08em; color: var(--faint); }
+
+.rk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+  gap: 18px;
+}
+.rk-card {
+  padding: 20px 18px;
+  border-radius: 18px;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+  transition: background-color 0.6s ease, border-color 0.6s ease;
+}
+.rk-card h3 {
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.rk-card .rk-sub { font-size: 0.72rem; color: var(--faint); margin-bottom: 14px; }
+
+.rk-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: background-color 0.25s ease;
+}
+.rk-row:hover { background: var(--chip); }
+.rk-no {
+  flex: none;
+  width: 22px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 0.9rem;
+  color: var(--faint);
+}
+.rk-row.top1 .rk-no { color: #f0b90b; }
+.rk-row.top2 .rk-no { color: #b9c2d6; }
+.rk-row.top3 .rk-no { color: #d08a4a; }
+.rk-face {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 0.9rem;
+  color: #0b0f1a;
+  background: linear-gradient(135deg, var(--gold), var(--gold-2));
+}
+.rk-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.86rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rk-name em {
+  font-style: normal;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+}
+.rk-name em.owner { color: #0b0f1a; background: linear-gradient(120deg, var(--gold), var(--gold-2)); }
+.rk-name em.admin { color: var(--gold); border: 1px solid var(--gold-line); }
+.rk-n {
+  flex: none;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: var(--gold-2);
+}
+.rk-hot { grid-column: 1 / -1; }
+.rk-hot-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 11px 4px;
+  border-top: 1px solid var(--line);
+  text-decoration: none;
+}
+.rk-hot-row:first-of-type { border-top: none; }
+.rk-hot-row:hover .rk-hot-body { color: var(--text); }
+.rk-hot-body {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--muted);
+  transition: color 0.3s ease;
+}
+.rk-hot-meta { font-size: 0.68rem; color: var(--faint); margin-top: 3px; }
+.rk-hot-n {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  color: var(--gold);
+  white-space: nowrap;
+}
+.rk-empty { padding: 24px 0; text-align: center; font-size: 0.8rem; color: var(--faint); }
+
+.thanks { text-align: center; margin-top: 40px; }
+.thanks-title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  letter-spacing: 8px;
+  text-indent: 8px;
+  color: var(--gold);
+}
+.thanks-title::before,
+.thanks-title::after {
+  content: "";
+  display: inline-block;
+  width: 42px;
+  height: 1px;
+  background: var(--gold-line);
+  vertical-align: middle;
+  margin: 0 14px;
+}
+.credit { margin-top: 18px; text-align: center; font-size: 0.72rem; letter-spacing: 2px; color: var(--muted); opacity: 0.42; }
+
+@media (max-width: 620px) {
+  .rk-stats { grid-template-columns: repeat(2, 1fr); }
+  .rk-stat b { font-size: 1.4rem; }
+}

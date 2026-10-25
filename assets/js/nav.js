@@ -7,11 +7,12 @@
    ============================================================ */
 
 // 导航配置：改了导航项,所有页面一起变。
-// 全站只留 5 个入口,原来散着的九项按「同一类东西放一起」并进板块里,
-// 板块内部再用下面 SECTIONS 那一排小药丸切换。
+// 主菜单 6 个入口;「同一类东西放一起」的页再并进板块里,
+// 板块内部用下面 SECTIONS 那一排小药丸切换。
 const NAV_ITEMS = [
   { href: "index.html", label: "首页" },
   { href: "story.html", label: "纪事" },
+  { href: "announcements.html", label: "公告" },
   { href: "gallery.html", label: "光影" },
   { href: "students.html", label: "同窗" },
   { href: "messages.html", label: "信箱" },
@@ -19,25 +20,17 @@ const NAV_ITEMS = [
 
 /* 板块内的分工:键是页面文件名,值是这一页属于哪个板块、板块里有哪几页。
    子导航由 nav.js 注入,所以同板块的页面不用各自写一遍。
-   带 #hash 的项是「同一个页面里的不同区块」,靠 hash 判断谁高亮。 */
+   带 #hash 的项是「同一个页面里的不同区块」,靠 hash 判断谁高亮。
+   公告已经提到主菜单,纪事组不再设子药丸。 */
 const SECTIONS = {
-  "story.html": { items: [["story.html", "时间线"], ["announcements.html", "班级公告"]] },
-  "post.html": { items: [["story.html", "时间线"], ["announcements.html", "班级公告"]] },
-  "announcements.html": { items: [["story.html", "时间线"], ["announcements.html", "班级公告"]] },
   "gallery.html": {
     items: [["gallery.html", "照片"], ["gallery.html#video", "视频"], ["gallery.html#highlight", "高光"]],
   },
   "students.html": {
-    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
-  },
-  "dormitory.html": {
-    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
-  },
-  "rank.html": {
-    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
+    items: [["students.html", "同学录"], ["students.html#dorm", "宿舍"], ["students.html#rank", "活跃榜"]],
   },
   "u.html": {
-    items: [["students.html", "同学录"], ["dormitory.html", "宿舍"], ["rank.html", "活跃榜"]],
+    items: [["students.html", "同学录"], ["students.html#dorm", "宿舍"], ["students.html#rank", "活跃榜"]],
   },
 };
 

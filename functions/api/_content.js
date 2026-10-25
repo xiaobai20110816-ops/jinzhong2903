@@ -195,9 +195,14 @@ function arr(v, max) {
   return Array.isArray(v) ? v.slice(0, max) : [];
 }
 
+/* 高光照片:src + 说明 + 日期(可空,格式随意,建议 2026.09.29 这种,排序靠它) */
 function normPhoto(v) {
-  if (typeof v === "string") return { src: str(v, 300), caption: "" };
-  return { src: str(v && v.src, 300), caption: str(v && v.caption, 80) };
+  if (typeof v === "string") return { src: str(v, 300), caption: "", date: "" };
+  return {
+    src: str(v && v.src, 300),
+    caption: str(v && v.caption, 80),
+    date: str(v && v.date, 20),
+  };
 }
 
 function normSite(v) {

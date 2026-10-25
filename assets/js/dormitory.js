@@ -139,13 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  // 门禁裁决:等登录态就绪后,未注册 / 未实名的同学直接不渲染(页面上有全屏遮罩)
-  const start = () => {
-    if (window.C103_SECTION_OPEN === false) return;
-    if (!window.C103Content) return render(null);
-    C103Content.load().then((content) => render(content && content.dorms));
-  };
-
-  if (window.C103_SECTION_OPEN === true) start();
-  else document.addEventListener("c103-section-gate", start, { once: true });
+  // 宿舍内容对所有人公开(含未实名访客),直接渲染;接口拿不到就显示空态
+  if (!window.C103Content) render(null);
+  else C103Content.load().then((content) => render(content && content.dorms));
 });

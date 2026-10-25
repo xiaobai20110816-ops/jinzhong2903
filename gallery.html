@@ -690,11 +690,33 @@
       const emptyTip = document.getElementById("moments-empty");
       const firstHead = document.getElementById("moments-first-head");
 
+      // 照片地址 → 短哈希:每张高光一个稳定锚点 id,后台改说明 / 日期都不会变
+      const anchorOf = (src) => {
+        const s = String(src || "");
+        let h = 0;
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+        return "moment-" + (h >>> 0).toString(36);
+      };
+      // 「2026.09.29」这种日期 → 可比较的数字;解析不出来就当没填(排最后)
+      const dateVal = (d) => {
+        const m = String(d || "").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+        return m ? +m[1] * 10000 + +m[2] * 100 + +m[3] : 0;
+      };
+      // 组内按时间排:写了日期的新的在前,没写的保持原顺序跟在后面
+      const sortPhotos = (photos) =>
+        photos
+          .map((p, i) => ({ p, i, v: dateVal(p && p.date) }))
+          .sort((a, b) => b.v - a.v || a.i - b.i)
+          .map((x) => x.p);
+
       const figure = (photo, title) => {
         const caption = photo && photo.caption ? String(photo.caption) : "";
+        const date = photo && photo.date ? String(photo.date) : "";
+        const id = anchorOf(photo && photo.src);
         return `
-        <figure class="moment-item">
+        <figure class="moment-item" id="${id}">
           <img src="${esc(img(photo && photo.src))}" alt="${esc(caption || title || "")}">
+          ${date ? `<a class="m-date" href="#${id}" title="点一下，地址栏就是这条高光的直达链接">${esc(date)}</a>` : ""}
           ${caption ? `<figcaption>${esc(caption)}</figcaption>` : ""}
         </figure>`;
       };
@@ -702,7 +724,9 @@
       // 点高光照片 → 同一个灯箱,但没有图库主键,所以不显示评论 / 下载
       const bindLightbox = () => {
         document.querySelectorAll(".moment-item").forEach((item) => {
-          item.onclick = () => {
+          item.onclick = (e) => {
+            // 点左上角日期牌是拿直达链接,不开灯箱
+            if (e.target && e.target.closest && e.target.closest(".m-date")) return;
             const image = item.querySelector("img");
             const cap = item.querySelector("figcaption");
             lbImg.src = image.src;
@@ -712,6 +736,19 @@
             document.dispatchEvent(new CustomEvent("c103:photo", { detail: { item: null } }));
           };
         });
+      };
+
+      // 直达链接:地址栏带着 #moment-xxx 进来,渲染完滚过去并描金闪一下
+      const jumpToAnchor = () => {
+        const targetId = location.hash.slice(1);
+        if (targetId.indexOf("moment-") !== 0) return;
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("anchor-flash");
+          setTimeout(() => el.classList.remove("anchor-flash"), 2400);
+        }, 60);
       };
 
       const render = (moments) => {
@@ -727,7 +764,7 @@
         if (emptyTip) emptyTip.hidden = true;
 
         const first = groups[0] || {};
-        const firstPhotos = Array.isArray(first.photos) ? first.photos : [];
+        const firstPhotos = sortPhotos(Array.isArray(first.photos) ? first.photos : []);
         if (firstHead) {
           firstHead.hidden = false;
           document.getElementById("moments-first-en").textContent = first.en || "";
@@ -738,7 +775,7 @@
         // 第 2 组及以后:每组一块,顺着插在上一块后面
         let anchor = grid.parentNode;
         groups.slice(1).forEach((g) => {
-          const photos = Array.isArray(g.photos) ? g.photos : [];
+          const photos = sortPhotos(Array.isArray(g.photos) ? g.photos : []);
           if (!photos.length) return;
           const box = document.createElement("div");
           box.setAttribute("data-moments-dyn", "");
@@ -750,6 +787,7 @@
         });
 
         bindLightbox();
+        jumpToAnchor();
       };
 
       if (window.C103Content) {

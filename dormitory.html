@@ -3,75 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="103班 · 宿舍风采">
   <title>宿舍风采 · 103班 音乐领军班</title>
-  <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
-  <meta name="view-transition" content="same-origin">
-  <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
-  <meta name="theme-color" content="#070b14">
-  <!-- 主题预置:必须在 CSS 之前执行,否则浅色用户刷新时会先闪一下深色 -->
-  <script>
-    try {
-      if (localStorage.getItem("class103-theme") === "light") {
-        document.documentElement.dataset.theme = "light";
-        document.querySelector('meta[name="theme-color"]').content = "#f4f6fa";
-      }
-      // 皮肤预置:同样要在 CSS 之前,避免刷新时先闪一下默认金色
-      var sk = localStorage.getItem("class103-skin");
-      if (sk && sk !== "classic") document.documentElement.dataset.skin = sk;
-    } catch (e) {}
-  </script>
-  <!-- 全站字体 MiSans(小米官方 CDN,国内直连;中文+西文统一,跨设备渲染一致) -->
-  <link rel="preconnect" href="https://font.sec.miui.com" crossorigin>
-  <link rel="stylesheet" href="https://font.sec.miui.com/font/css?family=MiSans:300,400,500,700,900:Chinese_Simplify,Latin&display=swap">
-  <link rel="stylesheet" href="assets/css/base.css">
-  <link rel="stylesheet" href="assets/css/layout.css">
-  <link rel="stylesheet" href="assets/css/dormitory.css">
+  <meta name="description" content="103班 · 宿舍风采并入了「同窗」页">
+  <link rel="canonical" href="students.html#dorm">
+  <!-- 「宿舍风采」并进了「同窗」页,老链接直接跳过去,别让人停在空页 -->
+  <meta http-equiv="refresh" content="0; url=students.html#dorm">
+  <script>location.replace("students.html#dorm");</script>
 </head>
 <body>
-  <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
-
-  <section class="page-hero">
-    <div class="no">Home Stage</div>
-    <h1><span class="gold-text">宿舍风采</span></h1>
-    <p>每一间宿舍,都是一间小型录音棚</p>
-  </section>
-
-  <section class="section">
-    <div class="container">
-      <div id="dorm-grid" class="dorm-grid">
-        <!-- 宿舍卡片由 assets/js/dormitory.js 渲染 -->
-      </div>
-    </div>
-  </section>
-
-  <!-- 灯箱:点击照片查看完整原图(不裁切),可左右翻看 -->
-  <div class="lightbox" id="lightbox">
-    <span class="close" id="lightbox-close">×</span>
-    <span class="nav prev" id="lightbox-prev" hidden>‹</span>
-    <span class="nav next" id="lightbox-next" hidden>›</span>
-    <div>
-      <img id="lightbox-img" src="" alt="宿舍照片">
-      <div class="lightbox-caption" id="lightbox-caption"></div>
-    </div>
-    <div class="counter" id="lightbox-counter"></div>
-  </div>
-
-  <script src="assets/js/nav.js"></script>
-  <script>
-    // 宿舍风采板块门禁:未注册 / 未实名的同学不能查看。
-    // dormitory.js 会等这面旗帜立起来再决定渲不渲染,防止兜底数据漏出。
-    // ready 可能还是 null(nav.js 没跑到 refresh),主动调一下兜底
-    (function () {
-      var A = window.C103Auth;
-      var r = A && (A.ready || A.refresh());
-      (r || Promise.resolve()).then(function () {
-        window.C103_SECTION_OPEN = A.canViewSections();
-        if (!window.C103_SECTION_OPEN) A.sectionGate("宿舍风采");
-        document.dispatchEvent(new CustomEvent("c103-section-gate"));
-      });
-    })();
-  </script>
-  <script src="assets/js/dormitory.js"></script>
+  <p style="font-family:sans-serif;padding:40px;color:#888">
+    宿舍风采已经合并到「同窗」页，正在跳转…
+    <a href="students.html#dorm">点这里</a>
+  </p>
 </body>
 </html>

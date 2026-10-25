@@ -351,7 +351,8 @@ export async function onRequestPost({ request, env }) {
     if (!g) return fail("这张照片已经不在了，刷新一下再看看", 404);
     galleryOwner = g.uploaded_by || 0;
   }
-  // 可见性只对「主帖」有意义:回复跟随主帖,留言墙一律公开
+  // 可见性在发帖这一刻只对「主帖」有意义:回复先按公开落库,
+  // 之后服主 / 管理员可以在后台把某条回复单独标成「仅本班」;留言墙一律公开
   const visibility = payload.visibility === "class" ? "class" : "public";
 
   if (!body && images.length === 0) return fail("写点什么，或者放张图吧");
@@ -464,7 +465,7 @@ export async function onRequestPost({ request, env }) {
   // IP 属地:只算到省份;服主发的主帖自动置顶
   const region = regionOf(request);
   const pinned = me.role === "owner" && !parentId ? 1 : 0;
-  const vis = parentId ? "public" : visibility; // 回复跟随主帖,自己不单独设可见性
+  const vis = parentId ? "public" : visibility; // 回复先一律公开;要「仅本班」由管理后台事后标记
 
   const res = await env.DB.prepare(
     `INSERT INTO posts (name, body, images, salt, pass_hash, cid, parent_id, user_id, region, reply_to_id, pinned, wall_id, video_id, gallery_id, visibility, created_at)

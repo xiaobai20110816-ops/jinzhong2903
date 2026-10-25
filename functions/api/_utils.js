@@ -971,6 +971,7 @@ export function toPost(row) {
     images: safeParse(row.images).filter((k) => IMAGE_KEY_RE.test(k)),
     user_id: row.user_id || 0,
     region: row.region || "",
+    parent_id: row.parent_id || 0, // 回复带这个,后台审核靠它认出「这是一条回复」
     reply_to_id: row.reply_to_id || 0,
     pinned: row.pinned ? 1 : 0,
     wall_id: row.wall_id || 0,

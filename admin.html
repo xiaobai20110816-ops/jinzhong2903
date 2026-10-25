@@ -723,7 +723,7 @@
           <div class="glass panel" id="panel-moments" hidden>
             <div class="panel-head">
               <h2>高光时刻</h2>
-              <p>可以分组（比如「合唱比赛」「天桥文化」），每组里放照片。下面的视频只改标题和地址，大文件还是建议直接放进仓库的 assets/videos。</p>
+              <p>可以分组（比如「合唱比赛」「天桥文化」），每组里放照片。点照片可以改说明和日期（如 2026.09.29），写了日期的照片在页面上会挂日期牌、按时间新的排前面，点日期牌还能拿到这条高光的直达链接。下面的视频只改标题和地址，大文件还是建议直接放进仓库的 assets/videos。</p>
             </div>
             <div class="rows" id="mom-groups"></div>
             <button class="btn ghost" type="button" id="mom-add-group" style="margin-top:14px">＋ 加一个照片分组</button>
@@ -786,7 +786,7 @@
           <div class="glass panel" id="panel-review" hidden>
             <div class="panel-head">
               <h2>内容审核</h2>
-              <p>未注册或未实名的访客只能看到标着「公开」的帖子 / 视频；标成「仅实名」后，这条内容就会从游客和未实名同学的首页卡片流里消失。视频另有整体门禁：游客本来进不了视频页，标记只决定 TA 能不能从首页点开单个视频。帖子标记最迟半分钟生效（卡片流有 30 秒边缘缓存）。</p>
+              <p>未注册或未实名的访客只能看到标着「公开」的帖子 / 视频；标成「仅实名」后，这条内容就会从游客和未实名同学的首页卡片流里消失。帖子下面的回复也能单独标「仅实名」，标了之后游客和未实名同学在留言板和帖子详情里都看不到这条回复。视频另有整体门禁：游客本来进不了视频页，标记只决定 TA 能不能从首页点开单个视频。帖子标记最迟半分钟生效（卡片流有 30 秒边缘缓存）。</p>
             </div>
             <div class="panel-head"><h2>帖子（主留言板最近 40 条）</h2></div>
             <div class="rows" id="review-posts"></div>
@@ -1087,13 +1087,17 @@
       }
 
       /* ============ 宿舍 ============ */
-      /* 宿舍照片只存地址;高光照片还带一句说明,点图可以改 */
-      function shotEl(src, caption, withCaption) {
+      /* 宿舍照片只存地址;高光照片还带一句说明和一个日期,点图可以改 */
+      function shotEl(src, caption, withCaption, date) {
         const el = document.createElement("span");
         el.className = "shot";
         el.dataset.src = src;
         el.dataset.caption = caption || "";
-        el.title = withCaption ? (caption || "（没有说明）") : "";
+        el.dataset.date = date || "";
+        // 悬停提示:说明 + 日期一起看,没填就提示「没有说明」
+        const tip = () =>
+          (el.dataset.caption || "（没有说明）") + (el.dataset.date ? " · " + el.dataset.date : "");
+        el.title = withCaption ? tip() : "";
         el.innerHTML = `<img src="${esc(img(src))}" alt=""><button class="x" type="button" title="删掉这张">×</button>`;
         $(".x", el).addEventListener("click", (e) => {
           e.stopPropagation();
@@ -1104,7 +1108,10 @@
             const v = prompt("这张图的说明（留空就不显示）：", el.dataset.caption || "");
             if (v === null) return;
             el.dataset.caption = v.trim().slice(0, 80);
-            el.title = el.dataset.caption || "（没有说明）";
+            // 日期:和公告一样的写法(2026.09.29),留空 = 不标时间,排在有日期的后面
+            const d = prompt("这张图的日期（如 2026.09.29，留空就不标）：", el.dataset.date || "");
+            if (d !== null) el.dataset.date = d.trim().slice(0, 20);
+            el.title = tip();
           });
         }
         return el;
@@ -1189,7 +1196,7 @@
         const shots = $(".shots", el);
         (g.photos || []).forEach((p) => {
           if (typeof p === "string") shots.appendChild(shotEl(p, "", true));
-          else shots.appendChild(shotEl(p.src, p.caption, true));
+          else shots.appendChild(shotEl(p.src, p.caption, true, p.date));
         });
 
         const add = document.createElement("button");
@@ -1249,7 +1256,7 @@
             title: $(".i-title", r).value.trim(),
             en: $(".i-en", r).value.trim(),
             photos: $$(".shot", $(".shots", r)).filter((s) => s.dataset.src)
-              .map((s) => ({ src: s.dataset.src, caption: s.dataset.caption || "" })),
+              .map((s) => ({ src: s.dataset.src, caption: s.dataset.caption || "", date: s.dataset.date || "" })),
           })),
           videos: $$("#mom-videos .row").map((r) => ({
             src: $(".i-src", r).value.trim(),
@@ -1733,7 +1740,7 @@
           else {
             posts.forEach((p) => {
               pBox.appendChild(reviewRow("post", p));
-              // 主帖下面的回复也列出来,方便直接删(回复没有可见性切换,只有删除)
+              // 主帖下面的回复也列出来:回复和主帖一样能切「公开/仅实名」,也能单独删
               (p.replies || []).forEach((r) => pBox.appendChild(reviewRow("reply", r)));
             });
           }

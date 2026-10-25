@@ -3,7 +3,7 @@
    GET    /api/posts/:id                     帖子详情:正文 + 全部回复 + 点赞数
    PUT    /api/posts/:id   { pinned }        服主/管理员置顶或取消置顶(只对主帖有效)
                            { visibility }    服主/管理员标记:public=未注册/未实名可见
-                                             class=仅本班实名可见(只对主留言板主帖有效)
+                                             class=仅本班实名可见(主留言板的主帖和回复都能标)
                            { body, images }  改正文 / 换图:本人或服主、管理员
    DELETE /api/posts/:id                     本人可删自己的;服主/管理员可删任意一条
                                              删主帖会连带删掉它下面所有回复及图片
@@ -99,6 +99,8 @@ export async function onRequestGet({ request, env, params }) {
 
   // 回复平铺一层,「回复 @某某」的名字同样按看的人决定给不给真名
   for (const row of kids) {
+    // 「仅本班」的回复:没权限的人看不到(和列表口径一致)
+    if (row.visibility === "class" && !canViewClass(me)) continue;
     const targetId = row.reply_to_id || row.parent_id;
     const target = rowById.get(targetId);
     const targetAuthor = target ? authors.get(target.user_id) : null;
