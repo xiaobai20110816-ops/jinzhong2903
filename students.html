@@ -96,6 +96,22 @@
   <script src="assets/js/students.js"></script>
   <script src="assets/js/dormitory.js"></script>
   <script>
+    // 未实名 / 未注册的访客:同窗里只留同学录和活跃榜,
+    //「宿舍风采」整块和对应的子导航药丸藏掉(首页的宿舍预览不受影响)
+    (function () {
+      var A = window.C103Auth;
+      var r = A && (A.ready || A.refresh());
+      (r || Promise.resolve()).then(function () {
+        if (!A || A.canViewSections()) return;
+        var dorm = document.getElementById("dorm");
+        if (dorm) dorm.hidden = true;
+        document.querySelectorAll('.subnav a').forEach(function (a) {
+          if ((a.getAttribute("href") || "").indexOf("#dorm") >= 0) a.hidden = true;
+        });
+      });
+    })();
+  </script>
+  <script>
     // 活跃榜:全部数据来自 GET /api/rank,不发任何写请求(原 rank.html 内联脚本)
     document.addEventListener("DOMContentLoaded", () => {
       const statsBox = document.getElementById("rk-stats");

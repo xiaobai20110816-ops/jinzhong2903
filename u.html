@@ -601,6 +601,20 @@
   </section>
 
   <script src="assets/js/nav.js"></script>
+  <script>
+    // 个人主页沿用「同窗」的子导航:未实名 / 未注册时同样把「宿舍」药丸藏掉,
+    // 和同窗页保持一致(宿舍区块本身在那边已经藏了)
+    (function () {
+      var A = window.C103Auth;
+      var r = A && (A.ready || A.refresh());
+      (r || Promise.resolve()).then(function () {
+        if (!A || A.canViewSections()) return;
+        document.querySelectorAll('.subnav a').forEach(function (a) {
+          if ((a.getAttribute("href") || "").indexOf("#dorm") >= 0) a.hidden = true;
+        });
+      });
+    })();
+  </script>
   <script src="assets/js/mention.js"></script>
   <script>
     // 个人主页:资料卡 + 「TA 的留言」+ 「留言墙」

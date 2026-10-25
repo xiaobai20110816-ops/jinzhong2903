@@ -194,13 +194,33 @@
   <script src="assets/js/nav.js"></script>
   <script src="assets/js/mention.js"></script>
   <script>
-    // 板块门禁:未注册 / 未实名的同学不能浏览照片和视频。
+    // 光影页不再整页上锁:未注册 / 未实名的访客也能进来,
+    // 只是照片和视频两块整块藏掉(等于原来的门禁),只留「高光时刻」。
     // ready 可能还是 null(nav.js 没跑到 refresh),主动调一下兜底
     (function () {
       var A = window.C103Auth;
       var r = A && (A.ready || A.refresh());
       (r || Promise.resolve()).then(function () {
-        if (!A.canViewSections()) A.sectionGate("照片·视频");
+        if (!A || A.canViewSections()) return;
+
+        // 照片区(上传框 + 图库网格)整块藏掉
+        var photoSec = document.getElementById("g-upload");
+        while (photoSec && photoSec.tagName !== "SECTION") photoSec = photoSec.parentElement;
+        if (photoSec) photoSec.hidden = true;
+
+        // 视频区整块藏掉
+        var videoSec = document.getElementById("video");
+        if (videoSec) videoSec.hidden = true;
+
+        // 子导航只留「高光」,并让「高光」处于选中状态
+        var pills = document.querySelectorAll(".subnav a");
+        var highlightPill = null;
+        pills.forEach(function (a) {
+          var href = a.getAttribute("href") || "";
+          if (href.indexOf("#highlight") >= 0) highlightPill = a;
+          else a.hidden = true;
+        });
+        if (highlightPill) highlightPill.classList.add("active");
       });
     })();
   </script>
