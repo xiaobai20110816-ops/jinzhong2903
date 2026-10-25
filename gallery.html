@@ -146,6 +146,7 @@
         <p>那些定格在旋律里的瞬间，由后台「高光时刻」录入。</p>
       </div>
       <div class="group-head" id="moments-first-head" hidden>
+        <a class="m-date" id="moments-first-date" hidden></a>
         <span class="en" id="moments-first-en"></span>
         <h2 id="moments-first-title"></h2>
       </div>
@@ -707,9 +708,9 @@
       const emptyTip = document.getElementById("moments-empty");
       const firstHead = document.getElementById("moments-first-head");
 
-      // 照片地址 → 短哈希:每张高光一个稳定锚点 id,后台改说明 / 日期都不会变
-      const anchorOf = (src) => {
-        const s = String(src || "");
+      // 分组名 → 短哈希:每个照片组一个稳定锚点 id,改照片 / 说明都不影响
+      const anchorOf = (name) => {
+        const s = String(name || "");
         let h = 0;
         for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
         return "moment-" + (h >>> 0).toString(36);
@@ -719,31 +720,38 @@
         const m = String(d || "").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
         return m ? +m[1] * 10000 + +m[2] * 100 + +m[3] : 0;
       };
-      // 组内按时间排:写了日期的新的在前,没写的保持原顺序跟在后面
-      const sortPhotos = (photos) =>
-        photos
-          .map((p, i) => ({ p, i, v: dateVal(p && p.date) }))
+      // 组按日期排:写了日期的新的在前,没写的保持原顺序跟在后面
+      const sortGroups = (groups) =>
+        groups
+          .map((g, i) => ({ g, i, v: dateVal(g && g.date) }))
           .sort((a, b) => b.v - a.v || a.i - b.i)
-          .map((x) => x.p);
+          .map((x) => x.g);
 
       const figure = (photo, title) => {
         const caption = photo && photo.caption ? String(photo.caption) : "";
-        const date = photo && photo.date ? String(photo.date) : "";
-        const id = anchorOf(photo && photo.src);
         return `
-        <figure class="moment-item" id="${id}">
+        <figure class="moment-item">
           <img src="${esc(img(photo && photo.src))}" alt="${esc(caption || title || "")}">
-          ${date ? `<a class="m-date" href="#${id}" title="点一下，地址栏就是这条高光的直达链接">${esc(date)}</a>` : ""}
           ${caption ? `<figcaption>${esc(caption)}</figcaption>` : ""}
         </figure>`;
+      };
+
+      // 分组标题:日期牌在标题前面,点它就是这组高光的直达链接
+      const groupHead = (g) => {
+        const id = anchorOf(g && (g.title || g.en));
+        const date = g && g.date ? String(g.date) : "";
+        return `
+          <div class="group-head" id="${id}">
+            ${date ? `<a class="m-date" href="#${id}" title="点一下，地址栏就是这组高光的直达链接">${esc(date)}</a>` : ""}
+            <span class="en">${esc(g.en || "")}</span>
+            <h2>${esc(g.title || "")}</h2>
+          </div>`;
       };
 
       // 点高光照片 → 同一个灯箱,但没有图库主键,所以不显示评论 / 下载
       const bindLightbox = () => {
         document.querySelectorAll(".moment-item").forEach((item) => {
-          item.onclick = (e) => {
-            // 点左上角日期牌是拿直达链接,不开灯箱
-            if (e.target && e.target.closest && e.target.closest(".m-date")) return;
+          item.onclick = () => {
             const image = item.querySelector("img");
             const cap = item.querySelector("figcaption");
             lbImg.src = image.src;
@@ -770,7 +778,9 @@
 
       const render = (moments) => {
         document.querySelectorAll("[data-moments-dyn]").forEach((n) => n.remove());
-        const groups = moments && Array.isArray(moments.groups) ? moments.groups : [];
+        const raw = moments && Array.isArray(moments.groups) ? moments.groups : [];
+        // 空组不参与排序,免得占掉第一组的位置
+        const groups = sortGroups(raw).filter((g) => Array.isArray(g.photos) && g.photos.length);
 
         if (!groups.length) {
           grid.innerHTML = "";
@@ -780,25 +790,29 @@
         }
         if (emptyTip) emptyTip.hidden = true;
 
-        const first = groups[0] || {};
-        const firstPhotos = sortPhotos(Array.isArray(first.photos) ? first.photos : []);
+        const first = groups[0];
         if (firstHead) {
           firstHead.hidden = false;
+          const id = anchorOf(first.title || first.en);
+          firstHead.id = id;
+          const dateEl = document.getElementById("moments-first-date");
+          if (dateEl) {
+            dateEl.hidden = !first.date;
+            dateEl.textContent = first.date || "";
+            dateEl.href = "#" + id;
+          }
           document.getElementById("moments-first-en").textContent = first.en || "";
           document.getElementById("moments-first-title").textContent = first.title || "";
         }
-        grid.innerHTML = firstPhotos.map((p) => figure(p, first.title)).join("");
+        grid.innerHTML = first.photos.map((p) => figure(p, first.title)).join("");
 
         // 第 2 组及以后:每组一块,顺着插在上一块后面
         let anchor = grid.parentNode;
         groups.slice(1).forEach((g) => {
-          const photos = sortPhotos(Array.isArray(g.photos) ? g.photos : []);
-          if (!photos.length) return;
           const box = document.createElement("div");
           box.setAttribute("data-moments-dyn", "");
-          box.innerHTML = `
-            <div class="group-head"><span class="en">${esc(g.en || "")}</span><h2>${esc(g.title || "")}</h2></div>
-            <div class="bridge-grid">${photos.map((p) => figure(p, g.title)).join("")}</div>`;
+          box.innerHTML = `${groupHead(g)}
+            <div class="bridge-grid">${g.photos.map((p) => figure(p, g.title)).join("")}</div>`;
           anchor.after(box);
           anchor = box;
         });

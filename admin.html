@@ -723,7 +723,7 @@
           <div class="glass panel" id="panel-moments" hidden>
             <div class="panel-head">
               <h2>高光时刻</h2>
-              <p>可以分组（比如「合唱比赛」「天桥文化」），每组里放照片。点照片可以改说明和日期（如 2026.09.29），写了日期的照片在页面上会挂日期牌、按时间新的排前面，点日期牌还能拿到这条高光的直达链接。下面的视频只改标题和地址，大文件还是建议直接放进仓库的 assets/videos。</p>
+              <p>可以分组（比如「合唱比赛」「天桥文化」），每组里放照片。每组有一个日期（如 2026.09.29），填了以后页面上会显示在这组标题前面，并且所有组按日期从新到旧排列；不填日期的组保持原本的顺序、排在最后。点照片可以改每张图的说明。下面的视频只改标题和地址，大文件还是建议直接放进仓库的 assets/videos。</p>
             </div>
             <div class="rows" id="mom-groups"></div>
             <button class="btn ghost" type="button" id="mom-add-group" style="margin-top:14px">＋ 加一个照片分组</button>
@@ -1087,17 +1087,13 @@
       }
 
       /* ============ 宿舍 ============ */
-      /* 宿舍照片只存地址;高光照片还带一句说明和一个日期,点图可以改 */
-      function shotEl(src, caption, withCaption, date) {
+      /* 宿舍照片只存地址;高光照片还带一句说明,点图可以改 */
+      function shotEl(src, caption, withCaption) {
         const el = document.createElement("span");
         el.className = "shot";
         el.dataset.src = src;
         el.dataset.caption = caption || "";
-        el.dataset.date = date || "";
-        // 悬停提示:说明 + 日期一起看,没填就提示「没有说明」
-        const tip = () =>
-          (el.dataset.caption || "（没有说明）") + (el.dataset.date ? " · " + el.dataset.date : "");
-        el.title = withCaption ? tip() : "";
+        el.title = withCaption ? (caption || "（没有说明）") : "";
         el.innerHTML = `<img src="${esc(img(src))}" alt=""><button class="x" type="button" title="删掉这张">×</button>`;
         $(".x", el).addEventListener("click", (e) => {
           e.stopPropagation();
@@ -1108,10 +1104,7 @@
             const v = prompt("这张图的说明（留空就不显示）：", el.dataset.caption || "");
             if (v === null) return;
             el.dataset.caption = v.trim().slice(0, 80);
-            // 日期:和公告一样的写法(2026.09.29),留空 = 不标时间,排在有日期的后面
-            const d = prompt("这张图的日期（如 2026.09.29，留空就不标）：", el.dataset.date || "");
-            if (d !== null) el.dataset.date = d.trim().slice(0, 20);
-            el.title = tip();
+            el.title = el.dataset.caption || "（没有说明）";
           });
         }
         return el;
@@ -1188,6 +1181,7 @@
           <div class="row-top">
             <input class="i-title w-grow" type="text" placeholder="分组名，如「合唱比赛」" value="${esc(g.title)}">
             <input class="i-en w-num" type="text" placeholder="英文" value="${esc(g.en)}">
+            <input class="i-date w-date" type="text" placeholder="2026.09.29" value="${esc(g.date || "")}">
             <button class="icon-btn del" type="button" title="删掉这组">×</button>
           </div>
           <div class="shots"></div>`;
@@ -1196,7 +1190,7 @@
         const shots = $(".shots", el);
         (g.photos || []).forEach((p) => {
           if (typeof p === "string") shots.appendChild(shotEl(p, "", true));
-          else shots.appendChild(shotEl(p.src, p.caption, true, p.date));
+          else shots.appendChild(shotEl(p.src, p.caption, true));
         });
 
         const add = document.createElement("button");
@@ -1255,8 +1249,9 @@
           groups: $$("#mom-groups .row").map((r) => ({
             title: $(".i-title", r).value.trim(),
             en: $(".i-en", r).value.trim(),
+            date: $(".i-date", r).value.trim(),
             photos: $$(".shot", $(".shots", r)).filter((s) => s.dataset.src)
-              .map((s) => ({ src: s.dataset.src, caption: s.dataset.caption || "", date: s.dataset.date || "" })),
+              .map((s) => ({ src: s.dataset.src, caption: s.dataset.caption || "" })),
           })),
           videos: $$("#mom-videos .row").map((r) => ({
             src: $(".i-src", r).value.trim(),
@@ -1265,7 +1260,7 @@
         };
       }
       $("#mom-add-group").addEventListener("click", () => {
-        $("#mom-groups").appendChild(groupRow({ title: "", en: "", photos: [] }));
+        $("#mom-groups").appendChild(groupRow({ title: "", en: "", date: "", photos: [] }));
       });
       $("#mom-add-video").addEventListener("click", () => {
         $("#mom-videos").appendChild(videoRow({ src: "", caption: "" }));

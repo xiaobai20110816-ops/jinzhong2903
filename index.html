@@ -678,7 +678,16 @@
 
         const grid = document.getElementById("moments-grid");
         const emptyTip = document.getElementById("moments-home-empty");
-        const groups = (moments && moments.groups) || [];
+        // 「2026.09.29」→ 可比较的数字;没填日期的排最后
+        const dateVal = (d) => {
+          const m = String(d || "").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+          return m ? +m[1] * 10000 + +m[2] * 100 + +m[3] : 0;
+        };
+        // 和光影页一致:组按日期新的在前,没日期的保持原顺序
+        const groups = ((moments && moments.groups) || [])
+          .map((g, i) => ({ g, i, v: dateVal(g && g.date) }))
+          .sort((a, b) => b.v - a.v || a.i - b.i)
+          .map((x) => x.g);
         // 每组第一张,作为该组在首页的代表
         const picks = [];
         groups.forEach((g) => {
