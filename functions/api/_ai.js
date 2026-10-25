@@ -54,11 +54,23 @@ export function aiText(out) {
   if (typeof out.answer === "string") return out.answer;
   if (typeof out.caption === "string") return out.caption;
   if (typeof out.description === "string") return out.description;
+  // 不同模型叫法不一样,都试一遍
+  if (typeof out.text === "string") return out.text;
+  if (typeof out.output_text === "string") return out.output_text;
+  if (typeof out.content === "string") return out.content;
+  if (typeof out.generated_text === "string") return out.generated_text;
+  if (typeof out.output === "string") return out.output;
   if (out.result && typeof out.result === "object") return aiText(out.result);
-  // 万一走的是 OpenAI 兼容格式
+  // 万一走的是 OpenAI 兼容格式:content 可能是字符串,也可能是内容块数组
   const choice = Array.isArray(out.choices) ? out.choices[0] : null;
-  if (choice && choice.message && typeof choice.message.content === "string") {
-    return choice.message.content;
+  if (choice && choice.message) {
+    const c = choice.message.content;
+    if (typeof c === "string") return c;
+    if (Array.isArray(c)) {
+      return c
+        .map((part) => (typeof part === "string" ? part : (part && part.text) || ""))
+        .join("");
+    }
   }
   return "";
 }

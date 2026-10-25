@@ -32,6 +32,17 @@ function parseSuggestions(raw) {
     .slice(0, 3);
 }
 
+/* 把模型返回的形状抠一小段出来,方便排查(只有服主能看到) */
+function safeRaw(res) {
+  try {
+    if (res && typeof res.getReader === "function") return "[stream]";
+    const s = JSON.stringify(res);
+    return s ? s.slice(0, 600) : String(res);
+  } catch (e) {
+    return "[读不出来]";
+  }
+}
+
 /* GET /api/ai/reply   只回答一句「AI 接上了没」。
    绑定和 REST 两条路哪条通、还是都没接上,一看就知道,方便排查。
    加 ?test=1(需服主登录)会真跑一次最小请求,把模型的真实回话 / 报错带回来 */
@@ -58,11 +69,32 @@ export async function onRequestGet({ request, env }) {
       const res = await aiRun(
         env,
         CHAT_MODELS[0],
-        { messages: [{ role: "user", content: "只回两个字：通了" }], max_tokens: 12 },
-        12000
+        {
+          messages: [
+            { role: "system", content: "只回两个字：通了" },
+            { role: "user", content: "回我两个字" },
+          ],
+          max_tokens: 60,
+        },
+        15000
       );
-      const text = aiText(res).trim();
-      out.test = text ? { ok: true, text } : { ok: false, error: "模型没吐文本" };
+      let text = aiText(res).trim();
+      // 有的模型会直接回一个流,读一遍再判断
+      if (!text && res && typeof res.getReader === "function") {
+        const rd = res.getReader();
+        const dec = new TextDecoder();
+        let acc = "";
+        for (;;) {
+          const step = await rd.read();
+          if (step.done) break;
+          acc += dec.decode(step.value, { stream: true });
+        }
+        text = acc.trim();
+        if (!text) text = "";
+      }
+      out.test = text
+        ? { ok: true, text: text.slice(0, 60) }
+        : { ok: false, error: "模型没吐文本", raw: safeRaw(res) };
     } catch (e) {
       out.test = { ok: false, error: String((e && e.message) || e).slice(0, 140) };
     }
