@@ -62,6 +62,22 @@ async function b2Probe(env, key) {
   return out;
 }
 
+async function cacheProbe(env, key) {
+  if (typeof caches === "undefined") return { error: "no-cache-api" };
+  try {
+    const u = "https://jinzhong2903.pages.dev/api/gallery/img/" + key;
+    const hit = await caches.default.match(new Request(u, { method: "GET" }));
+    if (!hit) return { hit: false };
+    const ct = hit.headers.get("content-type");
+    const cl = hit.headers.get("content-length");
+    const buf = new Uint8Array(await hit.arrayBuffer().catch(() => new ArrayBuffer(0)));
+    const magic = Array.from(buf.slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+    return { hit: true, status: hit.status, ct, cl, len: buf.byteLength, magic, cacheControl: hit.headers.get("cache-control") };
+  } catch (e) {
+    return { error: String((e && e.message) || e).slice(0, 200) };
+  }
+}
+
 export async function onRequestGet({ request, env }) {
   const url = new URL(request.url);
   if (url.searchParams.get("k") !== KEY) return json({ ok: false, error: "no" }, 404);
@@ -79,6 +95,8 @@ export async function onRequestGet({ request, env }) {
     // 缩略图(网格里能显示的那张)
     out.thumb = await kvProbe(env, r.thumb_key);
     out.full = isB2Key(r.full_key) ? await b2Probe(env, r.full_key) : await kvProbe(env, r.full_key);
+    out.fullCache = await cacheProbe(env, r.full_key);
+    out.thumbCache = await cacheProbe(env, r.thumb_key);
     rows.push(out);
   }
 
