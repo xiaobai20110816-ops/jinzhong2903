@@ -60,65 +60,44 @@ async function visionProbe(env, kind) {
 
   const MOON = "@cf/moondream/moondream3.1-9B-A2B";
   const GEMMA = "@cf/google/gemma-4-26b-a4b-it";
-  const variants = [
-    { name: "A-datastring", model: MOON, payload: { task: "query", image: uri, question: q, reasoning: false, max_tokens: 300 } },
-    { name: "B-rawbase64", model: MOON, payload: { task: "query", image: base64, question: q, max_tokens: 300 } },
-    { name: "C-bytes-prompt", model: MOON, payload: { image: Array.from(u8), prompt: q, max_tokens: 300 } },
-    { name: "D-nodata-question", model: MOON, payload: { task: "query", image: base64, question: q, reasoning: false, temperature: 0.4 } },
-    {
-      name: "E-gemma-imageurl",
-      model: GEMMA,
-      payload: {
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: q },
-              { type: "image_url", image_url: { url: uri } },
-            ],
-          },
+  const en = "Describe what is in this photo and how it was shot. Answer in two sentences.";
+  const zh = "用两句话描述这张照片里有什么、拍得怎么样。直接说答案，不要复述问题。";
+  const gemmaPayload = (text, maxTokens) => ({
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text },
+          { type: "image_url", image_url: { url: uri } },
         ],
-        max_tokens: 400,
-        reasoning_effort: "low",
       },
-    },
-    {
-      name: "F-nostream",
-      model: MOON,
-      payload: { task: "query", image: uri, question: q, reasoning: false, max_tokens: 300, stream: false },
-    },
+    ],
+    max_tokens: maxTokens,
+    reasoning_effort: "low",
+  });
+  const variants = [
+    { name: "F-nostream-zh", model: MOON, payload: { task: "query", image: uri, question: q, reasoning: false, max_tokens: 300, stream: false } },
+    { name: "G-en-question", model: MOON, payload: { task: "query", image: uri, question: en, reasoning: false, max_tokens: 300, stream: false } },
+    { name: "H-prompt", model: MOON, payload: { task: "query", image: uri, prompt: en, max_tokens: 300, stream: false } },
+    { name: "I-gemma-1600", model: GEMMA, payload: gemmaPayload(zh, 1600) },
+    { name: "J-gemma-1200", model: GEMMA, payload: gemmaPayload(zh, 1200) },
   ];
 
   for (const v of variants) {
+    const t0 = Date.now();
     try {
-      const r = await aiRun(env, v.model, v.payload, 20000);
+      const r = await aiRun(env, v.model, v.payload, 30000);
       const text = aiText(r).trim();
-      out.variants.push({ name: v.name, ok: !!text, text: text.slice(0, 120), raw: text ? undefined : safeRaw(r) });
+      out.variants.push({
+        name: v.name,
+        ok: !!text,
+        ms: Date.now() - t0,
+        text: text.slice(0, 150),
+        raw: text ? undefined : safeRaw(r),
+      });
     } catch (e) {
-      out.variants.push({ name: v.name, ok: false, error: String((e && e.message) || e).slice(0, 180) });
+      out.variants.push({ name: v.name, ok: false, ms: Date.now() - t0, error: String((e && e.message) || e).slice(0, 180) });
     }
-  }
-
-  // 把流里真正的原始片段留一段,看清它到底吐的是什么形状
-  try {
-    const raw = await env.AI.run(MOON, variants[0].payload);
-    if (raw && typeof raw.getReader === "function") {
-      const rd = raw.getReader();
-      const dec = new TextDecoder();
-      let acc = "";
-      for (;;) {
-        const step = await rd.read();
-        if (step.done) break;
-        acc += dec.decode(step.value, { stream: true });
-      }
-      out.streamRaw = acc.slice(0, 300);
-      out.streamTail = acc.slice(-500);
-      out.streamLen = acc.length;
-    } else {
-      out.streamRaw = JSON.stringify(raw).slice(0, 400);
-    }
-  } catch (e) {
-    out.streamRaw = "ERR " + String((e && e.message) || e).slice(0, 160);
   }
 
   return out;
