@@ -93,6 +93,27 @@ async function visionProbe(env, kind) {
       out.variants.push({ name: v.name, ok: false, error: String((e && e.message) || e).slice(0, 180) });
     }
   }
+
+  // 把流里真正的原始片段留一段,看清它到底吐的是什么形状
+  try {
+    const raw = await env.AI.run(MOON, variants[0].payload);
+    if (raw && typeof raw.getReader === "function") {
+      const rd = raw.getReader();
+      const dec = new TextDecoder();
+      let acc = "";
+      for (;;) {
+        const step = await rd.read();
+        if (step.done) break;
+        acc += dec.decode(step.value, { stream: true });
+      }
+      out.streamRaw = acc.slice(0, 400);
+    } else {
+      out.streamRaw = JSON.stringify(raw).slice(0, 400);
+    }
+  } catch (e) {
+    out.streamRaw = "ERR " + String((e && e.message) || e).slice(0, 160);
+  }
+
   return out;
 }
 
