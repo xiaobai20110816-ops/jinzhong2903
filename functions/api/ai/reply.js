@@ -10,16 +10,16 @@
 import { json, fail, ensureSchema, currentUser, classGate } from "../_utils.js";
 import { aiRun, aiText, aiReady } from "../_ai.js";
 
-/* 先试便宜、快的 gemma-4,不行再换 qwen3.8。
-   Workers AI 的模型名录会变,2026-05 那批 llama-3.1 / qwen1.5 已经下线,别再用老名字 */
-const CHAT_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/qwen/qwen3.8-27b"];
+/* 先上 qwen3.8-27b(中文最顺),不行再退 gemma-4。
+   这批模型默认爱先思考,必须压 reasoning_effort + 给足 max_tokens,否则会「想说但说不出来」 */
+const CHAT_MODELS = ["@cf/qwen/qwen3.8-27b", "@cf/google/gemma-4-26b-a4b-it"];
 
 const KIND_LABEL = { dm: "私信", group: "群聊", comment: "照片评论" };
 
 const SYSTEM = `你是金华一中 103 班（音乐领军班）的聊天助手。
 任务：根据对方说的话，帮同学想 3 条得体的中文回复。
-要求：每条不超过 30 个字，口语化、自然、像高中生在班里聊天；角度各不相同；
-不要用颜文字轰炸，不要提 AI，不要输出解释，只输出 3 行回复，每行以「1.」「2.」「3.」开头。`;
+要求：每条不超过 30 个字，口语化、像高中生在班里聊天，**带点幽默**：可以自嘲、接梗、俏皮损一句，但别油腻、别阴阳怪气、别硬凑网络热词；
+三条角度各不相同，不要提 AI，不要输出解释，只输出 3 行，每行以「1.」「2.」「3.」开头。`;
 
 /* 模型吐出来的文本 → 干净的 3 条候选。
    模型偶尔会带上「回复：」「以下是」之类的前缀,这里逐行洗一遍 */
@@ -71,12 +71,14 @@ export async function onRequestGet({ request, env }) {
         CHAT_MODELS[0],
         {
           messages: [
-            { role: "system", content: "只回两个字：通了" },
-            { role: "user", content: "回我两个字" },
+            { role: "system", content: "有人问你「你好」，用一句俏皮的中文回一句。" },
+            { role: "user", content: "你好" },
           ],
-          max_tokens: 60,
+          max_tokens: 400,
+          temperature: 0.9,
+          reasoning_effort: "low",
         },
-        15000
+        20000
       );
       let text = aiText(res).trim();
       // 有的模型会直接回一个流,读一遍再判断
@@ -137,9 +139,11 @@ export async function onRequestPost({ request, env, params }) {
             { role: "system", content: SYSTEM },
             { role: "user", content: prompt },
           ],
-          max_tokens: 220,
+          max_tokens: 700,
+          temperature: 0.9,
+          reasoning_effort: "low",
         },
-        9000
+        20000
       );
       const list = parseSuggestions(aiText(out));
       if (list.length) return json({ ok: true, suggestions: list, model });

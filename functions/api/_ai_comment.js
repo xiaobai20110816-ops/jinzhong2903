@@ -15,10 +15,10 @@ import { aiRun, aiText, aiReady } from "./_ai.js";
 import { aiBotId, notify } from "./_utils.js";
 import { b2Config, isB2Key, b2ObjectName, s3Get } from "./_b2.js";
 
-/* 视觉用 moondream(图生文,按 task + image 传字节),文本用 gemma-4(便宜、快、也带视觉)
-   2026-05-30 起旧的 llama-3.1 / llama-3.2-vision / qwen1.5 全部下线,别再叫老名字 */
+/* 视觉用 moondream(图生文,按 task + image 传字节),文本用 qwen3.8-27b(中文更自然)
+   注意:2026 这批模型默认爱「先思考再说话」,一定要压 reasoning_effort,不然 token 全花在自言自语上 */
 const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
-const TEXT_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/qwen/qwen3.8-27b"];
+const TEXT_MODELS = ["@cf/qwen/qwen3.8-27b", "@cf/google/gemma-4-26b-a4b-it"];
 const MAX_IMAGE_BYTES = 900 * 1024;
 
 /* 图片字节转 data URI:模型直接吃 base64,私有图片也就不用开公网地址了 */
@@ -112,7 +112,7 @@ function polish(raw) {
 }
 
 const SYSTEM = `你是金华一中 103 班（音乐领军班）班级站点里的 AI 助手。
-说话像这个班的同学：口语化、温和、有分寸，不客套、不夸张，不用「首先/其次」这种书面结构。
+说话像班里那个嘴有点贫、但心很软的同学：口语化，带一点俏皮和自嘲，偶尔抖个小机灵；但不阴阳怪气、不油腻、不硬凑梗。
 只输出你要发在评论区的那段话本身：两三句、不超过 100 字，不要自称 AI，不要加引号，不要解释。`;
 
 /* 主体:生成并写入一条 AI 回复
@@ -197,7 +197,10 @@ ${
               { role: "system", content: SYSTEM },
               { role: "user", content: prompt },
             ],
-            max_tokens: 220,
+            // 留足额度:思考链会先吃掉一部分,截太短就会「content 为空、finish_reason=length」
+            max_tokens: 700,
+            temperature: 0.9,
+            reasoning_effort: "low",
           },
           15000
         )
