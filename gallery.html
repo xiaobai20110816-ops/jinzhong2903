@@ -215,6 +215,9 @@
       // 前端统一用同一条地址,由 Function 判断是去 KV 取还是签名去 B2 取
       const thumb = (k) => "api/gallery/img/" + encodeURIComponent(k);
       const full = (k) => "api/gallery/img/" + encodeURIComponent(k);
+      // 原图地址带上内容版本:图换了 URL 就变,不会被浏览器/边缘里
+      // 那份旧的坏副本(immutable 缓存一年)一直顶在前面。
+      const fullOf = (item) => full(item.full) + "?v=" + (Number(item.full_size) || 0);
 
       const grid = document.getElementById("gallery-grid");
       const upBox = document.getElementById("g-upload");
@@ -268,7 +271,20 @@
 
       function openLightbox(item) {
         lbItem = item;
-        lbImg.src = full(item.full);
+        const src0 = fullOf(item);
+        lbImg.onerror = () => {
+          // 上面那条如果再失败,换一个 URL 硬重试一次(绕过一切缓存);
+          // 还是不行就把话说清楚,别让人对着裂图猜
+          if (lbImg.dataset.retried) {
+            lbImg.onerror = null;
+            lbCaption.textContent = "原图打不开，点「保存」试试下载";
+            return;
+          }
+          lbImg.dataset.retried = "1";
+          lbImg.src = full(item.full) + "?r=" + Date.now();
+        };
+        delete lbImg.dataset.retried;
+        lbImg.src = src0;
         lbImg.alt = item.title;
         lbCaption.textContent = item.title + (item.by ? "　上传：" + item.by : "");
         // 灯箱的下载档位跟着这张图的上传画质走:只给「上传档位及其以下」
@@ -399,7 +415,7 @@
         const oldText = btn ? btn.textContent : "";
         if (btn) { btn.disabled = true; btn.textContent = direct ? "下载中…" : "压缩中…"; }
         try {
-          let href = full(item.full);
+          let href = fullOf(item);
           let revoke = null;
           if (!direct && lv) {
             const res = await fetch(href, { credentials: "same-origin" });
