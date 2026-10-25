@@ -30,6 +30,13 @@
   <link rel="stylesheet" href="assets/css/story.css">
   <link rel="stylesheet" href="assets/css/video.css">
   <link rel="stylesheet" href="assets/css/moments.css">
+  <!-- 图库列表提前开跑:和样式 / 脚本下载重叠,省一个完整往返 -->
+  <script>
+    try {
+      window.__C103_GAL0 = fetch("api/gallery", { credentials: "same-origin", cache: "no-store" });
+      window.__C103_GAL0.catch(function () { window.__C103_GAL0 = null; });
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
@@ -649,8 +656,13 @@
 
       const load = async (retries) => {
         try {
-          const res = await fetch("api/gallery", { credentials: "same-origin", cache: "no-store" });
-          if (!res.ok) throw new Error("http " + res.status);
+          // 页面 <head> 里已经把这份请求提前发出去了,这里直接接过来
+          const early = window.__C103_GAL0;
+          if (early) window.__C103_GAL0 = null;
+          const res = early
+            ? await early
+            : await fetch("api/gallery", { credentials: "same-origin", cache: "no-store" });
+          if (!res || !res.ok) throw new Error("http " + (res ? res.status : "early"));
           const d = await res.json().catch(() => null);
           if (!d || !d.ok) throw new Error("bad payload");
           render(d.items || [], d.me, d.quota);

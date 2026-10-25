@@ -34,6 +34,15 @@
   <link rel="stylesheet" href="assets/css/story.css">
   <!-- 视频卡片(首页合并流里会有视频卡片) -->
   <link rel="stylesheet" href="assets/css/video.css">
+  <!-- 首页数据提前开跑:CSS / JS 还在下载的这段时间,先把第一页内容请求发出去。
+       跨境访问一次往返差不多 1 秒,这一步能和资源下载重叠掉 -->
+  <script>
+    try {
+      window.__C103_FEED0 = fetch("api/feed?page=1", { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+    } catch (e) {}
+  </script>
 </head>
 <body class="poster">
 

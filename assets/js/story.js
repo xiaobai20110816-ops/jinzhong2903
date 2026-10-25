@@ -602,7 +602,14 @@
 
       // 首页:帖子和视频混在一条流里(小红书那种),后端已经合好并排好序
       if (MODE === "cards") {
-        const [data] = await Promise.all([api(API + "/feed?page=" + page), eReady]);
+        // 首页在 <head> 里就把第一页请求发出去了,这里直接接过来用;
+        // 拿不到(失败 / 不是第一页)才自己再发一次
+        const early = page === 1 && window.__C103_FEED0 ? window.__C103_FEED0 : null;
+        if (early) window.__C103_FEED0 = null; // 只消费一次
+        const p = early
+          ? early.then((d) => d || api(API + "/feed?page=1"))
+          : api(API + "/feed?page=" + page);
+        const [data] = await Promise.all([p, eReady]);
         state.page = data.page;
         state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
         let items = data.items || [];
