@@ -15,9 +15,10 @@ import { aiRun, aiText, aiReady } from "./_ai.js";
 import { aiBotId, notify } from "./_utils.js";
 import { b2Config, isB2Key, b2ObjectName, s3Get } from "./_b2.js";
 
-/* 视觉用 moondream(图生文,按 task + image 传字节),文本用 qwen3.8-27b(中文更自然)
+/* 视觉用 gemma-4(多模态,直接用 OpenAI 兼容的 image_url 传图,中文描述最自然);
+   文本用 qwen3.8-27b。moondream 只听得懂英文提问,中文会复读问题,所以不用它。
    注意:2026 这批模型默认爱「先思考再说话」,一定要压 reasoning_effort,不然 token 全花在自言自语上 */
-const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
+const VISION_MODEL = "@cf/google/gemma-4-26b-a4b-it";
 const TEXT_MODELS = ["@cf/qwen/qwen3.8-27b", "@cf/google/gemma-4-26b-a4b-it"];
 const MAX_IMAGE_BYTES = 900 * 1024;
 
@@ -178,19 +179,26 @@ ${
   let answer = "";
   let usedModel = "";
   if (image) {
-    // moondream 没有 system 位,把「你是谁、怎么说」一起塞进 question
+    // gemma 走 OpenAI 兼容格式:系统提示 + 文本 + image_url 三件套
     const vr = await ask(
       env,
       VISION_MODEL,
       {
-        task: "query",
-        image: dataUri(image),
-        question: SYSTEM + "\n" + prompt,
-        reasoning: false,
-        temperature: 0.4,
-        max_tokens: 300,
+        messages: [
+          { role: "system", content: SYSTEM },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: dataUri(image) } },
+            ],
+          },
+        ],
+        max_tokens: 1400,
+        temperature: 0.7,
+        reasoning_effort: "low",
       },
-      12000
+      25000
     );
     if (vr.text) {
       answer = polish(vr.text);
