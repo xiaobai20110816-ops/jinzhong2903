@@ -85,13 +85,14 @@ async function videoCover(env, coverKey) {
   return kvImage(env, coverKey, "img:");
 }
 
-/* 调一次模型,统一拿文本;模型挂了返回空串 */
+/* 调一次模型:成功回 { text, model },失败回 { text:"", model, error }
+   把错误带给自检接口,排障时不用猜 */
 async function ask(env, model, payload, timeout) {
   try {
     const out = await aiRun(env, model, payload, timeout);
-    return aiText(out).trim();
+    return { text: aiText(out).trim(), model };
   } catch (e) {
-    return "";
+    return { text: "", model, error: String((e && e.message) || e).slice(0, 180) };
   }
 }
 
@@ -119,8 +120,14 @@ const SYSTEM = `你是金华一中 103 班（音乐领军班）班级站点里�
    opts = { postId(触发的那条评论 id), rootId(挂到哪个根下面), body(评论内容),
             authorId(评论作者), galleryId, videoId } */
 export async function replyAsAi(env, opts) {
-  if (!env || !env.DB) return 0;
-  if (!(await aiReady(env))) return 0;
+  // debug=true 时不写库的返回值不叫 0,而是一份「死在哪一步」的报告,自检接口用
+  const dbg = !!(opts && opts.debug);
+  const t0 = Date.now();
+  const stop = (stage, extra) =>
+    dbg ? Object.assign({ ok: false, stage, ms: Date.now() - t0 }, extra || {}) : 0;
+
+  if (!env || !env.DB) return stop("no-db");
+  if (!(await aiReady(env))) return stop("ai-not-ready");
 
   const { postId, rootId, body, authorId, galleryId, videoId } = opts;
 
@@ -134,7 +141,7 @@ export async function replyAsAi(env, opts) {
       .bind(galleryId)
       .first()
       .catch(() => null);
-    if (!row) return 0;
+    if (!row) return stop("gallery-missing", { galleryId });
     image = await galleryImage(env, row);
     const caption = String(row.title || "").trim();
     prompt = `场景：班级相册的一张照片${caption ? `，标题叫《${caption}》` : ""}。
@@ -151,7 +158,7 @@ ${
       .bind(videoId)
       .first()
       .catch(() => null);
-    if (!row) return 0;
+    if (!row) return stop("video-missing", { videoId });
     image = await videoCover(env, row.cover_key);
     const title = String(row.title || "").trim();
     const intro = String(row.body || "").replace(/\s+/g, " ").slice(0, 300);
@@ -167,51 +174,62 @@ ${
   }
 
   // 有图先走视觉模型,没图或失败再退回纯文本模型
+  const tried = [];
   let answer = "";
+  let usedModel = "";
   if (image) {
     // moondream 没有 system 位,把「你是谁、怎么说」一起塞进 question
-    answer = polish(
-      await ask(
-        env,
-        VISION_MODEL,
-        {
-          task: "query",
-          image: dataUri(image),
-          question: SYSTEM + "\n" + prompt,
-          reasoning: false,
-          temperature: 0.4,
-          max_tokens: 260,
-        },
-        20000
-      )
+    const vr = await ask(
+      env,
+      VISION_MODEL,
+      {
+        task: "query",
+        image: dataUri(image),
+        question: SYSTEM + "\n" + prompt,
+        reasoning: false,
+        temperature: 0.4,
+        max_tokens: 300,
+      },
+      12000
     );
+    if (vr.text) {
+      answer = polish(vr.text);
+      usedModel = vr.model;
+    } else {
+      tried.push({ model: vr.model, error: vr.error || "没吐文本" });
+    }
   }
   if (!answer) {
     for (const model of TEXT_MODELS) {
-      answer = polish(
-        await ask(
-          env,
-          model,
-          {
-            messages: [
-              { role: "system", content: SYSTEM },
-              { role: "user", content: prompt },
-            ],
-            // 留足额度:思考链会先吃掉一部分,截太短就会「content 为空、finish_reason=length」
-            max_tokens: 700,
-            temperature: 0.9,
-            reasoning_effort: "low",
-          },
-          15000
-        )
+      const r = await ask(
+        env,
+        model,
+        {
+          messages: [
+            { role: "system", content: SYSTEM },
+            { role: "user", content: prompt },
+          ],
+          // 留足额度:思考链会先吃掉一部分,截太短就会「content 为空、finish_reason=length」
+          max_tokens: 700,
+          temperature: 0.9,
+          reasoning_effort: "low",
+        },
+        20000
       );
-      if (answer) break;
+      if (r.text) {
+        answer = polish(r.text);
+        usedModel = r.model;
+        break;
+      }
+      tried.push({ model: r.model, error: r.error || "没吐文本" });
     }
   }
-  if (!answer) return 0;
+  if (!answer) {
+    return stop("generate-empty", { tried, hasImage: !!image, imageBytes: image ? image.length : 0 });
+  }
 
   const botId = await aiBotId(env.DB);
-  if (!botId) return 0;
+  if (!botId) return stop("no-ai-account");
 
   const now = Date.now();
   const res = await env.DB.prepare(
@@ -220,8 +238,10 @@ ${
   )
     .bind(AI_NAME, answer, rootId || null, botId, postId || null, videoId || null, galleryId || null, now)
     .run()
-    .catch(() => null);
-  if (!res || !res.success) return 0;
+    .catch((e) => ({ __err: String((e && e.message) || e).slice(0, 200) }));
+  if (!res || !res.success) {
+    return stop("insert-failed", { tried, error: (res && res.__err) || "insert 返回失败" });
+  }
 
   // 通知被回的那个人;AI 自己不看通知,不用给别人发
   if (authorId) {
@@ -237,5 +257,16 @@ ${
     });
   }
 
-  return Number(res.meta.last_row_id) || 0;
+  const newId = Number(res.meta.last_row_id) || 0;
+  return dbg
+    ? {
+        ok: true,
+        id: newId,
+        model: usedModel,
+        answer,
+        ms: Date.now() - t0,
+        tried,
+        hasImage: !!image,
+      }
+    : newId;
 }

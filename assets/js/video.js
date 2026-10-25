@@ -1146,18 +1146,24 @@
           v.comments = (v.comments || 0) + 1;
           syncSlide(v);
         }
-        // 叫了 AI:它回得比人慢几秒,过一会儿自己把评论拉一次
+        // 叫了 AI:跑模型要十几秒,轮询到它出现为止,别只看 11 秒就下结论
         if (/@\s*AI/i.test(body)) {
-          [5000, 11000].forEach((ms) =>
-            setTimeout(async () => {
-              if (!(drawer.classList.contains("open") && drawer.getAttribute("data-vid") === String(videoId))) return;
-              await openComments(videoId).catch(() => {});
-              // 等了 11 秒还没有 AI 的回复:说明模型那条路没通,给一句人话,别让人干等
-              if (ms === 11000 && !/AI\s*助手/.test(drawerList.textContent || "")) {
-                toast("AI 助手没回应，可能还没接上（服主需在 Cloudflare 绑定 Workers AI）");
-              }
-            }, ms)
-          );
+          toast("AI 正在看…");
+          let waited = 0;
+          const timer = setInterval(async () => {
+            waited += 4;
+            if (!(drawer.classList.contains("open") && drawer.getAttribute("data-vid") === String(videoId))) {
+              clearInterval(timer);
+              return;
+            }
+            await openComments(videoId).catch(() => {});
+            if (/AI\s*助手/.test(drawerList.textContent || "")) {
+              clearInterval(timer);
+            } else if (waited >= 60) {
+              clearInterval(timer);
+              toast("AI 助手还在想，过一会儿再点开评论看看");
+            }
+          }, 4000);
         }
       } catch (err) {
         toast(err.message);

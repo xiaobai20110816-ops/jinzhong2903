@@ -984,19 +984,26 @@
           sug.hidden = true;
           msg.textContent = "";
           loadComments(photoId);
-          // 叫了 AI:它回得慢几秒,过一会儿把评论拉一次
+          // 叫了 AI:生成要跑模型 + 落库,可能慢十几秒,这里轮询到它出现为止
           if (/@\s*AI/i.test(body)) {
             const pid = photoId;
-            [5000, 11000].forEach((ms) =>
-              setTimeout(async () => {
-                if (photoId !== pid) return;
-                await loadComments(pid);
-                // 11 秒还没有 AI 的回复:模型那条路没通,说一句人话
-                if (ms === 11000 && !/AI\s*助手/.test(list.textContent || "")) {
-                  msg.textContent = "AI 助手没回应，可能还没接上（服主需在 Cloudflare 绑定 Workers AI）";
-                }
-              }, ms)
-            );
+            msg.textContent = "AI 正在看…";
+            let waited = 0;
+            const timer = setInterval(async () => {
+              waited += 4;
+              if (photoId !== pid) {
+                clearInterval(timer);
+                return;
+              }
+              await loadComments(pid).catch(() => {});
+              if (/AI\s*助手/.test(list.textContent || "")) {
+                clearInterval(timer);
+                msg.textContent = "";
+              } else if (waited >= 60) {
+                clearInterval(timer);
+                msg.textContent = "AI 助手还在想，过一会儿刷新看看";
+              }
+            }, 4000);
           }
         } catch (e) {
           msg.textContent = "网络出错，检查网络再试";
