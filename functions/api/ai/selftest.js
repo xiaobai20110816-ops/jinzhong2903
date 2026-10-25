@@ -82,6 +82,11 @@ async function visionProbe(env, kind) {
         reasoning_effort: "low",
       },
     },
+    {
+      name: "F-nostream",
+      model: MOON,
+      payload: { task: "query", image: uri, question: q, reasoning: false, max_tokens: 300, stream: false },
+    },
   ];
 
   for (const v of variants) {
@@ -106,7 +111,9 @@ async function visionProbe(env, kind) {
         if (step.done) break;
         acc += dec.decode(step.value, { stream: true });
       }
-      out.streamRaw = acc.slice(0, 400);
+      out.streamRaw = acc.slice(0, 300);
+      out.streamTail = acc.slice(-500);
+      out.streamLen = acc.length;
     } else {
       out.streamRaw = JSON.stringify(raw).slice(0, 400);
     }
