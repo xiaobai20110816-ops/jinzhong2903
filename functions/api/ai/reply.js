@@ -33,8 +33,9 @@ function parseSuggestions(raw) {
 }
 
 /* GET /api/ai/reply   只回答一句「AI 接上了没」。
-   绑定和 REST 两条路哪条通、还是都没接上,一看就知道,方便排查。 */
-export async function onRequestGet({ env }) {
+   绑定和 REST 两条路哪条通、还是都没接上,一看就知道,方便排查。
+   加 ?test=1(需服主登录)会真跑一次最小请求,把模型的真实回话 / 报错带回来 */
+export async function onRequestGet({ request, env }) {
   let ready = false;
   try {
     ready = await aiReady(env);
@@ -47,7 +48,27 @@ export async function onRequestGet({ env }) {
       : ready
       ? "token"
       : "";
-  return json({ ok: true, ready, via });
+  const out = { ok: true, ready, via };
+
+  const test = new URL(request.url).searchParams.get("test");
+  if (test) {
+    const me = await currentUser(request, env).catch(() => null);
+    if (!me || me.role !== "owner") return fail("测试要服主登录后再点", 403);
+    try {
+      const res = await aiRun(
+        env,
+        "@cf/meta/llama-3.1-8b-instruct",
+        { messages: [{ role: "user", content: "只回两个字：通了" }], max_tokens: 12 },
+        12000
+      );
+      const text = aiText(res).trim();
+      out.test = text ? { ok: true, text } : { ok: false, error: "模型没吐文本" };
+    } catch (e) {
+      out.test = { ok: false, error: String((e && e.message) || e).slice(0, 140) };
+    }
+  }
+
+  return json(out);
 }
 
 export async function onRequestPost({ request, env, params }) {
