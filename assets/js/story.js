@@ -387,9 +387,14 @@
     // 不再是「超过一页才出现」,这样人少时也看得出这里是分页的
     const show = !CFG.compact && total > 0;
     els.pager.hidden = !show;
-    if (els.pageInfo) els.pageInfo.textContent = `第 ${state.page} / ${state.totalPages} 页`;
+    // 首页的「更早的」是去纪事页的入口,不在这里翻页,所以显示总数而不是页码
+    if (els.pageInfo) {
+      els.pageInfo.textContent = CFG.nextHref
+        ? `共 ${total} 条`
+        : `第 ${state.page} / ${state.totalPages} 页`;
+    }
     if (els.prev) els.prev.disabled = state.page <= 1;
-    if (els.next) els.next.disabled = state.page >= state.totalPages;
+    if (els.next) els.next.disabled = CFG.nextHref ? false : state.page >= state.totalPages;
   }
 
   /* ---------- 发帖框:登录了才给用 ---------- */
@@ -610,8 +615,8 @@
         } else {
           renderCards();
         }
-        // 限定条数时不显示分页器
-        if (CFG.limit > 0 && els.pager) els.pager.hidden = true;
+        // 限定条数时不显示分页器;首页的「更早的」要去纪事,所以照样亮出来
+        if (CFG.limit > 0 && !CFG.nextHref && els.pager) els.pager.hidden = true;
         else renderPager(data.total);
         return;
       }
@@ -1033,7 +1038,14 @@
         .forEach((b) => b.classList.toggle("active", b === opt));
     });
     on(els.prev, "click", () => goto(state.page - 1));
-    on(els.next, "click", () => goto(state.page + 1));
+    // 首页给了 nextHref(去纪事页)时,「更早的」直接跳过去,不在首页翻页
+    on(els.next, "click", () => {
+      if (CFG.nextHref) {
+        location.href = CFG.nextHref;
+        return;
+      }
+      goto(state.page + 1);
+    });
 
     on(els.list, "click", (e) => {
       // 卡片角上的叉号:压在整卡链接之上,先拦下来免得跳进播放页
