@@ -629,7 +629,13 @@
         return;
       }
 
-      const [data] = await Promise.all([api(API + "/posts?page=" + page), eReady]);
+      // 纪事页在 <head> 里已经预取了第一页,这里直接接过来
+      const earlyList = page === 1 && MODE === "list" && window.__C103_POSTS0 ? window.__C103_POSTS0 : null;
+      if (earlyList) window.__C103_POSTS0 = null;
+      const lp = earlyList
+        ? earlyList.then((d) => d || api(API + "/posts?page=1"))
+        : api(API + "/posts?page=" + page);
+      const [data] = await Promise.all([lp, eReady]);
       state.page = data.page;
       state.totalPages = Math.max(1, Math.ceil(data.total / data.size));
       let posts = data.posts || [];

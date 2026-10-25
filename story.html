@@ -27,6 +27,18 @@
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/layout.css">
   <link rel="stylesheet" href="assets/css/story.css">
+  <!-- 列表数据提前开跑:和样式 / 脚本下载重叠。
+       没登录时这请求会 401 回来(接口自己会把关),正好也不漏内容 -->
+  <script>
+    try {
+      // 详情页(?id=)不铺列表,别浪费这一次请求
+      if (!new URLSearchParams(location.search).get("id")) {
+        window.__C103_POSTS0 = fetch("api/posts?page=1", { credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; });
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <!-- 顶部导航栏由 assets/js/nav.js 动态注入 -->
