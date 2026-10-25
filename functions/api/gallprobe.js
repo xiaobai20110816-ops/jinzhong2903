@@ -3,8 +3,8 @@
    检查最近几张图的原图到底在 KV 还是 B2、能不能取到、content-type 对不对。
    排查完删除本文件。 */
 
-import { json, ensureSchema } from "../_utils.js";
-import { b2Config, isB2Key, b2ObjectName, s3Get } from "../_b2.js";
+import { json, ensureSchema } from "./_utils.js";
+import { b2Config, isB2Key, b2ObjectName, s3Get } from "./_b2.js";
 
 const KEY = "gp-4d19c7e6";
 
