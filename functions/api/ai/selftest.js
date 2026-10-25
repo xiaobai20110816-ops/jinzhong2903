@@ -5,8 +5,96 @@
 
 import { json, ensureSchema } from "../_utils.js";
 import { replyAsAi } from "../_ai_comment.js";
+import { aiRun, aiText } from "../_ai.js";
 
 const KEY = "st-7f3a91c4e2";
+
+/* 图片字节 → base64(和 _ai_comment.js 里同一套做法) */
+function b64(u8) {
+  let bin = "";
+  const step = 0x8000;
+  for (let i = 0; i < u8.length; i += step) {
+    bin += String.fromCharCode.apply(null, u8.subarray(i, i + step));
+  }
+  return btoa(bin);
+}
+
+function safeRaw(res) {
+  try {
+    if (res && typeof res.getReader === "function") return "[stream]";
+    const s = JSON.stringify(res);
+    return s ? s.slice(0, 500) : String(res);
+  } catch (e) {
+    return "[读不出来]";
+  }
+}
+
+/* 视觉模型换几种传参方式试一遍,看它到底吃什么、吐什么 */
+async function visionProbe(env, kind) {
+  const out = { ok: true, kind: "vision", variants: [] };
+
+  let key = "";
+  let prefix = "gal:";
+  if (kind === "video") {
+    const v = await env.DB.prepare("SELECT cover_key FROM videos ORDER BY id DESC LIMIT 1").first();
+    key = v && v.cover_key;
+    prefix = "img:";
+  } else {
+    const g = await env.DB.prepare("SELECT thumb_key FROM gallery ORDER BY id DESC LIMIT 1").first();
+    key = g && g.thumb_key;
+  }
+  if (!key || !env.STORY_KV) {
+    out.error = "no-image-key";
+    return out;
+  }
+  const buf = await env.STORY_KV.get(prefix + key, "arrayBuffer");
+  if (!buf) {
+    out.error = "kv-miss";
+    return out;
+  }
+  const u8 = new Uint8Array(buf);
+  out.imageBytes = u8.length;
+  const base64 = b64(u8);
+  const uri = "data:image/jpeg;base64," + base64;
+  const q = "这张照片里有什么？拍得怎么样？用两句话说说。";
+
+  const MOON = "@cf/moondream/moondream3.1-9B-A2B";
+  const GEMMA = "@cf/google/gemma-4-26b-a4b-it";
+  const variants = [
+    { name: "A-datastring", model: MOON, payload: { task: "query", image: uri, question: q, reasoning: false, max_tokens: 300 } },
+    { name: "B-rawbase64", model: MOON, payload: { task: "query", image: base64, question: q, max_tokens: 300 } },
+    { name: "C-bytes-prompt", model: MOON, payload: { image: Array.from(u8), prompt: q, max_tokens: 300 } },
+    { name: "D-nodata-question", model: MOON, payload: { task: "query", image: base64, question: q, reasoning: false, temperature: 0.4 } },
+    {
+      name: "E-gemma-imageurl",
+      model: GEMMA,
+      payload: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: q },
+              { type: "image_url", image_url: { url: uri } },
+            ],
+          },
+        ],
+        max_tokens: 400,
+        reasoning_effort: "low",
+      },
+    },
+  ];
+
+  for (const v of variants) {
+    try {
+      const r = await aiRun(env, v.model, v.payload, 20000);
+      const text = aiText(r).trim();
+      out.variants.push({ name: v.name, ok: !!text, text: text.slice(0, 120), raw: text ? undefined : safeRaw(r) });
+    } catch (e) {
+      out.variants.push({ name: v.name, ok: false, error: String((e && e.message) || e).slice(0, 180) });
+    }
+  }
+  return out;
+}
 
 export async function onRequestGet({ request, env }) {
   const url = new URL(request.url);
@@ -17,6 +105,10 @@ export async function onRequestGet({ request, env }) {
 
   const kind = url.searchParams.get("kind") || "text";
   const out = { ok: true, kind, aiReady: !!(env.AI && env.AI.run) };
+
+  if (kind === "vision" || kind === "vision-video") {
+    return json(await visionProbe(env, kind === "vision-video" ? "video" : "photo"));
+  }
 
   let rootId = 0;
   let galleryId = 0;
