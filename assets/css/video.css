@@ -620,6 +620,8 @@ body.video-page .site-footer { display: none; }
   padding: 2px 4px;
 }
 .v-cmt-btn:hover { color: var(--gold); }
+/* 删除:平时和技术按钮一样淡,悬停才变红 */
+.v-cmt-del:hover { color: #e06666; }
 .v-cmt-empty {
   padding: 26px 0;
   text-align: center;

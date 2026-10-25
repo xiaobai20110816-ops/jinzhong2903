@@ -402,6 +402,15 @@
   transition: color 0.2s, opacity 0.2s;
 }
 .lbc-r:hover { color: var(--gold); opacity: 1; }
+/* 回复 / 删除竖着排在右边,不挤占正文宽度 */
+.lbc-acts {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.lbc-del:hover { color: #e06666; }
 
 .lbc-reply {
   display: flex;

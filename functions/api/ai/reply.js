@@ -32,6 +32,24 @@ function parseSuggestions(raw) {
     .slice(0, 3);
 }
 
+/* GET /api/ai/reply   只回答一句「AI 接上了没」。
+   绑定和 REST 两条路哪条通、还是都没接上,一看就知道,方便排查。 */
+export async function onRequestGet({ env }) {
+  let ready = false;
+  try {
+    ready = await aiReady(env);
+  } catch (e) {
+    ready = false;
+  }
+  const via =
+    env && env.AI && typeof env.AI.run === "function"
+      ? "binding"
+      : ready
+      ? "token"
+      : "";
+  return json({ ok: true, ready, via });
+}
+
 export async function onRequestPost({ request, env, params }) {
   await ensureSchema(env.DB);
 

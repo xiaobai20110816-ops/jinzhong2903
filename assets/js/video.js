@@ -968,6 +968,8 @@
       const name = uid
         ? `<a class="story-name" href="u.html?id=${uid}">${C103Person.html(c.author)}${badgeHTML(c.author)}</a>`
         : `<span class="story-name">已注销</span>`;
+      // 自己的评论能删,服主 / 管理员能删任意一条 —— 和后端 DELETE /api/posts/:id 的口径一致
+      const canDel = !!state.me && (uid === state.me.id || isStaff(state.me));
       const to = c.reply_to_name
         ? `<p class="v-cmt-to">回复 <b>@${esc(c.reply_to_name)}${c.reply_to_verified ? window.C103Person.check : ""}</b></p>`
         : "";
@@ -979,7 +981,11 @@
           ${c.body ? `<p class="v-cmt-body">${richText(c.body)}</p>` : ""}
           <div class="v-cmt-foot"><button class="v-cmt-btn" type="button" data-reply="${c.id}" data-name="${esc(
         C103Person.name(c.author)
-      )}">回复</button></div>
+      )}">回复</button>${
+        canDel
+          ? `<button class="v-cmt-btn v-cmt-del" type="button" data-cdel="${c.id}">删除</button>`
+          : ""
+      }</div>
         </div>
       </div>`;
     }
@@ -1037,6 +1043,21 @@
         }
       } catch (err) {
         drawerList.innerHTML = `<p class="v-cmt-empty">${esc(err.message)}</p>`;
+      }
+    }
+
+    /* 删一条评论:后端 DELETE /api/posts/:id 本来就能删,
+       删完把抽屉重新拉一遍,列表计数和评论数就都对齐了 */
+    async function deleteComment(id) {
+      if (!id) return;
+      if (!confirm("删掉这条评论？它下面的回复会一起删掉，删了就找不回来了。")) return;
+      try {
+        await api(API + "/posts/" + id, { method: "DELETE" });
+        const vid = parseInt(drawer.getAttribute("data-vid"), 10) || 0;
+        if (vid) await openComments(vid);
+        toast("已删除");
+      } catch (err) {
+        toast(err.message || "没删掉，再试一次");
       }
     }
 
@@ -1177,6 +1198,11 @@
     });
 
     drawerList.addEventListener("click", (e) => {
+      const del = e.target.closest("[data-cdel]");
+      if (del) {
+        deleteComment(parseInt(del.getAttribute("data-cdel"), 10) || 0);
+        return;
+      }
       const rep = e.target.closest("[data-reply]");
       if (!rep) return;
       if (!state.me) {
