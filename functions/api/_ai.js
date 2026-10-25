@@ -10,11 +10,54 @@ import { getSetting } from "./_utils.js";
 
 const CF_ACCOUNT_FALLBACK = "2bb27ee5aa6faadbcc0cb6fefa21351f";
 
+/* 绑定有时直接回一个流(图生文 / 开了 stream 的模型),这里读干、拼成文本 */
+async function readAll(stream) {
+  const rd = stream.getReader();
+  const dec = new TextDecoder();
+  let acc = "";
+  for (;;) {
+    const step = await rd.read();
+    if (step.done) break;
+    acc += dec.decode(step.value, { stream: true });
+  }
+  acc += dec.decode();
+  return acc;
+}
+
+/* 把流里累积的 SSE / JSON 片段拼成一段正文 */
+function parseStreamText(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (s.startsWith("{")) {
+    try {
+      return aiText(JSON.parse(s));
+    } catch (e) {
+      /* 往下按行拆 */
+    }
+  }
+  let acc = "";
+  for (const line of s.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t === "data: [DONE]") continue;
+    const body = t.startsWith("data:") ? t.slice(5).trim() : t;
+    try {
+      acc += aiText(JSON.parse(body));
+    } catch (e) {
+      if (!t.startsWith("data:")) acc += t;
+    }
+  }
+  return acc;
+}
+
 /* 调一次模型,返回模型吐出来的原始结果(绑定是对象,REST 是 {result})。
    timeout 到点就中止:少一次 AI 不影响用户发消息,但不能让人干等 */
 export async function aiRun(env, model, payload, timeout = 6000) {
   if (env && env.AI && typeof env.AI.run === "function") {
-    return await env.AI.run(model, payload);
+    const out = await env.AI.run(model, payload);
+    if (out && typeof out.getReader === "function") {
+      return { response: parseStreamText(await readAll(out)) };
+    }
+    return out;
   }
 
   if (!env || !env.DB) throw new Error("AI 还没接上");
