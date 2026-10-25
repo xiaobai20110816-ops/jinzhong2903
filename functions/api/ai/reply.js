@@ -10,9 +10,9 @@
 import { json, fail, ensureSchema, currentUser, classGate } from "../_utils.js";
 import { aiRun, aiText, aiReady } from "../_ai.js";
 
-/* 先试轻量中文表现还行的模型,不行再换一个。
-   Workers AI 的模型名录会变,两个都挂就说明真的没接上 */
-const CHAT_MODELS = ["@cf/meta/llama-3.1-8b-instruct", "@cf/qwen/qwen1.5-14b-chat-awq"];
+/* 先试便宜、快的 gemma-4,不行再换 qwen3.8。
+   Workers AI 的模型名录会变,2026-05 那批 llama-3.1 / qwen1.5 已经下线,别再用老名字 */
+const CHAT_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/qwen/qwen3.8-27b"];
 
 const KIND_LABEL = { dm: "私信", group: "群聊", comment: "照片评论" };
 
@@ -57,7 +57,7 @@ export async function onRequestGet({ request, env }) {
     try {
       const res = await aiRun(
         env,
-        "@cf/meta/llama-3.1-8b-instruct",
+        CHAT_MODELS[0],
         { messages: [{ role: "user", content: "只回两个字：通了" }], max_tokens: 12 },
         12000
       );

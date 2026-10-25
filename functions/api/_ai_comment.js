@@ -15,10 +15,27 @@ import { aiRun, aiText, aiReady } from "./_ai.js";
 import { aiBotId, notify } from "./_utils.js";
 import { b2Config, isB2Key, b2ObjectName, s3Get } from "./_b2.js";
 
-/* 视觉模型只认常见图片格式;缩略图一般几十 KB,超过 900KB 就不再塞了 */
-const VISION_MODEL = "@cf/llama-3.2-11b-vision-instruct";
-const TEXT_MODELS = ["@cf/meta/llama-3.1-8b-instruct", "@cf/qwen/qwen1.5-14b-chat-awq"];
+/* 视觉用 moondream(图生文,按 task + image 传字节),文本用 gemma-4(便宜、快、也带视觉)
+   2026-05-30 起旧的 llama-3.1 / llama-3.2-vision / qwen1.5 全部下线,别再叫老名字 */
+const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
+const TEXT_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/qwen/qwen3.8-27b"];
 const MAX_IMAGE_BYTES = 900 * 1024;
+
+/* 图片字节转 data URI:模型直接吃 base64,私有图片也就不用开公网地址了 */
+function dataUri(u8) {
+  let mime = "image/jpeg";
+  if (u8.length > 12) {
+    if (u8[0] === 0x89 && u8[1] === 0x50) mime = "image/png";
+    else if (u8[0] === 0x52 && u8[1] === 0x49 && u8[8] === 0x57) mime = "image/webp";
+    else if (u8[0] === 0x47 && u8[1] === 0x49) mime = "image/gif";
+  }
+  let bin = "";
+  const step = 0x8000;
+  for (let i = 0; i < u8.length; i += step) {
+    bin += String.fromCharCode.apply(null, u8.subarray(i, i + step));
+  }
+  return "data:" + mime + ";base64," + btoa(bin);
+}
 
 const AI_NAME = "AI 助手";
 
@@ -152,19 +169,17 @@ ${
   // 有图先走视觉模型,没图或失败再退回纯文本模型
   let answer = "";
   if (image) {
+    // moondream 没有 system 位,把「你是谁、怎么说」一起塞进 question
     answer = polish(
       await ask(
         env,
         VISION_MODEL,
         {
-          messages: [
-            { role: "system", content: SYSTEM },
-            {
-              role: "user",
-              content: prompt,
-              image: Array.from(image),
-            },
-          ],
+          task: "query",
+          image: dataUri(image),
+          question: SYSTEM + "\n" + prompt,
+          reasoning: false,
+          temperature: 0.4,
           max_tokens: 260,
         },
         20000

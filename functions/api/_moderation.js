@@ -3,7 +3,7 @@
    发帖 / 评论 / 私信 / 群聊在写库之前都过一遍这里。
    两层:
    1) 规则层(永远生效):长度、刷屏、外部链接、明显的脏话 / 广告词;
-   2) AI 层(接上了才生效):Workers AI 的 llama-guard-3-8b 判 safe / unsafe。
+   2) AI 层(接上了才生效):让通用模型判 SAFE / UNSAFE。
    AI 调不通就只走规则 —— 宁可少拦一句,也不能让同学发不出消息。
    ============================================================ */
 
@@ -50,14 +50,27 @@ export async function moderate(env, raw, kind = "内容") {
   if (!(await aiReady(env))) return { ok: true };
 
   try {
+    /* llama-guard 系列 2026-05 已下线,改成让通用模型按 SAFE / UNSAFE 二选一回答,
+       只认第一个词,免得它多写两句被误判 */
     const out = await aiRun(
       env,
-      "@cf/meta/llama-guard-3-8b",
-      { messages: [{ role: "user", content: text.slice(0, 2000) }] },
+      "@cf/google/gemma-4-26b-a4b-it",
+      {
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是班级社区的内容审核员。只判断有没有明显的辱骂、色情、暴力、违法或广告内容。只回一个词：SAFE 或 UNSAFE。",
+          },
+          { role: "user", content: text.slice(0, 2000) },
+        ],
+        max_tokens: 8,
+        temperature: 0,
+      },
       5000
     );
     const verdict = aiText(out).trim().toLowerCase();
-    if (verdict.startsWith("unsafe")) {
+    if (/^unsafe/.test(verdict)) {
       return { ok: false, reason: `这段${kind}没通过 AI 审核，换个说法再发吧` };
     }
   } catch (e) {

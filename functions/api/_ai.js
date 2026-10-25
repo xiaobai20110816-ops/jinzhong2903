@@ -44,12 +44,22 @@ export async function aiRun(env, model, payload, timeout = 6000) {
   }
 }
 
-/* 绑定和 REST 两种返回形状不一样,这里统一成一段文本 */
+/* 绑定和 REST 两种返回形状不一样,视觉模型又是另一套字段,这里统一成一段文本 */
 export function aiText(out) {
   if (out == null) return "";
   if (typeof out === "string") return out;
   if (typeof out.response === "string") return out.response;
   if (typeof out.result === "string") return out.result;
+  // moondream 这类图生文模型:query 回 answer,caption 回 caption
+  if (typeof out.answer === "string") return out.answer;
+  if (typeof out.caption === "string") return out.caption;
+  if (typeof out.description === "string") return out.description;
+  if (out.result && typeof out.result === "object") return aiText(out.result);
+  // 万一走的是 OpenAI 兼容格式
+  const choice = Array.isArray(out.choices) ? out.choices[0] : null;
+  if (choice && choice.message && typeof choice.message.content === "string") {
+    return choice.message.content;
+  }
   return "";
 }
 
