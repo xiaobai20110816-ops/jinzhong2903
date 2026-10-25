@@ -88,7 +88,7 @@ let schemaReady = null;
    每个新 isolate 里先查这一次轻量标记,对得上就直接返回,
    不用把十几条建表语句再重跑一遍 —— 冷启动时的数据库往返从十几次降到一次 */
 const SCHEMA_KEY = "schema_version";
-const SCHEMA_VERSION = "2026-10-24.2";
+const SCHEMA_VERSION = "2026-10-25.1";
 
 /* SQLite 没有 ADD COLUMN IF NOT EXISTS。先探一下这列在不在,不在才加。
    老库升级 + 并发请求都会走到这里,所以失败要吞掉:多半是别的请求刚加完 */
@@ -249,6 +249,31 @@ export function ensureSchema(db) {
         )
         .run();
       await db.prepare(`CREATE INDEX IF NOT EXISTS idx_likes_to ON profile_likes(to_id)`).run();
+
+      // ---- 关注:一个人关注另一个人,只留一行;双向都是各自的一行 ----
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS follows (
+             follower_id INTEGER NOT NULL,
+             followee_id INTEGER NOT NULL,
+             created_at INTEGER NOT NULL,
+             PRIMARY KEY (follower_id, followee_id)
+           )`
+        )
+        .run();
+      // 「谁关注了我」按 followee_id 找,「我关注了谁」按主键前缀走
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_follows_to ON follows(followee_id)`).run();
+
+      // ---- AI 助手:一个登不进来的账号,只用来挂 AI 发的回复 ----
+      await db
+        .prepare(
+          `INSERT INTO users (username, salt, pass_hash, role, display_name, created_at)
+           SELECT 'AI助手', 'ai-bot', 'ai-bot-no-login', 'ai', 'AI 助手', ?
+            WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'ai')`
+        )
+        .bind(Date.now())
+        .run()
+        .catch(() => {});
 
       // ---- 帖子点赞:一人对一帖只能点一次,靠联合主键去重 ----
       await db
@@ -845,6 +870,22 @@ export async function likedBy(db, userId, postIds) {
 
 export function isStaff(user) {
   return !!user && (user.role === ROLE_OWNER || user.role === ROLE_ADMIN);
+}
+
+/* AI 助手那个账号的 id:回复要挂在它名下,才有一个稳定的作者身份。
+   老库第一次跑 ensureSchema 时补的行;万一是只读库拿不到,退回 0 */
+export async function aiBotId(db) {
+  const row = await db
+    .prepare("SELECT id FROM users WHERE role = 'ai' ORDER BY id LIMIT 1")
+    .first()
+    .catch(() => null);
+  return row ? Number(row.id) || 0 : 0;
+}
+
+/* 一个人对外的显示名:昵称 > 真名 > 账号名,和前端 nameOf 保持同一顺序 */
+export function displayNameOf(row) {
+  if (!row) return "";
+  return String(row.display_name || row.real_name || row.username || "").trim();
 }
 
 /* 「本班实名视线」:看的人是管理员 / 服主,或者已经通过实名。

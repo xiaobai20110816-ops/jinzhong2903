@@ -113,6 +113,28 @@
     .pf-like.on { color: var(--gold); border-color: var(--gold-line); background: var(--gold-soft); }
     .pf-like.on .heart { color: var(--gold); }
 
+    /* 关注按钮:和点赞同一排,已关注时金色描边 */
+    .pf-follow {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 18px;
+      margin-right: 10px;
+      padding: 9px 20px;
+      border-radius: 999px;
+      border: 1px solid var(--gold-line);
+      background: var(--gold-soft);
+      color: var(--gold);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.92rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.2s ease, background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+    }
+    .pf-follow:hover { transform: translateY(-2px); }
+    .pf-follow.on { background: var(--chip); color: var(--muted); border-color: var(--glass-brd); }
+
     /* 板块小标题:沿用高光时刻 .group-head 的样子 */
     .pf-block { margin-top: 54px; }
     .pf-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
@@ -579,6 +601,7 @@
   </section>
 
   <script src="assets/js/nav.js"></script>
+  <script src="assets/js/mention.js"></script>
   <script>
     // 个人主页:资料卡 + 「TA 的留言」+ 「留言墙」
     // 通过 u.html?id=12 查看某个成员;所有接口拿不到时都有兜底文案,不会白屏
@@ -600,7 +623,7 @@
       // URL 上的 ?id=
       const uid = parseInt(new URLSearchParams(location.search).get("id") || "0", 10) || 0;
 
-      const state = { user: null, liked: 0, likes: 0, busy: false, mine: false, photos: [] };
+      const state = { user: null, liked: 0, likes: 0, busy: false, mine: false, photos: [], following: 0, followers: 0, iFollow: 0 };
       let wall = []; // 留言墙列表(最新的排最前)
       const MAX_PHOTOS = 9; // 个人相册最多 9 张,和后端一致
 
@@ -765,7 +788,10 @@
               <div class="pf-meta">
                 <span><i>注册</i>${esc(fmtDate(u.created_at))}</span>
                 <span><i>发帖</i>${Number(data.postCount) || 0}</span>
+                <span><i>关注</i><b id="pf-following-n">${Number(data.following) || 0}</b></span>
+                <span><i>粉丝</i><b id="pf-followers-n">${Number(data.followers) || 0}</b></span>
               </div>
+              ${state.mine ? "" : `<button class="pf-follow" id="pf-follow" type="button">关注</button>`}
               <button class="pf-like" id="pf-like" type="button" aria-pressed="false">
                 <span class="heart">❤</span><span id="pf-like-n">${Number(state.likes) || 0}</span>
               </button>
@@ -793,7 +819,7 @@
             <div class="pf-head"><span class="en">Wall</span><h2>留言墙</h2></div>
             <div id="pf-wall" class="pf-wall"><p class="glass pf-empty">读取中…</p></div>
             <form id="pf-form" class="glass pf-compose" hidden>
-              <textarea id="pf-body" rows="3" maxlength="4000" placeholder="给 ${plainName} 留句话…"></textarea>
+              <textarea id="pf-body" data-mention rows="3" maxlength="4000" placeholder="给 ${plainName} 留句话…（@ 可以叫人）"></textarea>
               <div class="pf-compose-foot">
                 <p class="pf-msg" id="pf-msg"></p>
                 <button class="pf-send" type="submit">留言</button>
@@ -803,8 +829,10 @@
           </section>`;
 
         on($("#pf-like"), "click", onLike);
+        on($("#pf-follow"), "click", onFollow);
         on($("#pf-form"), "submit", onWallSubmit);
         paintLike();
+        paintFollow();
         renderWallGate();
         renderPhotos(u);
       }
@@ -1052,6 +1080,49 @@
         }
       }
 
+      // ---------- 关注 ----------
+      async function onFollow() {
+        if (state.busy) return;
+        if (!state.user) {
+          toast("登录后才能关注，去 account.html 登录吧");
+          return;
+        }
+        state.busy = true;
+        try {
+          const d = await api(API + "/follow", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ user: uid, follow: !state.iFollow }),
+          });
+          state.iFollow = d.i_follow ? 1 : 0;
+          state.followers = Number(d.followers) || 0;
+          paintFollow();
+          toast(state.iFollow ? "关注了，TA 发帖时会出现在你的首页" : "已取消关注");
+        } catch (err) {
+          if (/登录/.test(err.message)) {
+            state.user = null;
+            renderWallGate();
+          }
+          toast(err.message);
+        } finally {
+          state.busy = false;
+        }
+      }
+
+      // 按钮文案跟着状态走:没关注是「关注」,关注了是「已关注」
+      function paintFollow() {
+        const btn = $("#pf-follow");
+        if (btn) {
+          btn.classList.toggle("on", !!state.iFollow);
+          btn.textContent = state.iFollow ? "已关注" : "关注";
+          btn.setAttribute("aria-pressed", state.iFollow ? "true" : "false");
+        }
+        const fn = document.getElementById("pf-following-n");
+        if (fn) fn.textContent = String(Number(state.following) || 0);
+        const fr = document.getElementById("pf-followers-n");
+        if (fr) fr.textContent = String(Number(state.followers) || 0);
+      }
+
       // ---------- 一张留言卡(主帖与留言墙共用) ----------
       function postCard(p) {
         const list = p.images || [];
@@ -1186,6 +1257,9 @@
           const data = await api(API + "/users/" + uid);
           state.liked = data.liked ? 1 : 0;
           state.likes = Number(data.likes) || 0;
+          state.following = Number(data.following) || 0;
+          state.followers = Number(data.followers) || 0;
+          state.iFollow = data.i_follow ? 1 : 0;
           renderProfile(data);
           loadPosts();
           loadWall().then(focusWall);

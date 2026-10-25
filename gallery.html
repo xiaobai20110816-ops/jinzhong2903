@@ -175,7 +175,7 @@
         <button type="button" id="lbc-reply-x" aria-label="取消回复">×</button>
       </div>
       <div class="lbc-form">
-        <textarea id="lbc-input" rows="2" maxlength="500" placeholder="在这张照片下面说点什么…"></textarea>
+        <textarea id="lbc-input" data-mention rows="2" maxlength="500" placeholder="在这张照片下面说点什么…（@AI助手 让它来点评）"></textarea>
         <div class="lbc-foot">
           <button type="button" id="lbc-ai" class="lbc-ai">AI 帮我想</button>
           <button type="button" id="lbc-send" class="lbc-send">发送</button>
@@ -191,6 +191,7 @@
     window.CLASS103_BOARD = { mode: "videos" };
   </script>
   <script src="assets/js/nav.js"></script>
+  <script src="assets/js/mention.js"></script>
   <script>
     // 板块门禁:未注册 / 未实名的同学不能浏览照片和视频。
     // ready 可能还是 null(nav.js 没跑到 refresh),主动调一下兜底
@@ -943,6 +944,15 @@
           sug.hidden = true;
           msg.textContent = "";
           loadComments(photoId);
+          // 叫了 AI:它回得慢几秒,过一会儿把评论拉一次
+          if (/@\s*AI/i.test(body)) {
+            const pid = photoId;
+            [5000, 11000].forEach((ms) =>
+              setTimeout(() => {
+                if (photoId === pid) loadComments(pid);
+              }, ms)
+            );
+          }
         } catch (e) {
           msg.textContent = "网络出错，检查网络再试";
         } finally {

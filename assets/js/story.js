@@ -441,7 +441,7 @@
 
     slot.innerHTML = `<form class="inline-reply" autocomplete="off">
       <p class="inline-to">回复 <b>@${esc(name)}</b><button type="button" class="inline-x" aria-label="收起">×</button></p>
-      <textarea rows="2" maxlength="4000" placeholder="回复 @${esc(name)}…"></textarea>
+      <textarea data-mention rows="2" maxlength="4000" placeholder="回复 @${esc(name)}…"></textarea>
       <div class="inline-row">
         <input type="file" accept="image/*" multiple hidden>
         <button type="button" class="pick-btn sm">＋ 加图</button>

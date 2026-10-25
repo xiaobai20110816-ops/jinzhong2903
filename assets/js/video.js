@@ -1125,6 +1125,16 @@
           v.comments = (v.comments || 0) + 1;
           syncSlide(v);
         }
+        // 叫了 AI:它回得比人慢几秒,过一会儿自己把评论拉一次
+        if (/@\s*AI/i.test(body)) {
+          [5000, 11000].forEach((ms) =>
+            setTimeout(() => {
+              if (drawer.classList.contains("open") && drawer.getAttribute("data-vid") === String(videoId)) {
+                openComments(videoId).catch(() => {});
+              }
+            }, ms)
+          );
+        }
       } catch (err) {
         toast(err.message);
       } finally {

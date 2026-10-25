@@ -108,6 +108,26 @@ export async function onRequestGet({ request, env, params }) {
     likes: Number(likeRow ? likeRow.n : 0) || 0,
     replies: Number(peopleRow ? peopleRow.n : 0) || 0,
   };
+
+  // 关注关系:关注了几个 / 被几个人关注 / 我有没有关注 TA
+  const followRow = await env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM follows WHERE follower_id = ?) AS following,
+       (SELECT COUNT(*) FROM follows WHERE followee_id = ?) AS followers`
+  )
+    .bind(id, id)
+    .first()
+    .catch(() => null);
+  let iFollow = 0;
+  if (me) {
+    const rel = await env.DB.prepare(
+      "SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?"
+    )
+      .bind(me.id, id)
+      .first()
+      .catch(() => null);
+    iFollow = rel ? 1 : 0;
+  }
   const achievements = ACHIEVEMENTS.map((a) => ({
     key: a.key,
     name: a.name,
@@ -131,6 +151,9 @@ export async function onRequestGet({ request, env, params }) {
     liked,
     likes: likeRow ? likeRow.n : 0,
     postCount: postRow ? postRow.n : 0,
+    following: Number(followRow && followRow.following) || 0,
+    followers: Number(followRow && followRow.followers) || 0,
+    i_follow: iFollow,
     achievements,
     user: {
       ...shown,
@@ -308,6 +331,7 @@ export async function onRequestDelete({ request, env, params }) {
   await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(id).run();
   await env.DB.prepare("UPDATE posts SET user_id = NULL WHERE user_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM profile_likes WHERE from_id = ? OR to_id = ?").bind(id, id).run();
+  await env.DB.prepare("DELETE FROM follows WHERE follower_id = ? OR followee_id = ?").bind(id, id).run();
   await env.DB.prepare("DELETE FROM post_likes WHERE user_id = ?").bind(id).run();
   // 视频:发的片子留着(别人还在看),只是作者变成「已注销」;赞和收藏跟着人一起清
   await env.DB.prepare("DELETE FROM video_likes WHERE user_id = ?").bind(id).run();

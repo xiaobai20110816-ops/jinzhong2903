@@ -32,6 +32,7 @@ import {
   onlineUserIds,
 } from "./_utils.js";
 import { moderate } from "./_moderation.js";
+import { wantsAi, replyAsAi } from "./_ai_comment.js";
 
 const PAGE_SIZE = 20;
 const MAX_BODY = 4000;
@@ -305,7 +306,44 @@ export async function onRequestGet({ request, env }) {
   return json({ ok: true, total: totalRow ? totalRow.n : 0, page, size: PAGE_SIZE, posts: out });
 }
 
-export async function onRequestPost({ request, env }) {
+/* @ 到的人各发一条通知。名字按「昵称 / 账号名 / 已审核的真名」三种写法匹配,
+   命中一次就够;同一条评论里重复 @ 同一个人不会重复通知 */
+async function notifyMentions(db, body, authorId, opts) {
+  const text = String(body || "");
+  if (!text || text.indexOf("@") < 0) return;
+
+  const { results } = await db
+    .prepare(
+      "SELECT id, username, display_name, real_name, verified FROM users WHERE IFNULL(banned, 0) = 0 AND role <> 'ai'"
+    )
+    .all()
+    .catch(() => ({ results: [] }));
+
+  const seen = new Set();
+  for (const u of results || []) {
+    if (!u.id || u.id === authorId || seen.has(u.id)) continue;
+    const names = [u.display_name, u.username];
+    if (u.verified) names.push(u.real_name);
+    const hit = names.some((n) => {
+      const t = String(n || "").trim();
+      return t && text.includes("@" + t);
+    });
+    if (!hit) continue;
+    seen.add(u.id);
+    await notify(db, {
+      userId: u.id,
+      actorId: authorId,
+      type: "mention",
+      postId: opts.postId || 0,
+      wallId: opts.wallId || 0,
+      videoId: opts.videoId || 0,
+      galleryId: opts.galleryId || 0,
+      excerpt: text.slice(0, 100),
+    });
+  }
+}
+
+export async function onRequestPost({ request, env, waitUntil }) {
   if (!env.DB) return notReady("数据库");
   await ensureSchema(env.DB);
 
@@ -395,6 +433,14 @@ export async function onRequestPost({ request, env }) {
       postId: resWall.meta.last_row_id,
       wallId: wallId,
       excerpt: body || "[图片]",
+    });
+
+    // 留言里 @ 了谁,也一并通知
+    await notifyMentions(env.DB, body, me.id, {
+      postId: resWall.meta.last_row_id,
+      wallId,
+      videoId: 0,
+      galleryId: 0,
     });
 
     return json({
@@ -518,6 +564,28 @@ export async function onRequestPost({ request, env }) {
       galleryId: galleryId,
       excerpt: body || "[图片]",
     });
+  }
+
+  // ---- @ 通知:正文里出现「@某人的名字」就告诉那个人 ----
+  await notifyMentions(env.DB, body, me.id, {
+    postId: parentId || res.meta.last_row_id,
+    wallId,
+    videoId,
+    galleryId,
+  });
+
+  // ---- 叫了 AI 助手:让它回一条。放 waitUntil 里跑,评论本身不用等模型 ----
+  if (wantsAi(body)) {
+    const job = replyAsAi(env, {
+      postId: res.meta.last_row_id,
+      rootId: parentId || res.meta.last_row_id,
+      body,
+      authorId: me.id,
+      galleryId: galleryId || 0,
+      videoId: videoId || 0,
+    }).catch(() => 0);
+    if (waitUntil) waitUntil(job);
+    else await job;
   }
 
   return json({

@@ -1320,15 +1320,15 @@ window.C103Editor = (function () {
    3) 每台设备对同一个版本只弹一次,靠 localStorage 记住
    ============================================================ */
 
-const SPLASH_VERSION = "2026-10-24-2";
-const SPLASH_DATE = "2026.10.24";
+const SPLASH_VERSION = "2026-10-25-1";
+const SPLASH_DATE = "2026.10.25";
 const SPLASH_TITLE = "103 纪事 · 本次更新";
-const SPLASH_LEAD = "导航收成五项，照片能评论，AI 开始看门。";
+const SPLASH_LEAD = "能 @ 人了，能关注了，还能把 AI 助手叫进评论区。";
 const SPLASH_NOTES = [
-  "导航从九项并成五项：首页 / 纪事 / 光影 / 同窗 / 信箱，板块内部用小药丸切换",
-  "高光时刻并进「光影」，和图库、视频在同一页",
-  "图库照片可以评论、回复，评论框里还有「AI 帮我想」",
-  "发帖、私信、群聊会先过一次内容审核：规则常开，AI 接上后一起把关",
+  "@ 一下就能叫人：打出 @ 弹出候选，关注的人排最前面",
+  "个人主页可以关注同学，关注数和粉丝数都在资料卡上",
+  "评论里 @AI助手：它会回答问题，也会点评照片和视频",
+  "相册和视频的评论框里都有提示，直接叫它就行",
 ];
 const SPLASH_KEY = "class103-splash-" + SPLASH_VERSION;
 
@@ -1682,7 +1682,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.appendChild(panel);
   const notifList = panel.querySelector("#notif-list");
 
-  const NOTIF_TEXT = { reply: "回复了你", wall: "在你主页留了言", like: "赞了你的主页", vcomment: "评论了你的视频", gcomment: "评论了你的照片" };
+  const NOTIF_TEXT = { reply: "回复了你", wall: "在你主页留了言", like: "赞了你的主页", vcomment: "评论了你的视频", gcomment: "评论了你的照片", mention: "在内容里 @ 了你", follow: "关注了你" };
 
   function fmtAgo(ms) {
     const d = Date.now() - ms;
@@ -1701,6 +1701,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return "u.html?id=" + (n.wall_id || 0) + (n.post_id ? "&p=" + n.post_id : "");
     }
     if (n.type === "like") return "u.html?id=" + ((C103Auth.user && C103Auth.user.id) || "");
+    // 关注:点通知去关注你的人的主页
+    if (n.type === "follow") return "u.html?id=" + (n.actor_id || 0);
     // 视频下面的评论:直接去全屏播放页,带上 &r= 会定位到那条评论
     if (n.video_id) return "video.html?id=" + n.video_id + (n.reply_id ? "&r=" + n.reply_id : "");
     // 照片评论:回图库,带上 ?photo= 会直接打开那张图的灯箱

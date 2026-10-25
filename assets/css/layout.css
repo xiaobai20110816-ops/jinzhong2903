@@ -1186,3 +1186,64 @@ body { padding-bottom: 48px; } /* 给固定信息栏留出空间,避免遮住正
   .emoji-pop { width: calc(100vw - 20px); }
   .emoji-grid { grid-template-columns: repeat(7, 1fr); }
 }
+/* ---- @ 候选浮层:关注的人排前面,第一项固定是 AI 助手 ---- */
+.mention-pop {
+  position: fixed;
+  z-index: 700;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-rim);
+}
+.mention-pop[hidden] { display: none; }
+.mp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.mp-item.on,
+.mp-item:hover { background: var(--gold-soft); }
+.mp-av {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+}
+.mp-av-ai { letter-spacing: 0.02em; }
+.mp-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mp-tag {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  color: var(--muted);
+  border: 1px solid var(--glass-brd);
+}
+.mp-tag.ai { color: var(--gold); border-color: var(--gold-line); }

@@ -54,7 +54,7 @@
 
           <label class="field">
             <span>正文</span>
-            <textarea id="f-body" rows="5" maxlength="4000" placeholder="那天发生了什么？写下来，就是 103 的历史。"></textarea>
+            <textarea id="f-body" data-mention rows="5" maxlength="4000" placeholder="那天发生了什么？写下来，就是 103 的历史。"></textarea>
           </label>
 
           <div class="picker">
@@ -107,6 +107,7 @@
   </div>
 
   <script src="assets/js/nav.js"></script>
+  <script src="assets/js/mention.js"></script>
   <script>
     // 103 纪事板块门禁:只要求「已注册登录」。
     // 未实名的同学也能看,但「仅本班可见」的帖子由后端 canViewClass 过滤掉,
