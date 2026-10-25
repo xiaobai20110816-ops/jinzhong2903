@@ -548,9 +548,12 @@
         list.forEach((it) => URL.revokeObjectURL(it.url));
         replyImages.delete(form);
         state.openReply = 0;
+        const rootId = parseInt(card.getAttribute("data-id"), 10) || id;
         await goto(state.page);
         const back = document.querySelector(`.story-card[data-id="${id}"]`);
         if (back) back.scrollIntoView({ behavior: "smooth", block: "center" });
+        // 叫了 AI 助手:挂「正在思考」并自动等它出现
+        if (/@\s*AI/i.test(body)) watchAi(rootId);
       } catch (err) {
         btn.disabled = false;
         btn.textContent = "回复";
@@ -857,15 +860,71 @@
 
   /* ---------- 删除 / 置顶 ---------- */
 
+  /* 叫了 AI 之后:先在卡片里挂一条「正在思考」,再轮询这一条;
+     AI 的回复一落库就重绘,让它立刻出现,不用人手动刷新 */
+  function watchAi(rootId) {
+    if (!rootId) return;
+    const cardOf = () => document.querySelector(`.story-card[data-id="${rootId}"]`);
+    const countInDom = () => {
+      const el = cardOf();
+      if (!el) return 0;
+      return Array.from(el.querySelectorAll(".story-sub:not(.story-ai-thinking) .story-name")).filter((n) =>
+        /AI\s*助手/.test(n.textContent || "")
+      ).length;
+    };
+    const paint = () => {
+      const el = cardOf();
+      if (!el || el.querySelector(".story-ai-thinking")) return;
+      let box = el.querySelector(".story-replies");
+      if (!box) {
+        box = document.createElement("div");
+        box.className = "story-replies";
+        el.appendChild(box);
+      }
+      const ph = document.createElement("article");
+      ph.className = "story-card story-sub story-ai-thinking";
+      ph.innerHTML = '<div class="story-thinking">AI 助手正在思考…</div>';
+      box.appendChild(ph);
+    };
+
+    const before = countInDom();
+    paint();
+    let waited = 0;
+    const timer = setInterval(async () => {
+      waited += 2;
+      try {
+        const d = await api(API + "/posts/" + rootId);
+        const n = ((d.post && d.post.replies) || []).filter((r) => /AI\s*助手/.test(String(r.name || ""))).length;
+        if (n > before) {
+          clearInterval(timer);
+          await goto(state.page);
+          const back = cardOf();
+          if (back) back.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+      } catch (e) {
+        /* 网络抖一下,下一轮再试 */
+      }
+      if (waited >= 60) {
+        clearInterval(timer);
+        const ph = document.querySelector(".story-ai-thinking");
+        if (ph) ph.remove();
+      }
+    }, 2000);
+  }
+
   async function onDelete(id) {
     if (!confirm("确定删掉这条？它下面的回复和图片会一起删掉，删了就找不回来了。")) return;
     try {
       await api(API + "/posts/" + id, { method: "DELETE" });
       state.openReply = 0;
-      // 详情页的那条被删了就没什么可看的了,直接回首页
+      // 详情页:删的是「这一页的主帖」才回列表,删一条回复就留在原地刷新
       if (MODE === "single") {
-        location.href = "index.html";
-        return;
+        const rootId = parseInt(new URLSearchParams(location.search).get("id") || "0", 10) || 0;
+        if (id === rootId) {
+          location.href = "story.html";
+          return;
+        }
       }
       await goto(state.page);
     } catch (err) {

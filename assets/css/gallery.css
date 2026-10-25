@@ -525,3 +525,7 @@
 @media (max-width: 520px) {
   .media-head { margin-top: 42px; }
 }
+/* AI 助手正在思考…占位 */
+.lbc-thinking { opacity: .7; }
+.lbc-thinking .lbc-name,
+.lbc-thinking .lbc-time { color: #8a94a6; font-style: italic; }

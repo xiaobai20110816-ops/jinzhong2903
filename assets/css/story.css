@@ -1060,3 +1060,6 @@
   .card-title { font-size: 0.82rem; }
   .like-pill { padding: 2px 8px; font-size: 0.7rem; }
 }
+
+/* AI 助手正在思考…(叫了 @AI 后先挂一条占位) */
+.story-thinking { color: #8a94a6; font-style: italic; padding: 10px 2px; font-size: 14px; }

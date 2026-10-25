@@ -135,6 +135,31 @@ export async function replyAsAi(env, opts) {
   let prompt = "";
   let image = null;
 
+  /* 把「之前聊了什么」捞出来:AI 被 @ 时不能只看见最后半句,
+     不然像「@AI助手 什么意思」这种它根本不知道在问什么 */
+  const clean = (s) => String(s || "").replace(/\s+/g, " ").slice(0, 120);
+  async function prevLines(where, value) {
+    try {
+      const { results } = await env.DB.prepare(
+        `SELECT name, body FROM posts WHERE ${where} AND id <> ? ORDER BY created_at DESC LIMIT 6`
+      )
+        .bind(value, postId || 0)
+        .all();
+      return (results || []).reverse().map((r) => `${r.name || "某人"}：${clean(r.body)}`);
+    } catch (e) {
+      return [];
+    }
+  }
+  // 被回复的那条(主帖 / 根评论):它在不在,直接决定 AI 有没有前因
+  let rootLine = "";
+  if (rootId && rootId !== postId) {
+    const root = await env.DB.prepare("SELECT name, body FROM posts WHERE id = ?")
+      .bind(rootId)
+      .first()
+      .catch(() => null);
+    if (root && root.body) rootLine = `${root.name || "某人"}：「${clean(root.body)}」`;
+  }
+
   if (galleryId) {
     const row = await env.DB.prepare(
       "SELECT title, full_key, thumb_key, uploaded_by FROM gallery WHERE id = ?"
@@ -145,12 +170,16 @@ export async function replyAsAi(env, opts) {
     if (!row) return stop("gallery-missing", { galleryId });
     image = await galleryImage(env, row);
     const caption = String(row.title || "").trim();
+    const prev = await prevLines("gallery_id = ?", galleryId);
+    const talk = [rootLine ? `被回复的那条：${rootLine}` : "", ...prev.map((x) => `之前评论 ${x}`)]
+      .filter(Boolean)
+      .join("\n");
     prompt = `场景：班级相册的一张照片${caption ? `，标题叫《${caption}》` : ""}。
-同学在照片下面说：「${String(body).slice(0, 400)}」
+${talk ? `照片下面的对话：\n${talk}\n` : ""}同学刚说：「${String(body).slice(0, 400)}」
 ${
   image
-    ? "请看着这张照片，用两三句话评价它：画面里有什么、氛围怎么样、抓拍得如何，说具体一点。"
-    : "请结合标题和这句话，用两三句话聊聊这张照片给人的感觉。"
+    ? "请看着这张照片，结合上面的对话用两三句话回应：可以评价画面里有什么、氛围怎么样、抓拍得如何，也可以顺着对方的话聊。"
+    : "请结合标题和上面的对话，用两三句话回应这张照片给人的感觉。"
 }`;
   } else if (videoId) {
     const row = await env.DB.prepare(
@@ -163,15 +192,24 @@ ${
     image = await videoCover(env, row.cover_key);
     const title = String(row.title || "").trim();
     const intro = String(row.body || "").replace(/\s+/g, " ").slice(0, 300);
+    const prev = await prevLines("video_id = ?", videoId);
+    const talk = [rootLine ? `被回复的那条：${rootLine}` : "", ...prev.map((x) => `之前评论 ${x}`)]
+      .filter(Boolean)
+      .join("\n");
     prompt = `场景：班级视频《${title || "未命名"}》${intro ? `，简介是：${intro}` : ""}。
-同学在下面评论：「${String(body).slice(0, 400)}」
-请用两三句话评价这支片子：内容和看点、拍得怎么样，语气像同学聊天。${
+${talk ? `视频下面的对话：\n${talk}\n` : ""}同学刚评论：「${String(body).slice(0, 400)}」
+请结合上面的对话，用两三句话回应：可以聊内容看点、拍得怎么样，语气像同学聊天。${
       image ? "可以配合封面画面来说。" : ""
     }`;
   } else {
-    // 主留言板:把触发的那条当作问题来答
-    prompt = `场景：班级留言板。有人写了：「${String(body).slice(0, 600)}」
-请用两三句话回应这段话：如果是在问问题就直接回答，如果是在分享就接一句有内容的回应。`;
+    // 主留言板:把主帖 + 之前的回复一起给模型,它才知道在说什么
+    const prev = rootId ? await prevLines("parent_id = ?", rootId) : [];
+    const talk = [rootLine ? `主帖：${rootLine}` : "", ...prev.map((x) => `之前回复 ${x}`)]
+      .filter(Boolean)
+      .join("\n");
+    prompt = `场景：班级留言板。
+${talk ? `${talk}\n` : ""}现在有人说：「${String(body).slice(0, 600)}」
+请结合上面的上下文，用两三句话回应：如果是在问问题就直接回答，如果是在分享就接一句有内容的回应。不要装傻说「你没给我上下文」。`;
   }
 
   // 有图先走视觉模型,没图或失败再退回纯文本模型

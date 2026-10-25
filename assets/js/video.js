@@ -990,6 +990,24 @@
       </div>`;
     }
 
+    /* 已经叫了 AI、它还没回来时,评论列表底部挂一条「正在思考」占位 */
+    function aiCommentCount() {
+      return Array.from(drawerList.querySelectorAll(".v-cmt:not(.v-cmt-thinking) .story-name")).filter(
+        (n) => /AI\s*助手/.test(n.textContent || "")
+      ).length;
+    }
+
+    function paintAiThinking() {
+      const box = document.createElement("div");
+      box.className = "v-cmt v-cmt-thinking";
+      box.innerHTML =
+        '<div class="v-cmt-main"><div class="v-cmt-head">' +
+        '<span class="story-name">AI 助手</span>' +
+        '<span class="v-cmt-time">正在思考…</span></div></div>';
+      drawerList.appendChild(box);
+      drawerList.scrollTop = drawerList.scrollHeight;
+    }
+
     function setReplyBar(name) {
       const barEl = drawer.querySelector("#v-reply-bar");
       if (!barEl) return;
@@ -1146,24 +1164,30 @@
           v.comments = (v.comments || 0) + 1;
           syncSlide(v);
         }
-        // 叫了 AI:跑模型要十几秒,轮询到它出现为止,别只看 11 秒就下结论
+        // 叫了 AI:先挂「正在思考」,之后每 2 秒拉一次,它一回来立刻出现
         if (/@\s*AI/i.test(body)) {
-          toast("AI 正在看…");
+          const before = aiCommentCount();
+          let thinking = true;
+          paintAiThinking();
           let waited = 0;
           const timer = setInterval(async () => {
-            waited += 4;
+            waited += 2;
             if (!(drawer.classList.contains("open") && drawer.getAttribute("data-vid") === String(videoId))) {
               clearInterval(timer);
               return;
             }
             await openComments(videoId).catch(() => {});
-            if (/AI\s*助手/.test(drawerList.textContent || "")) {
+            if (aiCommentCount() > before) {
+              thinking = false;
               clearInterval(timer);
             } else if (waited >= 60) {
+              thinking = false;
               clearInterval(timer);
               toast("AI 助手还在想，过一会儿再点开评论看看");
+            } else if (thinking) {
+              paintAiThinking();
             }
-          }, 4000);
+          }, 2000);
         }
       } catch (err) {
         toast(err.message);

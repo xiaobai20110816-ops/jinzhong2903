@@ -696,3 +696,8 @@ body.video-page .site-footer { display: none; }
   .v-author-name { font-size: 0.84rem; }
   .v-title { font-size: 0.88rem; }
 }
+
+/* AI 助手正在思考…占位 */
+.v-cmt-thinking { opacity: .7; }
+.v-cmt-thinking .story-name,
+.v-cmt-thinking .v-cmt-time { color: #8a94a6; font-style: italic; }

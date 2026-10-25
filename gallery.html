@@ -840,6 +840,26 @@
       let photoId = 0;      // 当前灯箱里的图库 id;0 = 高光照片,不显示评论
       let replyTo = 0;      // 正在回复哪一条评论
       let lastComment = ""; // 最新一条评论,给 AI 当上下文
+      let aiThinking = 0;   // 1 = 已经叫了 AI、它还在想,评论列表底部挂一条占位
+
+      // 「AI 助手正在思考…」占位:轮询每次重绘都会带上,直到真正的回复出现
+      function paintThinking() {
+        if (!aiThinking) return;
+        const box = document.createElement("div");
+        box.className = "lbc-item lbc-thinking";
+        box.innerHTML =
+          '<span class="lbc-av lbc-av-t">A</span>' +
+          '<div class="lbc-body"><div class="lbc-name">AI 助手' +
+          '<span class="lbc-time">正在思考…</span></div></div>';
+        list.appendChild(box);
+      }
+
+      // 列表里现有几条 AI 助手的评论(用来判断新回复有没有到)
+      function aiCount() {
+        return Array.from(list.querySelectorAll(".lbc-name")).filter((n) =>
+          /AI\s*助手/.test(n.textContent || "")
+        ).length;
+      }
 
       function itemHtml(p, isReply) {
         const a = p.author;
@@ -876,6 +896,7 @@
         if (!total) {
           list.innerHTML = '<p class="lbc-empty">还没有人评论，来当第一个</p>';
           lastComment = "";
+          paintThinking();
           return;
         }
         list.innerHTML = roots
@@ -897,6 +918,7 @@
             deleteComment(parseInt(btn.getAttribute("data-del"), 10) || 0);
           });
         });
+        paintThinking();
         list.scrollTop = list.scrollHeight;
       }
 
@@ -952,7 +974,10 @@
         lbLevel.hidden = !isPhoto;
         lbDl.hidden = !isPhoto;
         if (isPhoto) loadComments(item.id);
-        else photoId = 0;
+        else {
+          photoId = 0;
+          aiThinking = 0;
+        }
       });
 
       replyX.addEventListener("click", () => {
@@ -984,26 +1009,32 @@
           sug.hidden = true;
           msg.textContent = "";
           loadComments(photoId);
-          // 叫了 AI:生成要跑模型 + 落库,可能慢十几秒,这里轮询到它出现为止
+          // 叫了 AI:先挂一条「正在思考」,之后每 2 秒拉一次,它一回来立刻出现
           if (/@\s*AI/i.test(body)) {
             const pid = photoId;
-            msg.textContent = "AI 正在看…";
+            const before = aiCount();
+            aiThinking = 1;
+            await loadComments(pid);
             let waited = 0;
             const timer = setInterval(async () => {
-              waited += 4;
+              waited += 2;
               if (photoId !== pid) {
+                aiThinking = 0;
                 clearInterval(timer);
                 return;
               }
               await loadComments(pid).catch(() => {});
-              if (/AI\s*助手/.test(list.textContent || "")) {
+              if (aiCount() > before) {
+                aiThinking = 0;
                 clearInterval(timer);
-                msg.textContent = "";
+                await loadComments(pid).catch(() => {});
               } else if (waited >= 60) {
+                aiThinking = 0;
                 clearInterval(timer);
+                await loadComments(pid).catch(() => {});
                 msg.textContent = "AI 助手还在想，过一会儿刷新看看";
               }
-            }, 4000);
+            }, 2000);
           }
         } catch (e) {
           msg.textContent = "网络出错，检查网络再试";
