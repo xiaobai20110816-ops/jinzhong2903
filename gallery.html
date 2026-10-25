@@ -697,12 +697,26 @@
             gHint.textContent = "";
           }
         } catch (e) {
-          if (retries > 0) return setTimeout(() => load(retries - 1), 600);
-          grid.innerHTML =
-            '<p class="glass gallery-empty">图库没读上来，检查一下网络再刷新。</p>';
+          // 401 / 403 是权限问题(图库只给实名同学),重试也不会变,直接停
+          const denied = /http (401|403)/.test(e.message);
+          if (!denied && retries > 0) return setTimeout(() => load(retries - 1), 600);
+          grid.innerHTML = denied
+            ? '<p class="glass gallery-empty">实名认证通过后就能看图库啦。</p>'
+            : '<p class="glass gallery-empty">图库没读上来，检查一下网络再刷新。</p>';
         }
       };
-      load(2);
+      // 未注册 / 未实名:本页只开放「高光时刻」,图库接口本来也会 401,
+      // 所以干脆不发请求,免得控制台刷一片 401
+      const startLoad = () => {
+        const A = window.C103Auth;
+        if (A && !A.canViewSections()) {
+          grid.innerHTML = "";
+          return;
+        }
+        load(2);
+      };
+      const gate = window.C103Auth && (window.C103Auth.ready || window.C103Auth.refresh());
+      (gate || Promise.resolve()).then(startLoad);
 
       // 从导航的「＋ → 发视频」跳过来时,上传框亮出来后滚到它
       // (老链接 videos.html?post=1 也会重定向到这里,顺便认一下 post)
