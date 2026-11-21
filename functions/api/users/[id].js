@@ -272,6 +272,13 @@ export async function onRequestPut({ request, env, params }) {
     sets.push("verified = ?");
     binds.push(v);
     changed.push(v ? "审核通过" : "取消实名");
+    // 审核通过就默认是本班同学:年级高一、班号 3,
+    // 省得再手动登记一遍(老账号大多没填过班级)
+    if (v) {
+      sets.push("grade = ?", "class_no = ?");
+      binds.push("高一", 3);
+      changed.push("班级");
+    }
   }
 
   // 官方认证头衔 + 级别:服主和管理员都能写(管理员可写的字段在入口处已限定)。

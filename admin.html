@@ -60,7 +60,7 @@
     .adm-tab:hover { color: var(--text); }
     .adm-tab.active {
       color: #0b0f1a;
-      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      background: var(--gold);
       border-color: transparent;
     }
 
@@ -112,7 +112,7 @@
     }
     .mem-f.active {
       color: #0b0f1a;
-      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      background: var(--gold);
       border-color: transparent;
     }
     /* 实名输入框和按钮排在头像信息下面,不挤在一行 */
@@ -178,13 +178,11 @@
       padding: 10px 20px;
       border-radius: 999px;
       border: 1px solid transparent;
-      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      background: var(--gold);
       color: #0b0f1a;
       cursor: pointer;
-      transition: transform 0.2s ease, opacity 0.3s ease;
     }
-    .btn:hover { transform: translateY(-1px); }
-    .btn:disabled { opacity: 0.5; transform: none; cursor: default; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
     .btn.ghost {
       background: var(--chip);
       border-color: var(--line);
@@ -242,7 +240,7 @@
     .sv-stat-opt { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.84rem; }
     .sv-stat-lb { flex: none; max-width: 40%; }
     .sv-stat-bar { flex: 1; height: 8px; border-radius: 99px; background: var(--chip); overflow: hidden; }
-    .sv-stat-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-2)); }
+    .sv-stat-bar i { display: block; height: 100%; background: var(--gold); }
     .sv-stat-n { flex: none; font-size: 0.76rem; color: var(--faint); }
     .sv-stat-a { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 0.84rem; margin-top: 8px; }
 
@@ -304,7 +302,7 @@
       border: none;
       border-radius: 12px;
       color: #0b0f1a;
-      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+      background: var(--gold);
       font-weight: 700;
       font-size: 0.84rem;
       cursor: pointer;
@@ -353,7 +351,7 @@
     .member .m-face {
       flex: none; width: 52px; height: 52px; border-radius: 50%; overflow: hidden;
       display: grid; place-items: center; font-weight: 900; font-size: 1.15rem; color: #0b0f1a;
-      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+      background: var(--gold);
     }
     .member .m-face img { width: 100%; height: 100%; object-fit: cover; }
     .member .m-info { flex: 1 1 180px; min-width: 0; }
@@ -398,7 +396,7 @@
       white-space: nowrap;
     }
     /* 服主金色、管理员描金、普通成员中性 —— 全用变量,浅色主题也看得清 */
-    .badge-pill.role-owner { background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #0b0f1a; }
+    .badge-pill.role-owner { background: var(--gold); color: #0b0f1a; }
     .badge-pill.role-admin { background: var(--chip); border: 1px solid var(--gold-line); color: var(--gold); }
     .badge-pill.role-member { background: var(--chip); border: 1px solid var(--line); color: var(--muted); }
     /* 封禁:头像和资料灰掉,但红色小标签要保持醒目 */
@@ -500,12 +498,10 @@
       cursor: pointer;
       color: #fff;
       opacity: 0.45;
-      transition: opacity 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
     }
     .member .m-cert-dot:hover { opacity: 0.8; }
     .member .m-cert-dot.on {
       opacity: 1;
-      transform: scale(1.12);
       box-shadow: 0 0 0 2px var(--bg1), 0 0 0 4px var(--gold-line);
     }
     .member .m-cert-dot.lv-gold { background: linear-gradient(135deg, #ffd76a, #d99b06); color: #3a2a00; }
@@ -559,6 +555,11 @@
     .b2-report code { font-size: 0.78rem; word-break: break-all; }
 
     .gate { padding: 32px 24px; text-align: center; }
+    /* 门禁卡片也不用毛玻璃,实心一点反而更好读 */
+    .gate {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
     .gate h2 { font-family: var(--font-display); font-size: 1.2rem; color: var(--text); }
     .gate p { margin: 12px 0 20px; font-size: 0.86rem; line-height: 1.8; color: var(--muted); }
 
@@ -641,7 +642,7 @@
       display: block;
       height: 100%;
       border-radius: 99px;
-      background: linear-gradient(90deg, var(--gold), var(--gold-2));
+      background: var(--gold);
     }
     .use-bar .n { flex: none; width: 48px; text-align: right; color: var(--faint); }
 
@@ -659,9 +660,9 @@
     .q-bar.lv-none .t i { background: var(--line); }
     .q-bar.lv-none .n { color: var(--faint); }
     .q-bar.lv-ok .n { color: var(--gold); }
-    .q-bar.lv-warn .t i { background: linear-gradient(90deg, #e79a15, #f5c451); }
+    .q-bar.lv-warn .t i { background: #e79a15; }
     .q-bar.lv-warn .n { color: #e79a15; }
-    .q-bar.lv-bad .t i { background: linear-gradient(90deg, #d93a3f, #ff7b72); }
+    .q-bar.lv-bad .t i { background: #d93a3f; }
     .q-bar.lv-bad .n { color: #e5484d; }
     .q-group + .q-group { margin-top: 22px; }
     .q-group h4 {
