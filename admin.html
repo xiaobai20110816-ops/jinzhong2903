@@ -34,7 +34,7 @@
       border: 1px solid var(--glass-brd);
       box-shadow: var(--glass-rim);
       border-radius: 22px;
-      transition: background-color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+      transition: background-color 0.15s linear, border-color 0.15s linear, box-shadow 0.15s linear;
     }
 
     /* ---- 页签 ---- */
@@ -55,7 +55,7 @@
       border: 1px solid var(--line);
       color: var(--muted);
       cursor: pointer;
-      transition: color 0.3s ease, background-color 0.4s ease, border-color 0.4s ease;
+      transition: color 0.12s linear, background-color 0.12s linear, border-color 0.12s linear;
     }
     .adm-tab:hover { color: var(--text); }
     .adm-tab.active {
@@ -64,8 +64,60 @@
       border-color: transparent;
     }
 
-    .panel { padding: 24px 22px; animation: page-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    /* 后台以速度优先:面板不用毛玻璃、不做进场动画,切页签立刻响应 */
+    .panel {
+      padding: 24px 22px;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      transition: none;
+      animation: none;
+    }
     .panel[hidden] { display: none; }
+
+    /* 背景那层缓慢漂移和首屏入场动画在后台全关掉:
+       常驻动画会一直占着合成线程,后台又不需要这些观感 */
+    .frost-blob { animation: none !important; will-change: auto; }
+    .page-hero,
+    .page-hero * { animation: none !important; }
+
+    /* 成员工具栏:搜索 + 筛选 */
+    .mem-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .mem-tools input[type="search"] {
+      flex: 1 1 200px;
+      min-width: 160px;
+      font-family: var(--font-body);
+      font-size: 0.86rem;
+      color: var(--text);
+      background: var(--bg0);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+    .mem-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+    .mem-f {
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .mem-f.active {
+      color: #0b0f1a;
+      background: linear-gradient(120deg, var(--gold), var(--gold-2));
+      border-color: transparent;
+    }
+    /* 实名输入框和按钮排在头像信息下面,不挤在一行 */
+    .member .i-real { margin-top: 8px; width: 100%; max-width: 420px; display: block; }
+    .member .m-ver { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .panel-head { margin-bottom: 18px; }
     .panel-head h2 {
       font-family: var(--font-display);
@@ -664,11 +716,10 @@
         <div id="adm-main" hidden>
           <div class="adm-tabs">
             <button class="adm-tab active" type="button" data-panel="ann">班级公告</button>
-            <button class="adm-tab" type="button" data-panel="students">实名审核</button>
             <button class="adm-tab" type="button" data-panel="dorms">宿舍风采</button>
             <button class="adm-tab" type="button" data-panel="moments">高光时刻</button>
             <button class="adm-tab" type="button" data-panel="site">首页文案</button>
-            <button class="adm-tab" type="button" data-panel="members">成员权限</button>
+            <button class="adm-tab" type="button" data-panel="members">成员</button>
             <button class="adm-tab" type="button" data-panel="review">内容审核</button>
             <button class="adm-tab" type="button" data-panel="usage">用量看板</button>
             <button class="adm-tab" type="button" data-panel="accounts">账号统计</button>
@@ -691,16 +742,6 @@
                 <button class="btn" type="button" data-save="announcements" data-msg="ann-msg">保存公告</button>
               </div>
             </div>
-          </div>
-
-          <!-- ========== 实名审核 ========== -->
-          <div class="glass panel" id="panel-students" hidden>
-            <div class="panel-head">
-              <h2>实名审核</h2>
-              <p>学生风采改成「账号驱动」了：只有审核通过的账号才会出现在学生风采里，并带上蓝色小勾。填上真名点「审核通过」即可；真名只有服主、管理员和同样通过实名的同学看得到，其他同学只看到账号名。</p>
-            </div>
-            <div class="rows" id="verify-list"></div>
-            <p class="msg" id="ver-msg"></p>
           </div>
 
           <!-- ========== 宿舍 ========== -->
@@ -772,11 +813,20 @@
             </div>
           </div>
 
-          <!-- ========== 成员 ========== -->
+          <!-- ========== 成员:实名审核 + 权限,合并成一页 ========== -->
           <div class="glass panel" id="panel-members" hidden>
             <div class="panel-head">
-              <h2>成员管理</h2>
-              <p>只有服主能改角色、改名、重置密码、封禁和删除账号；管理员能改全站内容、置顶和删留言；普通成员只能发帖回复。封禁后 TA 立刻掉线、登不进来，但账号和留言都还在，随时可以解封。删账号会释放用户名，TA 发过的留言保留为无主老帖。</p>
+              <h2>成员</h2>
+              <p>一页搞定实名和权限。填上真名点「审核通过」，TA 才会出现在学生风采里并带上蓝色小勾；真名只有服主、管理员和已实名的同学看得到。只有服主能改角色、改名、重置密码、封禁和删除账号；管理员能填真名、审核实名、设置官方认证。封禁后 TA 立刻掉线、登不进来，账号和留言都还在，随时可以解封。</p>
+            </div>
+            <div class="mem-tools">
+              <input id="mem-search" type="search" placeholder="搜账号 / 真实姓名" autocomplete="off">
+              <div class="mem-filter" role="group" aria-label="筛选成员">
+                <button class="mem-f active" type="button" data-filter="all">全部</button>
+                <button class="mem-f" type="button" data-filter="pending">待实名</button>
+                <button class="mem-f" type="button" data-filter="verified">已实名</button>
+                <button class="mem-f" type="button" data-filter="banned">已封禁</button>
+              </div>
             </div>
             <div class="rows" id="mem-list"></div>
             <p class="msg" id="mem-msg"></p>
@@ -993,98 +1043,6 @@
       $("#ann-add").addEventListener("click", () => {
         $("#ann-list").appendChild(annRow({ date: "", title: "", body: "", pinned: false }));
       });
-
-      /* ============ 实名审核 ============ */
-      /* 学生风采改成账号驱动:这里只负责给账号填真名、标记是否通过实名。
-         真名存进 users.real_name,审核状态存 users.verified。 */
-      async function renderVerify(okMsg) {
-        const box = $("#verify-list");
-        if (!box) return;
-        say("ver-msg", "");
-        box.innerHTML = '<p class="msg">正在读取…</p>';
-        try {
-          const res = await fetch(API + "/users", { credentials: "same-origin" });
-          const d = await res.json().catch(() => ({}));
-          if (!res.ok || !d.ok) throw new Error(d.error || "读不到成员列表");
-          const users = (d.users || []).filter((u) => !u.banned);
-          // 待审核的排前面,审核完的沉到下面,方便一眼看到要处理谁
-          users.sort((a, b) => (a.verified ? 1 : 0) - (b.verified ? 1 : 0) || a.id - b.id);
-          box.innerHTML = "";
-          if (!users.length) {
-            box.innerHTML = '<p class="msg">还没有可审核的账号。</p>';
-            return;
-          }
-          users.forEach((u) => box.appendChild(verifyRow(u)));
-          if (okMsg) say("ver-msg", okMsg, "ok");
-        } catch (err) {
-          box.innerHTML = "";
-          say("ver-msg", err.message, "err");
-        }
-      }
-
-      /* 实名审核的一个操作:禁用按钮 → 请求 → 成功刷新本面板 / 失败复原 */
-      async function runVerifyOp(btn, doneText, task) {
-        btn.disabled = true;
-        try {
-          await task();
-          renderVerify(doneText);
-          return true;
-        } catch (err) {
-          say("ver-msg", err.message, "err");
-          btn.disabled = false;
-          return false;
-        }
-      }
-
-      function verifyRow(u) {
-        const el = document.createElement("div");
-        el.className = "row member";
-        const face = u.avatar
-          ? `<img src="${esc(img(u.avatar))}" alt="">`
-          : esc(String(u.name || "?").slice(0, 1));
-        const done = !!u.verified;
-        el.innerHTML = `
-          <span class="m-face">${face}</span>
-          <div class="m-info">
-            <div class="m-line">
-              <span class="m-name">${esc(u.name)}</span>
-              <span class="ver-badge ${done ? "on" : "off"}">${done ? "已实名" : "待审核"}</span>
-            </div>
-            <div class="m-sub">${esc(u.signature || "（还没写个性签名）")}</div>
-            <div class="m-meta">注册于 ${esc(fmtDate(u.created_at))} · 已发 ${Number(u.posts) || 0} 条</div>
-            <input class="i-real" type="text" maxlength="24" placeholder="填写真名（只有服主、管理员和已实名同学看得到）" value="${esc(u.real_name || "")}">
-          </div>
-          <div class="m-right"></div>`;
-        const right = $(".m-right", el);
-        const input = $(".i-real", el);
-
-        const ok = document.createElement("button");
-        ok.type = "button";
-        ok.className = "m-btn ver-ok";
-        ok.textContent = done ? "保存真名" : "审核通过";
-        ok.addEventListener("click", () => {
-          const rn = input.value.trim();
-          if (!rn) { say("ver-msg", "先把真名填上，再点审核通过", "err"); input.focus(); return; }
-          const body = done ? { real_name: rn } : { real_name: rn, verified: 1 };
-          runVerifyOp(ok, done ? `已更新「${rn}」的真名` : `「${rn}」已通过实名，学生风采里能看到 TA 了`, () =>
-            patchUser(u.id, body));
-        });
-        right.appendChild(ok);
-
-        if (done) {
-          const undo = document.createElement("button");
-          undo.type = "button";
-          undo.className = "m-del";
-          undo.textContent = "取消实名";
-          undo.addEventListener("click", () => {
-            const who = u.real_name || u.name;
-            if (!confirm(`取消「${who}」的实名？\n\nTA 会从学生风采里消失，名字也会变回账号名。`)) return;
-            runVerifyOp(undo, "已取消实名", () => patchUser(u.id, { verified: 0 }));
-          });
-          right.appendChild(undo);
-        }
-        return el;
-      }
 
       /* ============ 宿舍 ============ */
       /* 宿舍照片只存地址;高光照片还带一句说明,点图可以改 */
@@ -1484,6 +1442,45 @@
         });
         return btn;
       }
+      /* 实名审核:填真名 → 审核通过;已实名的可以改真名或取消。
+         学生风采只认 verified,真名只有服主 / 管理员 / 已实名同学看得到 */
+      function verifyBox(u, rowEl) {
+        const wrap = document.createElement("span");
+        wrap.className = "m-ver";
+        const input = $(".i-real", rowEl);
+
+        const ok = document.createElement("button");
+        ok.type = "button";
+        ok.className = "m-btn ver-ok";
+        ok.textContent = u.verified ? "保存真名" : "审核通过";
+        ok.addEventListener("click", () => {
+          const rn = input ? input.value.trim() : "";
+          if (!rn) {
+            say("mem-msg", "先把真名填上，再点审核通过", "err");
+            if (input) input.focus();
+            return;
+          }
+          const body = u.verified ? { real_name: rn } : { real_name: rn, verified: 1 };
+          runMemberOp(ok,
+            u.verified ? `已更新「${rn}」的真名` : `「${rn}」已通过实名，学生风采里能看到 TA 了`,
+            () => patchUser(u.id, body));
+        });
+        wrap.appendChild(ok);
+
+        if (u.verified) {
+          const undo = document.createElement("button");
+          undo.type = "button";
+          undo.className = "m-del";
+          undo.textContent = "取消实名";
+          undo.addEventListener("click", () => {
+            const who = u.real_name || u.name;
+            if (!confirm(`取消「${who}」的实名？\n\nTA 会从学生风采里消失，名字也会变回账号名。`)) return;
+            runMemberOp(undo, "已取消实名", () => patchUser(u.id, { verified: 0 }));
+          });
+          wrap.appendChild(undo);
+        }
+        return wrap;
+      }
       /* 一行的完整渲染 */
       function memberRow(u) {
         const el = document.createElement("div");
@@ -1505,9 +1502,15 @@
             <div class="m-meta">注册于 ${esc(fmtDate(u.created_at))} · 已发 ${Number(u.posts) || 0} 条 · ${
               u.class_label ? esc(u.class_label) : '<em class="m-noclass">未登记班级</em>'
             }</div>
+            ${
+              u.banned
+                ? ""
+                : `<input class="i-real" type="text" maxlength="24" placeholder="填写真名（只有服主、管理员和已实名同学看得到）" value="${esc(u.real_name || "")}">`
+            }
           </div>
           <div class="m-right"></div>`;
         // 官方认证头衔:服主和管理员对每一行都能改(含自己)。
+        // 实名审核也放在这一行,不用再去另一个页签找人。
         // 其余操作(角色 / 改名 / 改密 / 封禁 / 删除)仍然只有服主能点;
         // 自己那一行只留「改名 / 重置密码」(不能给自己换角色、不能封自己、不能删自己)。
         const isOwnerView = me && me.role === "owner";
@@ -1515,6 +1518,7 @@
         if (isStaffView) {
           const right = $(".m-right", el);
           const self = me.id === u.id;
+          if (!u.banned) right.appendChild(verifyBox(u, el));
           if (isOwnerView) {
             if (!self) right.appendChild(roleSelect(u));
             right.appendChild(nameBtn(u));
@@ -1528,20 +1532,77 @@
         }
         return el;
       }
+      /* 成员列表:一次拉全量,筛选和搜索都在本地做,不再来回请求 */
+      let memUsers = [];
+      let memFilter = "all";
+      let memQuery = "";
+
+      function memMatch(u) {
+        if (memFilter === "pending" && (u.verified || u.banned)) return false;
+        if (memFilter === "verified" && !u.verified) return false;
+        if (memFilter === "banned" && !u.banned) return false;
+        if (!memQuery) return true;
+        return (
+          String(u.name || "").toLowerCase().includes(memQuery) ||
+          String(u.real_name || "").toLowerCase().includes(memQuery)
+        );
+      }
+
+      function paintMembers() {
+        const box = $("#mem-list");
+        if (!box) return;
+        // 「待实名」按钮上带一个数量,一眼看出还有几个人要处理
+        const pend = memUsers.filter((u) => !u.verified && !u.banned).length;
+        const pf = $('.mem-f[data-filter="pending"]');
+        if (pf) pf.textContent = pend ? `待实名 ${pend}` : "待实名";
+
+        box.innerHTML = "";
+        const list = memUsers.filter(memMatch);
+        if (!list.length) {
+          box.innerHTML =
+            '<p class="msg">' +
+            (memFilter === "all" && !memQuery ? "还没有成员。" : "没有符合条件的成员。") +
+            "</p>";
+          return;
+        }
+        list.forEach((u) => box.appendChild(memberRow(u)));
+      }
+
       async function renderMembers(okMsg) {
+        const box = $("#mem-list");
+        if (!box) return;
         say("mem-msg", "");
+        box.innerHTML = '<p class="msg">正在读取…</p>';
         try {
           const res = await fetch(API + "/users", { credentials: "same-origin" });
           const d = await res.json().catch(() => ({}));
           if (!res.ok || !d.ok) throw new Error(d.error || "读不到成员列表");
-          const box = $("#mem-list");
-          box.innerHTML = "";
-          (d.users || []).forEach((u) => box.appendChild(memberRow(u)));
+          // 待实名的排最前,已实名在后,封禁的沉底
+          memUsers = (d.users || []).slice().sort(
+            (a, b) =>
+              (a.banned ? 1 : 0) - (b.banned ? 1 : 0) ||
+              (a.verified ? 1 : 0) - (b.verified ? 1 : 0) ||
+              a.id - b.id
+          );
+          paintMembers();
           if (okMsg) say("mem-msg", okMsg, "ok");
         } catch (err) {
+          box.innerHTML = "";
           say("mem-msg", err.message, "err");
         }
       }
+
+      $("#mem-search").addEventListener("input", (e) => {
+        memQuery = e.target.value.trim().toLowerCase();
+        paintMembers();
+      });
+      $$(".mem-f").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          memFilter = btn.dataset.filter;
+          $$(".mem-f").forEach((b) => b.classList.toggle("active", b === btn));
+          paintMembers();
+        });
+      });
 
       /* ============ 保存 ============ */
       const COLLECT = {
@@ -2626,13 +2687,26 @@
       });
 
       /* ============ 页签 ============ */
+      /* 面板按需渲染:首屏只画公告,别的等第一次点开再画,
+         这样进后台不用一口气渲染所有表单 */
+      const painted = { ann: true };
+      const LAZY = {
+        ann: renderAnn,
+        dorms: renderDorms,
+        moments: renderMoments,
+        site: renderSite,
+      };
+
       $$(".adm-tab").forEach((tab) => {
         tab.addEventListener("click", () => {
           $$(".adm-tab").forEach((t) => t.classList.toggle("active", t === tab));
           const name = tab.dataset.panel;
           $$(".panel").forEach((p) => { p.hidden = p.id !== "panel-" + name; });
+          if (LAZY[name] && !painted[name]) {
+            painted[name] = true;
+            LAZY[name]();
+          }
           if (name === "members") renderMembers();
-          if (name === "students") renderVerify();
           if (name === "review") renderReview();
           if (name === "usage") renderUsage();
           if (name === "accounts") renderAccounts();
@@ -2672,11 +2746,8 @@
               return;
             }
             data = d;
+            // 只画首屏看得见的公告,其余面板点开时再渲染
             renderAnn();
-            renderVerify();
-            renderDorms();
-            renderMoments();
-            renderSite();
           });
         });
       });
