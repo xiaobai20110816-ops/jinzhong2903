@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="103班 · 个人中心：注册登录、头像与个性签名">
-  <title>个人中心 · 103班 音乐领军班</title>
+  <title>个人中心 · 103班 素养领军班</title>
   <!-- 跨文档视图过渡:多页之间平滑切换,无白屏 -->
   <meta name="view-transition" content="same-origin">
   <!-- 手机浏览器地址栏颜色,nav.js 切换主题时会同步改 -->
@@ -73,6 +73,9 @@
       background: linear-gradient(120deg, var(--gold), var(--gold-2));
     }
     .acc-form[hidden] { display: none; }
+    /* 人机验证框:后台配了 Turnstile 才由脚本显示 */
+    .acc-ts { display: flex; justify-content: center; margin: 2px 0 10px; }
+    .acc-ts[hidden] { display: none; }
     .submit-btn.wide { width: 100%; margin-top: 4px; }
 
     /* ---- 已登录 ---- */
@@ -253,6 +256,8 @@
               <span>密码</span>
               <input id="login-pass" type="password" maxlength="64" autocomplete="current-password" placeholder="你的密码">
             </label>
+            <!-- 人机验证:后台配置 Turnstile 后由脚本渲染 -->
+            <div class="acc-ts" id="ts-login" hidden></div>
             <p class="form-msg" id="login-msg"></p>
             <button class="submit-btn wide" type="submit">登录</button>
           </form>
@@ -284,6 +289,8 @@
               </div>
               <em class="field-tip">填完才算是本班成员，别人才知道你是谁班的</em>
             </div>
+            <!-- 人机验证:后台配置 Turnstile 后由脚本渲染 -->
+            <div class="acc-ts" id="ts-register" hidden></div>
             <p class="form-msg" id="reg-msg"></p>
             <button class="submit-btn wide" type="submit">注册并登录</button>
           </form>
@@ -517,8 +524,79 @@
           const which = tab.getAttribute("data-tab");
           $("#form-login").hidden = which !== "login";
           $("#form-register").hidden = which !== "register";
+          if (which === "register") mountTurnstile("register");
         });
       });
+
+      /* ---- 人机验证(Turnstile) ----
+         管理后台在 Pages 环境变量里配了 TURNSTILE_SITE_KEY 才会挂出来;
+         没配就保持原样,账号页照旧能登录注册 */
+      const TS = {
+        siteKey: "",
+        widgets: { login: null, register: null },
+        tokens: { login: "", register: "" },
+      };
+
+      function mountTurnstile(key) {
+        if (!TS.siteKey || !window.turnstile || TS.widgets[key] != null) return;
+        const box = $("#ts-" + key);
+        if (!box) return;
+        box.hidden = false;
+        // 主题跟着页面走,深色站点用 dark 皮肤
+        const theme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+        TS.widgets[key] = window.turnstile.render(box, {
+          sitekey: TS.siteKey,
+          theme: theme,
+          language: "zh-cn",
+          callback: (token) => { TS.tokens[key] = token; },
+          "expired-callback": () => { TS.tokens[key] = ""; },
+          "error-callback": () => { TS.tokens[key] = ""; },
+        });
+      }
+
+      (async () => {
+        let siteKey = "";
+        try {
+          const res = await fetch(API + "/auth/config", {
+            credentials: "same-origin",
+            cache: "no-store",
+          });
+          const d = await res.json();
+          siteKey = (d && d.turnstileSiteKey) || "";
+        } catch (e) {
+          return; // 配置读不到就当没开,不影响登录注册
+        }
+        if (!siteKey) return;
+        TS.siteKey = siteKey;
+        try {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+            s.async = true;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+        } catch (e) {
+          TS.siteKey = "";
+          return;
+        }
+        // 登录页签默认是开着的,注册那边等切过去再渲染(藏在 display:none 里挂不稳)
+        mountTurnstile("login");
+        if (!$("#form-register").hidden) mountTurnstile("register");
+      })();
+
+      // 一次性 token 提交过就作废:失败时把验证框重置一下,让人重新点一次
+      function resetTurnstile(key) {
+        TS.tokens[key] = "";
+        if (TS.widgets[key] != null && window.turnstile) window.turnstile.reset(TS.widgets[key]);
+      }
+      function turnstileGate(key, msg) {
+        if (!TS.siteKey) return true; // 后台没开验证
+        if (TS.tokens[key]) return true;
+        say(msg, "先完成一下人机验证", "err");
+        return false;
+      }
 
       /* ---- 登录 ---- */
       on($("#form-login"), "submit", async (e) => {
@@ -528,17 +606,19 @@
         const name = $("#login-name").value.trim();
         const pass = $("#login-pass").value;
         if (!name || !pass) { say(msg, "用户名和密码都要填", "err"); return; }
+        if (!turnstileGate("login", msg)) return;
 
         btn.disabled = true;
         btn.textContent = "登录中";
         try {
-          await A.login(name, pass);
+          await A.login(name, pass, TS.tokens.login);
           $("#login-pass").value = "";
           say(msg, "", "");
           render(A.user);
           window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (err) {
           say(msg, err.message, "err");
+          resetTurnstile("login");
         } finally {
           btn.disabled = false;
           btn.textContent = "登录";
@@ -560,16 +640,18 @@
         if (!grade) { say(msg, "选一下自己是几年级的", "err"); return; }
         const cno = parseInt(classNo, 10);
         if (!(cno >= 1 && cno <= 99)) { say(msg, "班号填 1~99 之间的数字", "err"); return; }
+        if (!turnstileGate("register", msg)) return;
 
         btn.disabled = true;
         btn.textContent = "注册中";
         try {
-          await A.register(name, pass, grade, cno);
+          await A.register(name, pass, grade, cno, TS.tokens.register);
           say(msg, "", "");
           render(A.user);
           window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (err) {
           say(msg, err.message, "err");
+          resetTurnstile("register");
         } finally {
           btn.disabled = false;
           btn.textContent = "注册并登录";

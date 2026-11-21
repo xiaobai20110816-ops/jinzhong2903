@@ -1,5 +1,5 @@
-/* ============================================================
-   103班：音乐领军班 · 全站公共脚本
+﻿/* ============================================================
+   103班：素养领军班 · 全站公共脚本
    1) 动态注入导航栏 + 主题开关 + 底部信息栏
    2) 账号系统:window.C103Auth(登录 / 注册 / 退出 / 改资料)
    3) 开屏公告:每次更新改 SPLASH_* 常量,版本号一变所有设备重新弹一次
@@ -422,11 +422,16 @@ const C103Auth = {
     return this.ready;
   },
 
-  async login(username, password) {
+  async login(username, password, turnstileToken) {
     const d = await apiFetch(API + "/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: username, password: password }),
+      body: JSON.stringify({
+        username: username,
+        password: password,
+        // 人机验证:后台没配 Turnstile 时后端会忽略这个空串
+        turnstileToken: turnstileToken || "",
+      }),
     });
     this.user = d.user;
     writeAuthCache(this.user);
@@ -434,7 +439,7 @@ const C103Auth = {
     return this.user;
   },
 
-  async register(username, password, grade, classNo) {
+  async register(username, password, grade, classNo, turnstileToken) {
     const d = await apiFetch(API + "/auth/register", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -445,6 +450,8 @@ const C103Auth = {
         // 班级信息:注册时就得登记,老账号在个人中心补
         grade: grade || "",
         classNo: classNo || "",
+        // 人机验证:后台没配 Turnstile 时后端会忽略这个空串
+        turnstileToken: turnstileToken || "",
       }),
     });
     this.user = d.user;
@@ -1424,7 +1431,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <div class="container nav">
       <a class="nav-logo" href="index.html" data-nav>
         <img src="assets/images/logo.svg" alt="103班 Logo">
-        <span><b>103 · 音乐领军班</b><small>Musical Vanguards</small></span>
+        <span><b>103 · 素养领军班</b><small>Literacy Vanguards</small></span>
       </a>
       <nav id="nav-links" class="nav-links">
         ${NAV_ITEMS.map((n) => {

@@ -816,7 +816,7 @@
       state.current = best;
       const vid = parseInt(best.getAttribute("data-vid"), 10) || 0;
       const now = byId.get(vid);
-      if (now) document.title = (now.title || "视频") + " · 103班 音乐领军班";
+      if (now) document.title = (now.title || "视频") + " · 103班 素养领军班";
 
       const v = best.querySelector("video");
       if (v) {

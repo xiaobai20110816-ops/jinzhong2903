@@ -14,6 +14,7 @@ import {
   sessionCookie,
   SESSION_TTL_MS,
   publicUser,
+  verifyTurnstile,
 } from "../_utils.js";
 
 export async function onRequestPost({ request, env }) {
@@ -30,6 +31,11 @@ export async function onRequestPost({ request, env }) {
   const username = String(payload.username || "").trim();
   const password = String(payload.password || "");
   if (!username || !password) return fail("用户名和密码都要填");
+
+  // 人机验证:后台配了 Turnstile 才生效,没配就照旧放行
+  if (!(await verifyTurnstile(env, request, payload.turnstileToken))) {
+    return fail("人机验证没通过，刷新页面再试一次", 400);
+  }
 
   const row = await env.DB.prepare(
     "SELECT id, username, salt, pass_hash, role, avatar_key, signature, banned, real_name, verified, display_name, wallpaper_key, cert_title, cert_level, photos FROM users WHERE username = ?"

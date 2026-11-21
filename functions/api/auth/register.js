@@ -18,6 +18,7 @@ import {
   publicUser,
   GRADES,
   classNo,
+  verifyTurnstile,
 } from "../_utils.js";
 
 const MIN_PASSWORD = 6;
@@ -49,6 +50,11 @@ export async function onRequestPost({ request, env }) {
   if (password.length > MAX_PASSWORD) return fail("密码太长了，换短一点的");
   if (GRADES.indexOf(grade) < 0) return fail("选一下自己是几年级的");
   if (!cno) return fail("班号填 1~99 之间的数字");
+
+  // 人机验证:后台配了 Turnstile 才生效,没配就照旧放行
+  if (!(await verifyTurnstile(env, request, payload.turnstileToken))) {
+    return fail("人机验证没通过，刷新页面再试一次", 400);
+  }
 
   const exists = await env.DB.prepare("SELECT id FROM users WHERE username = ?")
     .bind(username)

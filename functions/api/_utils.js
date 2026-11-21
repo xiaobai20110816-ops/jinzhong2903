@@ -35,6 +35,30 @@ export function notReady(what = "后端") {
   return fail(`${what}还没接上，需要先完成 Cloudflare 绑定`, 503);
 }
 
+/* Cloudflare Turnstile 人机验证:前端拿到一次性 token,后端拿去问 Cloudflare。
+   没配 TURNSTILE_SECRET 时直接放行 —— 免得环境变量没设好把所有人都挡在门外 */
+export async function verifyTurnstile(env, request, token) {
+  const secret = env && env.TURNSTILE_SECRET;
+  if (!secret) return true;
+  const t = String(token || "").trim();
+  if (!t) return false;
+  try {
+    const form = new FormData();
+    form.append("secret", secret);
+    form.append("response", t);
+    const ip = request.headers.get("cf-connecting-ip");
+    if (ip) form.append("remoteip", ip);
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: form,
+    });
+    const d = await res.json().catch(() => null);
+    return !!(d && d.success);
+  } catch (e) {
+    return false;
+  }
+}
+
 export function randomHex(bytes = 16) {
   const arr = new Uint8Array(bytes);
   crypto.getRandomValues(arr);
